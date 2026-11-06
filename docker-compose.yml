@@ -1,6 +1,9 @@
+name: telescope
+
 services:
   backend:
     build: ./backend
+    image: ${BACKEND_IMAGE:-telescope-backend}
     env_file:
       - path: .env
         required: false
@@ -11,6 +14,7 @@ services:
 
   frontend:
     build: ./frontend
+    image: ${FRONTEND_IMAGE:-telescope-frontend}
     depends_on:
       - backend
     ports:

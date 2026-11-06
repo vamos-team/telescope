@@ -1,0 +1,17 @@
+name: telescope-jenkins
+
+services:
+  jenkins:
+    build: .
+    user: root                 # /var/run/docker.sock 접근용
+    restart: unless-stopped
+    ports:
+      - "8081:8080"            # Jenkins 기본 8080은 백엔드와 겹치므로 호스트 포트만 8081
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      # 배포용 디렉터리: 호스트와 컨테이너의 경로가 같아야 compose의 ./data 마운트가 맞다
+      - /opt/telescope:/opt/telescope
+
+volumes:
+  jenkins_home:
