@@ -1,0 +1,27 @@
+services:
+  backend:
+    build: ./backend
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+
+  # 평소엔 뜨지 않음. 실행: docker compose run --rm pipelines <명령>
+  pipelines:
+    build: ./pipelines
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./data:/app/data
+    profiles: ["batch"]

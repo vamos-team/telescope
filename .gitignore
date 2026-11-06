@@ -1,0 +1,47 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Data
+data/*
+!data/.gitkeep
+*.duckdb
+*.duckdb.wal
+*.sqlite3
+
+# Java / Spring Boot
+.gradle/
+build/
+target/
+out/
+*.class
+*.jar
+*.war
+HELP.md
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+.next/
+
+# Logs / temp
+*.log
+tmp/
+.cache/
+
+# IDE / OS
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Claude Code 로컬 설정
+.claude/settings.local.json
