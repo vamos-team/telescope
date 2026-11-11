@@ -7,6 +7,11 @@ services:
     env_file:
       - path: .env
         required: false
+    environment:
+      MYSQL_HOST: mysql
+    depends_on:
+      mysql:
+        condition: service_healthy
     volumes:
       - ./data:/app/data
     ports:
@@ -30,8 +35,8 @@ services:
       - ./data:/app/data
     profiles: ["batch"]
 
-  # 로컬 개발용 MySQL. backend는 아직 이 DB에 연결하지 않고,
-  # 호스트에서 ./gradlew bootRun --spring.profiles.active=local 로 붙여 쓴다.
+  # 로컬 개발용 MySQL. backend 컨테이너는 서비스명(mysql)으로 접속하고,
+  # 호스트에서 ./gradlew bootRun 할 때는 .env의 MYSQL_HOST(localhost)로 붙여 쓴다.
   mysql:
     image: mysql:8.4
     env_file:
@@ -41,6 +46,11 @@ services:
       - "${MYSQL_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
   mysql_data:
