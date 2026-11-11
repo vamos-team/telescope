@@ -29,3 +29,18 @@ services:
     volumes:
       - ./data:/app/data
     profiles: ["batch"]
+
+  # 로컬 개발용 MySQL. backend는 아직 이 DB에 연결하지 않고,
+  # 호스트에서 ./gradlew bootRun --spring.profiles.active=local 로 붙여 쓴다.
+  mysql:
+    image: mysql:8.4
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:
