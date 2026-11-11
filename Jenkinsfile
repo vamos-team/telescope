@@ -14,8 +14,14 @@ pipeline {
   stages {
     stage('Backend Test') {
       steps {
-        dir('backend') {
-          sh 'chmod +x gradlew && ./gradlew test --no-daemon'
+        sh '''
+          docker compose up -d --wait mysql
+          docker compose run --rm backend-test
+        '''
+      }
+      post {
+        always {
+          sh 'docker compose down -v || true'
         }
       }
     }
