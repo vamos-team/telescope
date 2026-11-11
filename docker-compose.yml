@@ -56,12 +56,14 @@ services:
       retries: 10
 
   # CI/로컬에서 JDK 설치 없이 백엔드 테스트만 돌릴 때 사용.
+  # 소스를 bind mount하지 않고 Dockerfile의 build 스테이지를 그대로 빌드해서 쓴다.
+  # (Jenkins처럼 docker.sock을 공유해서 호스트 도커에 위임하는 환경에서는
+  #  상대경로 bind mount가 호스트 기준으로 해석돼 깨지기 때문)
   # 실행: docker compose up -d --wait mysql && docker compose run --rm backend-test
   backend-test:
-    image: eclipse-temurin:21-jdk
-    working_dir: /workspace
-    volumes:
-      - ./backend:/workspace
+    build:
+      context: ./backend
+      target: build
     environment:
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
@@ -71,8 +73,7 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-    entrypoint: ["./gradlew"]
-    command: ["test", "--no-daemon"]
+    command: ["./gradlew", "test", "--no-daemon"]
     profiles: ["test"]
 
 volumes:
