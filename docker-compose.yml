@@ -37,11 +37,14 @@ services:
 
   # 로컬 개발용 MySQL. backend 컨테이너는 서비스명(mysql)으로 접속하고,
   # 호스트에서 ./gradlew bootRun 할 때는 .env의 MYSQL_HOST(localhost)로 붙여 쓴다.
+  # .env가 없어도(CI 등) 기본값으로 뜰 수 있도록 environment에 기본값을 둔다.
   mysql:
     image: mysql:8.4
-    env_file:
-      - path: .env
-        required: false
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-telescope}
+      MYSQL_USER: ${MYSQL_USER:-telescope}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-telescope}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-telescope}
     ports:
       - "${MYSQL_PORT:-3306}:3306"
     volumes:
@@ -51,6 +54,26 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # CI/로컬에서 JDK 설치 없이 백엔드 테스트만 돌릴 때 사용.
+  # 실행: docker compose up -d --wait mysql && docker compose run --rm backend-test
+  backend-test:
+    image: eclipse-temurin:21-jdk
+    working_dir: /workspace
+    volumes:
+      - ./backend:/workspace
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-telescope}
+      MYSQL_USER: ${MYSQL_USER:-telescope}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-telescope}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    entrypoint: ["./gradlew"]
+    command: ["test", "--no-daemon"]
+    profiles: ["test"]
 
 volumes:
   mysql_data:
