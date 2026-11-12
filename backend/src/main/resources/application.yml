@@ -3,3 +3,6 @@ spring:
     name: telescope-backend
   profiles:
     default: local
+  jpa:
+    hibernate:
+      ddl-auto: validate
