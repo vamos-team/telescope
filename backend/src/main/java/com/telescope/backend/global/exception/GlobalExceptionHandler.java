@@ -18,7 +18,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException e) {
         ErrorCode errorCode = e.getErrorCode();
-        log.warn("BusinessException: {} - {}", errorCode.getCode(), e.getMessage());
+        if (errorCode.getStatus().is5xxServerError()) {
+            log.error("BusinessException: {} - {}", errorCode.getCode(), e.getMessage(), e);
+        } else {
+            log.warn("BusinessException: {} - {}", errorCode.getCode(), e.getMessage());
+        }
         return ResponseEntity
                 .status(errorCode.getStatus())
                 .body(ApiResponse.fail(errorCode, e.getMessage()));
@@ -38,6 +42,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             Exception ex, Object body, HttpHeaders headers,
             HttpStatusCode statusCode, WebRequest request) {
 
+        if (statusCode.is5xxServerError()) {
+            log.error("Spring MVC exception", ex);
+        }
         ErrorCode errorCode = ErrorCode.from(statusCode);
         return super.handleExceptionInternal(ex, ApiResponse.fail(errorCode), headers, statusCode, request);
     }
