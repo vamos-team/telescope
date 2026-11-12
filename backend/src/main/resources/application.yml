@@ -6,3 +6,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+
+# infra 구현체 전환용 설정. 실제 ai 서비스/클라우드 스토리지가 생기면 여기서 바꾼다.
+infra:
+  python-ai-client:
+    mode: stub # stub | (TODO: 실제 구현 생기면 값 추가)
