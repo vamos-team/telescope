@@ -11,3 +11,8 @@ spring:
 infra:
   python-ai-client:
     mode: stub # stub | (TODO: 실제 구현 생기면 값 추가)
+
+app:
+  storage:
+    local:
+      base-dir: ${FILE_STORAGE_DIR:./data/files}
