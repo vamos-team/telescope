@@ -21,11 +21,11 @@
 | `job` | 비동기 작업 공통 (상태 전이, 폴링 대상) |
 | `datasync` | 재무 데이터 적재 실행 이력, 활성 데이터 버전 |
 | `analysis` | 분석 실행, 허용 문서 스냅샷, 근거 점검 결과 |
-| `prediction` | 예상 질문 실행과 결과 |
+| `prediction` | 예상 질문 실행과 결과, 예측 평가 |
 | `chat` | 대화와 메시지, Spring AI 오케스트레이션 |
 | `infra` | 외부 연동: `python`(ai 서비스 호출), `storage`(파일), `ai`(ChatClient, MCP Client 설정) |
 
-> 예측 평가 기능의 패키지는 아직 만들지 않았다. 패키지가 추가되면 이 표도 갱신한다.
+> 예측 평가는 별도 패키지 없이 `prediction`에 포함한다. 패키지가 추가되면 이 표도 갱신한다.
 
 - `global`, `infra`를 제외한 기능 패키지 안은 `controller / service / repository / entity / dto`로 나눈다.
 - 클래스 이름: `XxxController`, `XxxService`, `XxxRepository`, `Xxx`(Entity), `XxxRequest`, `XxxResponse`
