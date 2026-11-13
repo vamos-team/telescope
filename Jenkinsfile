@@ -12,20 +12,11 @@ pipeline {
   }
 
   stages {
+    // DB 테스트는 Testcontainers가 빌드마다 임의 이름·포트의 MySQL 컨테이너를 띄우고 정리
     stage('Backend Test') {
-      environment {
-        COMPOSE_PROJECT_NAME = "telescope-ci-${env.BRANCH_NAME}-${env.BUILD_NUMBER}".toLowerCase().replaceAll('[^a-z0-9_-]', '-')
-        MYSQL_PORT           = '33000-33099'
-      }
       steps {
-        sh '''
-          docker compose up -d --wait mysql
-          docker compose run --rm backend-test
-        '''
-      }
-      post {
-        always {
-          sh 'docker compose --profile test down -v --rmi local || true'
+        dir('backend') {
+          sh 'chmod +x gradlew && ./gradlew test --no-daemon'
         }
       }
     }
