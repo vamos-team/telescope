@@ -1,3 +1,5 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Telescope</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,6 +20,8 @@
   --s1:#6250D6; --s2:#EB6834; --s3:#1BAF7A; --s4:#EDA100;
   --dim:rgba(0,0,0,.5); --shadow:0 2px 10px rgba(0,27,55,.08); --shadow-pop:0 12px 40px rgba(0,0,0,.18);
   --shadow-seg:0 1px 2px rgba(0,0,0,.09); --r-sm:8px; --r-md:10px; --r-lg:14px;
+  /* v04: 인사이트(해석) 면 */
+  --ai-bg:#F4F1FF; --ai-weak:rgba(98,80,214,.09); --ai-text:#4B37C9;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#141418; --bg-grey:#1B1B21; --bg-doc:#101014; --surface:#1E1E25; --side:#18181D;
@@ -29,7 +33,9 @@
   --green:#4FD39A; --green-weak:rgba(3,178,108,.18);
   --s1:#9085E9; --s2:#D95926; --s3:#199E70; --s4:#C98500;
   --dim:rgba(0,0,0,.62); --shadow:0 2px 10px rgba(0,0,0,.35); --shadow-pop:0 12px 40px rgba(0,0,0,.5);
+  --ai-bg:#1A1828; --ai-weak:rgba(140,123,255,.14); --ai-text:#B9AEFF;
   color-scheme:dark}}
+:root[data-theme="light"]{color-scheme:light}
 :root[data-theme="dark"]{
   --bg:#141418; --bg-grey:#1B1B21; --bg-doc:#101014; --surface:#1E1E25; --side:#18181D;
   --line:#2C2C35; --line-2:#3A3A45; --hover:rgba(255,255,255,.06);
@@ -40,6 +46,7 @@
   --green:#4FD39A; --green-weak:rgba(3,178,108,.18);
   --s1:#9085E9; --s2:#D95926; --s3:#199E70; --s4:#C98500;
   --dim:rgba(0,0,0,.62); --shadow:0 2px 10px rgba(0,0,0,.35); --shadow-pop:0 12px 40px rgba(0,0,0,.5);
+  --ai-bg:#1A1828; --ai-weak:rgba(140,123,255,.14); --ai-text:#B9AEFF;
   color-scheme:dark}
 html,body{height:100%;overflow-x:clip}
 #root{height:100%}
@@ -98,6 +105,7 @@ svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stro
 .grp>p .dot.p{background:var(--primary-text)}
 .grp button{height:34px;padding:0 10px;border-radius:var(--r-sm);font-size:14px;text-align:left;color:var(--t);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .grp button:hover{background:var(--hover)}
+.grp button[aria-current="page"]{background:var(--hover);color:var(--t-strong);font-weight:500}
 .step{display:flex!important;align-items:center;gap:10px}
 .step .n{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;font-size:11px;font-weight:700;background:var(--t-strong);color:var(--bg)}
 .step .d{margin-left:auto;font-size:11.5px;color:var(--t-cap)}
@@ -110,8 +118,12 @@ svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stro
 .main{min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--bg)}
 .mobilebar{display:none}
 
-.hdr{height:60px;flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 20px;border-bottom:1px solid var(--line);background:var(--bg)}
+.hdr{height:60px;flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 20px;background:var(--bg);position:relative;z-index:5}
+/* v05: 고정 헤더 아래 선 대신 그라데이션 블러 */
+.hdr::after,.dhead::after,.dtop::after,.topbar::after{content:"";position:absolute;left:0;right:0;top:100%;height:24px;pointer-events:none;background:linear-gradient(var(--bg),transparent);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);-webkit-mask-image:linear-gradient(#000,transparent);mask-image:linear-gradient(#000,transparent)}
 .hdr h1{margin:0;font-size:17px;font-weight:700;color:var(--t-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hdr .ctr{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
+@media (max-width:1180px){.hdr .ctr{position:static;transform:none}}
 .hdr .r{display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden}
 .chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:999px;background:var(--bg-grey);font-size:12.5px;color:var(--t-sub);white-space:nowrap}
 .chip b{color:var(--t-strong);font-weight:500}
@@ -167,6 +179,9 @@ svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stro
 .drop h4 small{font-size:12px;color:var(--t-cap);font-weight:400}
 .zone{border:1.5px dashed var(--line-2);border-radius:14px;padding:12px;display:grid;gap:8px;min-height:250px;align-content:start;transition:background .15s,border-color .15s}
 .zone.over{background:var(--primary-weak);border-color:var(--primary-text)}
+/* 업로드 안내는 칸의 남은 공간 가운데(가로·세로) */
+.drop .zone{display:flex;flex-direction:column}
+.drop .zone>.dz{flex:1;align-content:center}
 .frow{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:var(--surface);border:1px solid var(--line)}
 .frow .k{font-size:10.5px;font-weight:700;color:var(--t-cap);background:var(--bg-grey);border-radius:6px;padding:3px 6px}
 .frow b{display:block;font-size:13.5px;font-weight:500;color:var(--t-strong);word-break:break-all}
@@ -197,7 +212,7 @@ svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stro
 
 /* ---------- B30 review ---------- */
 .docarea{flex:1;min-width:0;overflow:auto;background:var(--bg-doc);position:relative}
-.docin{width:min(760px,100%);margin:0 auto;padding:20px 0 60px;display:grid;gap:14px}
+.docin{width:min(760px,100%);margin:0 auto;padding:20px 0 160px;display:grid;gap:14px}
 .sumwrap{position:sticky;top:12px;z-index:6;height:50px;margin:0 12px}
 .sum{position:absolute;inset:0 0 auto 0;background:color-mix(in srgb,var(--surface) 72%,transparent);-webkit-backdrop-filter:blur(16px) saturate(1.2);backdrop-filter:blur(16px) saturate(1.2);border-radius:14px;box-shadow:var(--shadow);border:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
 .sum>button{width:100%;display:flex;align-items:center;gap:12px;padding:13px 18px;text-align:left}
@@ -266,7 +281,7 @@ sup.mk{font-size:10.5px;margin-left:3px;padding:1px 5px;border-radius:4px;backgr
 .chatside .chat{flex:1}
 .chh{flex:none;display:flex;align-items:center;gap:8px;padding:12px 14px 12px 18px;border-bottom:1px solid var(--line)}
 .chh b{font-size:14.5px;color:var(--t-strong)}
-.chh svg.i{color:var(--primary-text)}
+.chh svg.i{color:var(--t-strong)}
 .chh .icon-btn{margin-left:auto}
 .msgs{flex:1;min-height:0;overflow:auto;padding:16px 18px;display:flex;flex-direction:column;justify-content:flex-end;gap:14px}
 .msgs .inner{display:flex;flex-direction:column;gap:14px}
@@ -279,22 +294,26 @@ sup.mk{font-size:10.5px;margin-left:3px;padding:1px 5px;border-radius:4px;backgr
 .send{width:34px;height:34px;border-radius:10px;background:var(--primary);color:var(--on-primary);display:grid;place-items:center;flex:none}
 
 /* ---------- reports ---------- */
-.rep{display:grid;grid-template-columns:180px minmax(0,760px);gap:48px;justify-content:center;padding:36px 32px 80px}
-.rep.wide{grid-template-columns:150px minmax(0,860px)}
-.toc{position:sticky;top:24px;align-self:start;display:grid;gap:4px;font-size:13.5px}
+/* 보고서: 세션 제목(헤더) 왼쪽 여백 40px, 목차 왼쪽 끝도 같은 40px. 본문은 남은 칸 가운데 */
+.hdr.rp{padding:0 24px 0 40px}
+.rep{display:grid;grid-template-columns:180px minmax(0,1fr);gap:40px;padding:36px 40px 160px}
+.rep>.doc{width:100%;max-width:760px;margin:0 auto}
+.rep.wide>.doc{max-width:860px}
+.toc{position:sticky;top:36px;align-self:start;display:grid;gap:4px;font-size:13.5px}
 .toc p{margin:0 0 6px;font-size:12px;color:var(--t-cap)}
 .toc button{text-align:left;padding:4px 0;color:var(--t-sub)}
-.toc button:hover{color:var(--t-strong)}
+.toc button:hover,.toc button[aria-current="true"]{color:var(--t-strong)}
+.toc button[aria-current="true"]{font-weight:700}
 .doc{min-width:0}
 .doc h1{margin:0;font-size:28px;line-height:1.35;color:var(--t-strong);letter-spacing:-.01em}
-.dtop{position:sticky;top:0;z-index:4;background:var(--bg);margin:-36px 0 0;padding:36px 0 2px;border-bottom:1px solid var(--line)}
-.dtop+*{margin-top:24px}
+.dtop{position:sticky;top:0;z-index:4;background:var(--bg);margin:-36px 0 0;padding:36px 0 2px}
+.dtop+*{margin-top:40px}
 .dtop .meta h1{margin:0}
 .dtop .meta{margin-bottom:14px}
 .meta{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:8px 0 26px;font-size:13px;color:var(--t-cap)}
 .doc h2{font-size:20px;margin:36px 0 12px;color:var(--t-strong);scroll-margin-top:150px}
 .doc h3{font-size:16px;margin:24px 0 8px;color:var(--t-strong)}
-.doc p{margin:0 0 12px;line-height:1.8;max-width:68ch}
+.doc p{margin:0 0 12px;line-height:1.8}
 .tbl{overflow-x:auto;margin:8px 0 14px}
 .tbl table{width:100%;border-collapse:collapse;font-size:14px;min-width:480px}
 .tbl th{font-weight:500;font-size:12.5px;color:var(--t-cap);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line-2)}
@@ -309,9 +328,9 @@ sup.mk{font-size:10.5px;margin-left:3px;padding:1px 5px;border-radius:4px;backgr
 .link{color:var(--primary-text);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .fix{margin:0;padding-left:20px;display:grid;gap:6px}
 .srcs{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12.5px;color:var(--t-cap)}
-.qa{padding:4px 0 18px}
+.qa{margin:30px 0 0}
 .qa .no{display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px}
-.qa .no b{color:var(--t-strong)}
+.qa .no b{color:var(--ai-text)}
 .qa .qt{font-size:16.5px;font-weight:500;color:var(--t-strong);line-height:1.6;margin-bottom:10px}
 .vt{display:inline-flex;gap:4px}
 .vt button{height:30px;padding:0 12px;border-radius:8px;background:var(--surface);border:1px solid var(--line);font-size:13px}
@@ -323,7 +342,7 @@ sup.mk{font-size:10.5px;margin-left:3px;padding:1px 5px;border-radius:4px;backgr
 /* ---------- F10 dashboard ---------- */
 .fwrap{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
 .dash{flex:1;min-height:0;overflow:auto;padding-block:0 140px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px))}
-.dhead{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;margin:0 0 16px;padding:22px 0 14px;position:sticky;top:0;z-index:8;background:var(--bg);border-bottom:1px solid var(--line)}
+.dhead{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;margin:0 0 16px;padding:14px 0 14px;position:sticky;top:0;z-index:8;background:var(--bg)}
 .dhead h2{margin:0;font-size:22px;color:var(--t-strong)}
 .dhead .sub{font-size:13px;color:var(--t-cap)}
 .dhead .ctl{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
@@ -336,7 +355,7 @@ sup.mk{font-size:10.5px;margin-left:3px;padding:1px 5px;border-radius:4px;backgr
 .tabs button[aria-selected="true"]{background:var(--surface);color:var(--t-strong);font-weight:500;box-shadow:var(--shadow-seg)}
 .grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px}
 .c3{grid-column:span 3}.c4{grid-column:span 4}.c5{grid-column:span 5}.c6{grid-column:span 6}.c7{grid-column:span 7}.c8{grid-column:span 8}.c12{grid-column:span 12}
-.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;min-width:0;display:flex;flex-direction:column}
 .ch{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
 .ch h3{margin:0;font-size:14.5px;font-weight:700;color:var(--t-strong)}
@@ -373,21 +392,199 @@ svg.chart rect[data-tip]:hover,svg.chart circle[data-tip]:hover{opacity:.82}
 .fin .cin{pointer-events:auto;width:min(760px,100%);margin:0;box-shadow:var(--shadow-pop);border-radius:16px;padding:8px 8px 8px 8px}
 
 /* ---------- F20 ---------- */
-.conv{width:min(820px,100%);margin:0 auto;padding:28px 0 150px;display:grid;gap:22px}
+.conv{width:min(820px,100%);margin:0 auto;padding:28px 0 260px;display:grid;gap:22px}
 .conv .bub{max-width:min(560px,70%)}
 .para{font-size:15.5px;line-height:1.8;color:var(--t)}
 .para .tags{display:flex;gap:4px;margin-top:6px}
 .srcgrid{display:grid;grid-template-columns:1.2fr 1fr;gap:12px}
 .srcline{font-size:12.5px;color:var(--t-cap)}
-.sugg{display:grid}
-.sugg p{margin:0 0 4px;font-size:12.5px;color:var(--t-cap)}
-.sugg button{text-align:left;padding:11px 4px;border-bottom:1px solid var(--line);font-size:14.5px}
-.sugg button:hover{background:var(--hover)}
+.sugg{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.sugg p{flex-basis:100%;margin:0;font-size:12.5px;font-weight:500;color:var(--ai-text);display:flex;gap:4px;align-items:center}
+.sugg p svg.i{width:14px;height:14px}
+.sugg button{text-align:left;padding:6px 12px;border:1px solid color-mix(in srgb,var(--ai-text) 40%,transparent);border-radius:999px;font-size:13px;line-height:1.4;color:var(--ai-text);background:var(--surface)}
+.sugg button:hover{background:var(--ai-weak)}
+.fin .sugg{width:min(760px,100%);pointer-events:auto;margin-bottom:10px}
+.chatside .sugg{padding:0 14px 10px}
+
+/* ---------- v04: 사실 / 해석 구분, 검색, 인사이트 ---------- */
+.tag.ai{background:var(--ai-weak);color:var(--ai-text)}
+.aib{background:none;padding:0}
+.aib .lab{color:var(--ai-text)}
+.dl dd.aib{border-radius:0;padding-left:10px}
+.ai-lab{display:flex;gap:4px;align-items:center;font-size:12px;font-weight:700;color:var(--ai-text);margin-bottom:6px}
+.ai-lab svg.i{width:14px;height:14px}
+.lab2{display:flex;gap:4px;align-items:center;font-size:12px;font-weight:700;color:var(--t-cap);margin-bottom:6px}
+.sico{display:inline-grid;color:var(--t-cap)}
+.res{display:grid;gap:10px}
+.rcard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:6px}
+.rcard .rv{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.rcard .rv b{font-size:17px;color:var(--t-strong);font-variant-numeric:tabular-nums}
+.rcard .rv .l{font-size:13px;color:var(--t-sub)}
+.rcard .loc{font-size:12.5px;color:var(--t-cap)}
+.rcard .ex{font-size:13.5px;color:var(--t);border-left:3px solid var(--line-2);padding-left:10px;line-height:1.6}
+.rcard .ex mark,.ans mark{background:var(--yel-weak);text-decoration:none;cursor:default;padding:0 2px}
+.rhead{font-size:13px;color:var(--t-cap)}
+.guide{font-size:13px;color:var(--t-sub);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ans .rcard{padding:10px 12px}
+.ans .rcard .rv b{font-size:15px}
+.ans .guide{margin-top:6px}
+.sech{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:22px 0 12px}
+.sech h3{margin:0;font-size:16px;color:var(--t-strong)}
+.sech .sub{font-size:13px;color:var(--t-cap)}
+.icards{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+.icard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;display:grid;gap:14px;align-content:start;min-width:0}
+.icard h3{margin:0;font-size:15.5px;color:var(--t-strong);line-height:1.5}
+.icard .facts{margin:0}.icard .facts table{min-width:0;font-size:13px}
+.icard .facts td,.icard .facts th{padding:6px 6px}
+.aip{background:var(--surface);border:1.5px solid color-mix(in srgb,var(--ai-text) 55%,transparent);border-radius:12px;padding:12px 14px}
+.aip p{margin:0;font-size:14px;line-height:1.7}
+.nrefs{display:grid;gap:2px;margin-top:8px}
+.nref{font-size:12px;color:var(--t-cap);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nref:hover{color:var(--ai-text);text-decoration:underline}
+.ask2{text-align:left;font-size:13px;color:var(--ai-text);padding:4px 0}
+.ask2:hover{text-decoration:underline}
+.fact{background:none;border:1px solid var(--line-2);border-radius:14px;padding:16px 18px;display:grid;gap:12px}
+.conv>.aip{padding:16px 18px;display:grid;gap:12px}
+.news{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:8px}
+.news .ncard{flex:none;width:min(380px,85vw);scroll-snap-align:start}
+.ncard{display:flex;flex-direction:column;gap:12px;align-items:stretch;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;text-decoration:none;color:inherit;min-width:0;transition:box-shadow .15s}
+.ncard:hover{box-shadow:var(--shadow)}
+.ncard:hover .nt{text-decoration:underline;text-underline-offset:3px}
+.ntext{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.nm{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t-cap);white-space:nowrap;overflow:hidden}
+.nm .pi{width:18px;height:18px;border-radius:50%;background:var(--bg-grey);color:var(--t-sub);display:inline-grid;place-items:center;font-size:10.5px;font-weight:700;flex:none}
+.nm .dotsep{color:var(--t-ph)}
+.nt{font-size:15px;font-weight:500;line-height:1.5;color:var(--t-strong);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ntext>div:last-child{margin-top:auto}
+.nimg{position:relative;width:100%;aspect-ratio:16/9;flex:none;border-radius:10px;overflow:hidden;background:var(--bg-grey)}
+.nimg img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.nimg span{position:absolute;inset:0;display:grid;place-items:center;font-size:22px;font-weight:700;color:var(--t-ph)}
+.themebtn{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border-radius:var(--r-sm);font-size:13px;color:var(--t-sub);width:100%}
+.themebtn:hover{background:var(--hover)}
+.login .themebtn{position:fixed;top:16px;right:16px;width:auto;background:var(--surface);box-shadow:var(--shadow)}
+
+/* ---------- v05 2차: 사이드바 현재 세션, B10, 보고서 ---------- */
+.sdot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--ai-text);margin-left:8px}
+.grp button:has(.sdot){display:flex;align-items:center}
+.grp button .st{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.b10{gap:20px}
+.b10 .zone{min-height:0;padding:0;border:0;background:var(--bg-grey);border-radius:16px;gap:6px;align-content:start;transition:background .15s}
+/* 파일이 들어가면 칸(면)은 없애고 작은 제목 + 파일만. 끌어 오는 중에만 옅은 면 */
+.b10 .zone:not(:has(.dz.big)){padding:0;background:none;border-radius:12px}
+.b10 .zone.over:not(:has(.dz.big)){background:var(--hover);box-shadow:0 0 0 8px var(--hover)}
+.b10 .zh{padding:0 2px 2px}
+.b10 .zone.over{background:var(--hover)}
+.zh{font-size:14px;font-weight:700;color:var(--t-strong);padding:2px 4px 2px}
+/* 빈 칸: 큰 제목만. 호버·포커스·끌어 오는 중이면 상세 안내가 제목 자리를 대신해요 */
+.dz.big{display:grid;place-items:center;height:120px;padding:0;border-radius:16px;width:100%}
+.dz.big>span{grid-area:1/1;transition:opacity .15s,transform .15s}
+.dz-t{font-size:22px;font-weight:700;color:var(--t-strong);letter-spacing:-.01em}
+.dz-d{display:grid;justify-items:center;gap:4px;font-size:14px;font-weight:500;color:var(--t-sub);opacity:0;transform:translateY(6px)}
+.dz-d small{font-size:12px;color:var(--t-cap);font-weight:400}
+.dz.big:hover,.zone.over .dz.big,.dz.big:focus-visible{background:var(--hover)}
+.dz.big:hover .dz-t,.zone.over .dz-t,.dz.big:focus-visible .dz-t{opacity:0;transform:translateY(-6px)}
+.dz.big:hover .dz-d,.zone.over .dz-d,.dz.big:focus-visible .dz-d{opacity:1;transform:none}
+.zh small{font-weight:400;color:var(--t-cap);margin-left:4px}
+.evrow{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scroll-snap-type:x proximity}
+.ecard{flex:none;width:184px;display:grid;gap:6px;align-content:start;padding:10px 10px 12px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--line);scroll-snap-align:start}
+.ecard.w{border-color:var(--yel-line)}
+.ecard .et{display:flex;justify-content:space-between;align-items:center}
+.ecard .k{font-size:10.5px;font-weight:700;color:var(--t-cap);background:var(--bg-grey);border-radius:6px;padding:3px 6px}
+.ecard .icon-btn{width:26px;height:26px}
+.ecard .icon-btn svg.i{width:15px;height:15px}
+.ecard b{font-size:13.5px;font-weight:500;line-height:1.45;color:var(--t-strong);overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ecard small{font-size:12px;color:var(--t-cap)}
+.evrow .dz.add{flex:none;width:128px;display:grid;place-items:center;align-content:center;gap:2px;padding:12px;border-radius:12px;background:var(--hover);text-align:center}
+.evrow .dz.add small{margin:0;font-size:11px}
+.dz.add{display:flex;align-items:center;justify-content:flex-start;gap:6px;padding:10px 12px;border-radius:10px;font-size:13.5px;text-align:left}
+.dz.add svg.i{width:16px;height:16px}
+.dz.add small{margin-left:auto;opacity:0;transition:opacity .15s}
+.dz.add:hover small,.zone.over .dz.add small{opacity:1}
+.qwrap{position:relative;z-index:6;display:grid;gap:10px}
+.cin.qin{margin:0;padding:6px;box-shadow:var(--shadow);gap:6px}
+.cin.qin input{padding:0 8px;font-size:15px}
+.cin.qin:focus-within{border-color:var(--t-sub)}
+.cbtn{display:inline-flex;align-items:center;gap:4px;height:34px;min-width:34px;justify-content:center;padding:0 8px;border-radius:10px;background:var(--bg-grey);color:var(--t-sub);font-size:13px;white-space:nowrap}
+.cbtn:hover{color:var(--t-strong)}
+.cbtn.pk{padding:0 12px}
+.cin .send:disabled{background:var(--line);color:var(--t-ph);cursor:not-allowed}
+.b10 .files{padding:0 2px;justify-content:center}
+.pz{border:1px solid var(--line);border-radius:16px;display:grid;gap:8px;align-content:start;min-height:220px}
+.pz:not(:has(.dz.big)){padding:12px}
+.pz .dz.big{height:100%;min-height:218px}
+.pz.over{background:var(--hover)}
+.qline{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line-2);border-radius:999px;padding:6px 6px 6px 20px;box-shadow:var(--shadow)}
+.qline:focus-within{border-color:var(--t-sub)}
+.qline input{flex:1;min-width:0;border:0;background:transparent;outline:none;font-size:15.5px;height:40px;color:var(--t-strong)}
+.qline input::placeholder{color:var(--t-ph)}
+.qline .btn{border-radius:999px}
+.exlist{position:absolute;left:12px;right:12px;top:calc(100% + 8px);z-index:7;display:grid;gap:6px}
+.exlist button{text-align:left;padding:12px 16px;border-radius:12px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);font-size:14.5px;color:var(--t);animation:exdrop .24s ease-out var(--d) both}
+.exlist button:hover{background:var(--bg-grey);color:var(--t-strong)}
+@keyframes exdrop{from{opacity:0;transform:translateY(-10px)}}
+.evwrap{transition:filter .2s,opacity .2s}
+.evwrap.blur{filter:blur(5px);opacity:.45;pointer-events:none}
+@media (max-width:600px){.qline{flex-wrap:wrap;border-radius:18px;padding:8px}.qline input{flex-basis:100%;padding:0 8px}.qline .menuwrap{margin-right:auto}}
+.toc .btn{justify-self:start;margin-top:14px;padding:0 12px;color:var(--t)}
+.rep.ai .toc button[aria-current="true"]{color:var(--ai-text)}
+.it{margin-top:48px}
+.doc .it h3.ih{margin:0;display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.srcbox{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:8px;background:var(--bg-grey);font-size:12.5px;font-weight:400;color:var(--t-sub);line-height:1.5}
+.srcbox svg.i{width:14px;height:14px;color:var(--t-cap)}
+.ih .srcbox{margin-left:auto}
+.doc p.claim{margin:18px 0 22px}
+.blk{margin:0 0 18px}
+.blk>.lab{font-size:12px;font-weight:500;color:var(--t-cap);margin-bottom:6px}
+.blk p{margin:0}
+.blk .none{color:var(--t-cap);font-size:14px}
+.it .aip ul{margin:0;padding-left:20px;display:grid;gap:2px;font-size:14.5px}
+.qloc{margin-top:2px}
+
+/* ---------- v05: 상단 고정 보기 전환, 챗봇(C10/C20), 보고서 태그 ---------- */
+.topbar{flex:none;display:flex;justify-content:center;padding:12px 16px;background:var(--bg);position:relative;z-index:9}
+.mwrap{flex:1;min-height:0;display:flex}
+.mcol{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;position:relative}
+.cin .seg{flex:none}
+.cin .seg button{height:28px;padding:0 12px;font-size:13px}
+.cin.ins{border-color:var(--ai-text);box-shadow:0 0 0 3px var(--ai-weak)}
+.fin .cin.ins{box-shadow:0 0 0 3px var(--ai-weak),var(--shadow-pop)}
+.cin .seg button.mi[aria-pressed="true"]{color:var(--ai-text)}
+.cin .send{background:var(--t-strong);color:var(--bg)}
+.cin.ins .send{background:var(--ai-text);color:#fff}
+.chatside{background:var(--bg);border-left:0;padding:12px 12px 12px 0}
+.chatside .chat{border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.chatside .chh{border-bottom:0;position:relative;z-index:2}
+.chatside .chh b{flex:1;min-width:0;line-height:1.45}
+.chatside .chh::after{content:"";position:absolute;left:0;right:0;top:100%;height:20px;pointer-events:none;background:linear-gradient(var(--bg),transparent)}
+.chatside .msgs{justify-content:flex-start}
+.chatside .srcgrid{grid-template-columns:minmax(0,1fr)}
+.chatside .msgs{overflow-x:hidden}
+.chatside .inner>*{min-width:0}
+.chatside .nref{white-space:normal}
+.chatside .card{padding:12px}
+.chatside .bub{max-width:85%}
+.chatside .para{font-size:14px}
+.chatside .cin{flex-wrap:wrap;padding:6px}
+.chatside .cin input{flex-basis:100%;order:-1;padding:0 6px}
+.chatside .cin .send{margin-left:auto}
+.mnote{font-size:13.5px;color:var(--t-sub);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.tag.bad{background:var(--red-weak);color:var(--red);font-weight:700}
+.doc h3.ih{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.srcloc{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:8px;border:1px solid var(--line-2);background:var(--surface);font-size:13px;font-weight:500;color:var(--t-strong);margin:0 0 10px}
+button.srcloc:hover{background:var(--hover)}
+.srcloc svg.i{width:15px;height:15px;color:var(--t-sub)}
+.srcloc .go{color:var(--t-cap);font-weight:400}
+.lack{margin:2px 0 14px}
+.lack .lab{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--t-strong);margin-bottom:4px}
+.lack ul{margin:0;padding-left:20px;display:grid;gap:2px;font-size:14.5px}
+.bzone{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.bzone .zone{min-height:150px;background:var(--surface)}
+@media (max-width:960px){.bzone{grid-template-columns:minmax(0,1fr)}.mwrap{flex-direction:column}.chatside{position:fixed;inset:0;z-index:70;width:auto;height:auto;border:0;padding:0}.chatside .chat{border:0;border-radius:0}}
 
 .toast{position:fixed;left:50%;bottom:calc(28px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--t-strong);color:var(--bg);padding:11px 18px;border-radius:12px;font-size:14px;z-index:90;max-width:calc(100% - 32px)}
 
 /* ---------- responsive ---------- */
-@media (max-width:1180px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.c3,.c4,.c5,.c7,.c8{grid-column:span 6}.rpanel{width:380px}.chatside{width:340px}}
+@media (max-width:1180px){.c3,.c4,.c5,.c7,.c8{grid-column:span 6}.rpanel{width:380px}.chatside{width:340px}}
 @media (max-width:960px){
   .dtop{margin-top:-24px;padding-top:24px}
   .app{grid-template-columns:minmax(0,1fr)}
@@ -397,10 +594,10 @@ svg.chart rect[data-tip]:hover,svg.chart circle[data-tip]:hover{opacity:.82}
   .mobilebar b{font-weight:700;color:var(--t-strong)}
   .body{flex-direction:column;overflow:auto}
   .docarea,.scroll{overflow:visible;flex:none}
-  .rpanel,.chatside{width:auto;border-left:0;border-top:1px solid var(--line)}
+  .rpanel{width:auto;border-left:0;border-top:1px solid var(--line)}
+  .chatside{width:auto}
   .rpanel .chat{height:420px}
-  .chatside{height:520px}
-  .rep,.rep.wide{grid-template-columns:minmax(0,1fr);padding:24px 16px 60px;gap:16px}
+  .rep,.rep.wide{grid-template-columns:minmax(0,1fr);padding:24px 16px 160px;gap:16px}
   .toc{position:static;display:flex;flex-wrap:wrap;gap:4px 14px}
   .toc p{width:100%}
   .c6,.c12{grid-column:span 12}.c3,.c4,.c5,.c7,.c8{grid-column:span 12}
@@ -449,30 +646,22 @@ const DEPTS=['네트워크/인프라','마케팅','AI/신사업','IT/정보시�
 const ANALYSIS={
  capex:{t:'5G 투자 안정화로 효율적 집행',claim:'5G 투자가 안정화 단계에 들어서 CapEx를 효율적으로 집행했다',at:'사업보고서 61쪽',ev:[['2025년 CapEx (SKT 단독)','1조 2,440억원'],['2024년 CapEx (SKT 단독)','1조 5,440억원']],gap:'금액은 있지만 "안정화"와 "효율"을 받쳐 줄 숫자(5G 커버리지, 트래픽당 투자비)가 없어요. 2026년 계획 금액도 없어요.',calc:[['−19.4%','전년 대비, (12,440 − 15,440) ÷ 15,440'],['−28.6%','2년 누적, (12,440 − 17,430) ÷ 17,430']],src:'SKT 2025 사업보고서 II-3-라, 61쪽 (공시 2026-03-17)'},
  dep:{t:'감가상각비 점진 감소',claim:'5G 설비 상각이 진행돼 감가상각비가 점진적으로 줄어든다',at:'사업보고서 61쪽',ev:[],gap:'줄어든다는 전망만 있고 연도별 상각 일정이나 금액이 없어요.',src:'SKT 2025 사업보고서 II-3-라, 61쪽'}};
-const QUESTIONS={
- q1:{t:'AI 인프라 투자 규모',lv:'높음',q:'AI 인프라 투자를 "지속 확대"한다고 했는데, 2026년 CapEx 안에서 AI 데이터센터와 GPUaaS에 얼마를 쓰나요? 언제부터 매출로 돌아오나요?',why:'"확대"에 금액과 회수 시점이 없어요. 네트워크/인프라 부서는 투자 효과를 엄격하게 봐요.',prep:'AI 인프라 CapEx 비중, GPUaaS 매출 추이, 데이터센터 가동률',loc:'사업보고서 II-3-라 61쪽, IR 발표자료 12쪽',prompt:'SKT의 2023~2025 CapEx 추이와 동종사(KT, LG유플러스) CapEx를 비교하고, AI 데이터센터 투자 계획이 공시된 자료를 찾아 정리해 주세요.'},
- q2:{t:'CapEx 2년 연속 감소와 5G 품질',lv:'높음',q:'CapEx가 2년 동안 28.6% 줄었는데, 5G 품질과 커버리지는 어떻게 유지하나요?',why:'감소 사유를 받쳐 줄 품질 지표가 없어요.',prep:'5G 커버리지, 품질 평가 결과, 트래픽당 투자비',loc:'사업보고서 II-3-라 61쪽',prompt:'SKT의 2021~2025 CapEx와 유형자산 감가상각비를 나란히 보여 주고, CapEx ÷ 감가상각비 비율이 1보다 낮아진 해를 알려 주세요.'}};
-const MARKS={capex:{a:'capex',q:'q2'},ai:{q:'q1'},dep:{a:'dep'}};
-const SUMMARY=[['5G 투자가 안정화돼 CapEx를 효율적으로 집행했다','근거: 2025 CapEx 1조 2,440억원, 감소 사유를 받쳐 줄 숫자는 없음','근거 부족','bad','capex'],
- ['AI 인프라 투자를 지속 확대한다','근거: 없음, 확대 규모와 회수 시점이 빠짐','질문','q','ai'],
- ['감가상각비가 점진적으로 줄어든다','근거: 없음, 연도별 상각 일정이 빠짐','근거 부족','bad','dep'],
- ['유무선 가입자 기반이 안정적이다','근거: 5G 가입자 비중 증가','근거 충분','ok',null]];
-const CHAT0={
- b30:[['u','SKT의 2023~2025 CapEx 추이와 동종사 CapEx를 비교해 주세요.'],['a','SKT 단독 CapEx는 2023년 1조 7,430억원에서 2025년 1조 2,440억원으로 2년 동안 28.6% 줄었어요 [1]. 같은 기간 KT와 LG유플러스도 투자를 줄였지만 감소 폭은 SKT가 가장 커요 [2].','[1] SKT 2025 사업보고서 II-3-라   [2] DART 3사 사업보고서']],
- b40:[['u','총평에서 근거가 부족한 4개는 어떤 주장이에요?'],['a','CapEx 효율 집행, AI 인프라 확대, 감가상각 감소, 네트워크 운영비 절감이에요 [1]. 네 개 모두 금액은 있지만 이유나 계획 숫자가 빠져 있어요.','[1] 분석 보고서 2장']],
- b50:[['u','Q1에 답하려면 무엇을 준비하면 돼요?'],['a','2026년 CapEx 중 AI 인프라 금액, GPUaaS 매출 추이, 데이터센터 가동률을 준비하세요 [1]. 공시에는 AI 인프라 금액이 따로 없어요.','[1] 예상 질문 보고서 Q1']],
- b60:[['u','빗나간 질문은 왜 빗나갔어요?'],['a','Q5 주주환원 재원과 Q6 전략 연결은 이번 분기 리포트 4건 어디에서도 쟁점으로 다루지 않았어요 [1].','[1] 예측 평가 2장']],
- b61:[['u','KT 리포트의 쟁점을 요약해 줘'],['a','정답 표에는 KT 리포트가 없어요. 증권사 4곳(A~D)의 쟁점 7개가 들어 있고, CapEx 축소와 AI 데이터센터 투자가 가장 많이 나왔어요 [1].','[1] 정답 표']]};
+/* v05 Chat Agent: 사실 모드(적재 데이터만, 무채색) / 인사이트 모드(AI 해석·추천, 보라). 메시지 ['u',질문,모드] ['a',답 키,모드,질문] */
+const SESS0=[{id:'s1',t:'SKT CapEx가 줄어든 이유',log:[['u','SKT CapEx가 2년 동안 줄어든 이유는?','ins'],['a','capex','ins']]}];
 
 /* ================= state ================= */
 const S={route:'login',sideOpen:false,
- files:{budget:null,ev:[]},attached:false,prompt:'',model:'범용 LLM',co:'SKT',dept:'네트워크/인프라',qtr:'2025 4Q',menu:null,modal:null,
+ files:{budget:null,ev:[]},prompt:'',model:'범용 LLM',co:'SKT',dept:'네트워크/인프라',qtr:'2025 4Q',menu:null,modal:null,
  draft:{budget:null,ev:[]},progress:0,
  sumOpen:false,tab:'a',openA:'capex',openQ:'q1',promptOpen:{q1:true},mark:null,
- chat:false,chatLog:JSON.parse(JSON.stringify(CHAT0)),
+ cmode:'fact',cside:false,sess:JSON.parse(JSON.stringify(SESS0)),cur:'s1',cq:'',
  exp:3,q4:'부분',
  ex:{sel:['a1','a2','a3','q1','q2','q3','q4'],fmt:'Markdown'},
- ftab:'over',editCrit:false,addRow:false,extraRows:[],crit:'같은 숫자나 사업을 두고 같은 방향의 의문을 품으면 맞힘이에요. 쟁점은 같지만 묻는 초점이 다르면 부분(0.5점)이에요. 예상 질문이 어느 리포트 쟁점과도 닿지 않으면 빗나감이에요.',scope:'skb',period:'y',fq:'',i20extra:[]};
+ ftab:'over',editCrit:false,addRow:false,extraRows:[],crit:'같은 숫자나 사업을 두고 같은 방향의 의문을 품으면 맞힘이에요. 쟁점은 같지만 묻는 초점이 다르면 부분(0.5점)이에요. 예상 질문이 어느 리포트 쟁점과도 닿지 않으면 빗나감이에요.',scope:'skb',period:'y',
+ nf:'전체',exOpen:false};
+/* 테마: 시스템 설정을 따르다가 토글하면 data-theme로 고정 */
+function isDark(){const t=document.documentElement.dataset.theme;if(t)return t==='dark';return !!(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches);}
+try{const t=localStorage.getItem('telescope-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;}catch(e){}
 const $=s=>document.querySelector(s);
 const root=$('#root');
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -493,60 +682,98 @@ const I={
  upload:'<svg class="i" viewBox="0 0 20 20" style="width:22px;height:22px"><path d="M10 13V3.5M6 7.5l4-4 4 4"/><path d="M3.5 12.5v3a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5v-3"/></svg>',
  copy:'<svg class="i" viewBox="0 0 20 20"><rect x="7" y="3" width="10" height="10" rx="2"/><path d="M13 16a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 3 16V9a1.5 1.5 0 0 1 1.5-1.5"/></svg>',
  warn:'<svg class="i" viewBox="0 0 20 20"><path d="M10 3.5l7 12.5H3z"/><path d="M10 8.5v3.5M10 14.3v.2"/></svg>',
- menu:'<svg class="i" viewBox="0 0 20 20"><path d="M3.5 6h13M3.5 10h13M3.5 14h13"/></svg>'};
+ menu:'<svg class="i" viewBox="0 0 20 20"><path d="M3.5 6h13M3.5 10h13M3.5 14h13"/></svg>',
+ search:'<svg class="i" viewBox="0 0 20 20"><circle cx="9" cy="9" r="5.5"/><path d="M13 13l4 4"/></svg>',
+ sun:'<svg class="i" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3.5"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.3 4.3l1.4 1.4M14.3 14.3l1.4 1.4M4.3 15.7l1.4-1.4M14.3 5.7l1.4-1.4"/></svg>',
+ moon:'<svg class="i" viewBox="0 0 20 20"><path d="M16 12.5A6.5 6.5 0 0 1 7.5 4a6.5 6.5 0 1 0 8.5 8.5z"/></svg>'};
 
 /* ================= shell ================= */
-const STEPS=[['b30','예산서 검토'],['b40','분석 보고서'],['b50','예상 질문 보고서']];
-const stepOf=r=>({b30:0,b40:1,b50:2,b60:2,b61:2})[r];
+const STEPS=[['b40','분석 보고서'],['b50','예상 질문 보고서']];
+const stepOf=r=>({b40:0,b50:1,b60:1,b61:1})[r];
+const SDOT='<span class="sdot" aria-hidden="true"></span>';
 function sidebar(){const r=S.route,st=stepOf(r);
  return `<aside class="side ${S.sideOpen?'open':''}" aria-label="메뉴">
   <button class="logo" data-go="b10" aria-label="Telescope 홈, 분석하기로 이동">Telescope</button>
-  <nav class="nav"><button data-go="b10" ${r==='b10'?'aria-current="page"':''}>${I.doc}분석하기</button><button data-go="i10" ${r==='i10'?'aria-current="page"':''}>${I.chat}인사이트</button></nav>
-  ${st!==undefined?`<div class="grp"><p>분석 단계</p>${STEPS.map(([k,l],i)=>`<button class="step" data-go="${k}" ${i===st?'aria-current="step"':''}><span class="n">${i+1}</span>${l}<span class="d">완료</span></button>`).join('')}</div>`:''}
-  <div class="grp"><p>분석 세션 <span class="dot"></span></p><button data-go="b30">SKT 2025 4Q 예산서</button><button data-act="ktSession">KT 2025 4Q 예산서</button></div>
-  <div class="grp"><p>대화 세션 <span class="dot p"></span></p><button data-go="i20">SKT CapEx가 줄어든 이유</button></div>
-  <div class="user"><span class="av" aria-hidden="true"></span><div><b>이서연</b><small>분석 담당자</small></div><button data-go="login">로그아웃</button></div>
+  <nav class="nav"><button data-go="b10" ${['b10','b70'].includes(r)?'aria-current="page"':''}>${I.doc}분석하기</button><button data-go="i10" ${r==='i10'?'aria-current="page"':''}>${I.spark}인사이트</button></nav>
+  <div class="grp"><p>분석 세션</p><button data-go="b40" ${st!==undefined?'aria-current="page"':''}><span class="st">SKT 2025 4Q 예산서</span>${st!==undefined?SDOT:''}</button><button data-act="ktSession">KT 2025 4Q 예산서</button></div>
+  <div class="grp"><p>대화 세션</p>${S.sess.map(s=>{const on=S.cur===s.id&&(r==='i20'||(S.cside&&!NOCHAT.includes(r)));return `<button data-act="sess" data-k="${s.id}" title="${esc(s.t)}" ${on?'aria-current="page"':''}><span class="st">${esc(s.t)}</span>${on?SDOT:''}</button>`;}).join('')}</div>
+  ${themeBtn()}
+  <div class="user" style="margin-top:0"><span class="av" aria-hidden="true"></span><div><b>이서연</b><small>분석 담당자</small></div><button data-go="login">로그아웃</button></div>
  </aside>`;}
-function header(title,chat=true){
- return `<header class="hdr"><h1>${title}</h1><div class="r">
-  <span class="chip">회사 <b>${S.co}</b></span><span class="chip">부서 <b>${S.dept}</b></span><span class="chip">분기 <b>${S.qtr}</b></span><span class="chip">기준 시점 <b class="num">2026-03-17</b></span>
-  ${chat?`<button class="icon-btn" data-act="chat" aria-pressed="${S.chat}" aria-label="AI 챗봇">${I.spark}</button>`:''}</div></header>`;}
-function shell(inner){return `<div class="app">${sidebar()}<div class="main"><div class="mobilebar"><button class="icon-btn" data-act="side" aria-label="메뉴 열기">${I.menu}</button><button class="logo" data-go="b10" style="padding:0">Telescope</button></div>${inner}</div></div>`;}
-function chatBox(key,cls=''){const log=S.chatLog[key];
- return `<section class="chat ${cls}" aria-label="AI 챗봇"><div class="chh">${I.spark}<b>AI 챗봇</b><button class="icon-btn" data-act="chat" aria-label="챗봇 닫기">${I.x}</button></div>
-  <div class="msgs" id="msgs"><div class="inner">${log.map(m=>m[0]==='u'?`<div class="bub">${esc(m[1])}</div>`:`<div class="ans">${esc(m[1])}${m[2]?`<span class="src">${esc(m[2])}</span>`:''}</div>`).join('')}</div></div>
-  <form class="cin" data-form="chat" data-k="${key}"><input id="chatIn" placeholder="이어서 물어보세요" autocomplete="off" aria-label="챗봇에 질문"><button class="send" aria-label="보내기">${I.up}</button></form></section>`;}
+/* v05: 분석 보고서 | 예상 질문 보고서 전환은 헤더 가운데(예산서 검토 | 회사 재무와 같은 모양). 사이드바 단계 목록은 없앰 */
+function repSeg(){const st=stepOf(S.route);if(st===undefined)return '';return `<div class="ctr"><div class="seg" role="tablist" aria-label="보고서 전환">${STEPS.map(([k,l],i)=>`<button role="tab" aria-selected="${i===st}" data-go="${k}">${l}</button>`).join('')}</div></div>`;}
+function header(title){
+ return `<header class="hdr ${stepOf(S.route)!==undefined?'rp':''}"><h1>${title}</h1>${repSeg()}<div class="r">
+  <span class="chip">회사 <b>${S.co}</b></span><span class="chip">분기 <b>${S.qtr}</b></span><span class="chip">기준 시점 <b class="num">2026-03-17</b></span></div></header>`;}
+function themeBtn(){const dk=isDark();return `<button class="themebtn" style="margin-top:auto" data-act="theme" aria-label="${dk?'라이트 모드로 바꾸기':'다크 모드로 바꾸기'}">${dk?I.sun:I.moon}${dk?'라이트 모드':'다크 모드'}</button>`;}
+/* v05: 챗봇은 B10(분석 입력), B20 빼고 모든 화면. 보내면 오른쪽 사이드 채팅(C20)이 열리고 본문은 왼쪽으로 줄어요 */
+const NOCHAT=['login','b10','b20'];
+function shell(inner){const r=S.route,ok=!NOCHAT.includes(r),side=ok&&r!=='i20'&&S.cside;
+ return `<div class="app">${sidebar()}<div class="main"><div class="mobilebar"><button class="icon-btn" data-act="side" aria-label="메뉴 열기">${I.menu}</button><button class="logo" data-go="b10" style="padding:0">Telescope</button></div>
+  <div class="mwrap"><div class="mcol">${inner}${ok&&!side?`<div class="fin">${r==='i20'?sugg():''}${cForm()}</div>`:''}</div>${side?chatSide():''}</div></div></div>`;}
+const curS=()=>S.sess.find(x=>x.id===S.cur)||S.sess[0];
+function cForm(){const ins=S.cmode==='ins';
+ return `<form class="cin ${ins?'ins':''}" data-form="chat"><div class="seg" role="radiogroup" aria-label="대화 모드"><button type="button" aria-pressed="${!ins}" data-act="cmode" data-v="fact">사실</button><button type="button" class="mi" aria-pressed="${ins}" data-act="cmode" data-v="ins">인사이트</button></div>
+  <input id="cq" value="${esc(S.cq)}" placeholder="${ins?'AI 해석과 추천까지 받아요. 예: SKT CapEx가 줄어든 이유는?':'적재된 공시와 예산서에서 사실만 찾아요. 예: SKT CapEx 2023~2025'}" autocomplete="off" aria-label="챗봇에 묻기"><button class="send" aria-label="보내기">${I.up}</button></form>`;}
+function chatSide(){const s=curS();
+ return `<aside class="chatside" aria-label="챗봇"><section class="chat"><div class="chh"><b>${esc(s.t)}</b><button class="icon-btn" data-act="cclose" aria-label="채팅 닫기">${I.x}</button></div>
+  <div class="msgs" id="msgs"><div class="inner">${s.log.map(msg).join('')}</div></div>${sugg()}${cForm()}</section></aside>`;}
+/* AI 추천 · 이어서 물어보기: 답이 있으면 항상 입력창 바로 위 */
+function sugg(){if(!curS().log.some(m=>m[0]==='a'))return '';
+ return `<div class="sugg"><p>${I.spark}AI 추천 · 이어서 물어보기</p>${['KT, LG유플러스도 같은 이유로 CapEx를 줄였나요?','감가상각비 감소가 영업이익에 준 영향은?','AI 데이터센터 투자 계획은 어떻게 봐야 하나요?'].map(x=>`<button data-act="sugg" data-v="${esc(x)}">${x}</button>`).join('')}</div>`;}
+const tagsFact=()=>`<div class="lab2">사실 ${tg('공시')}${tg('계산')}</div>`;
+const aiLab=t=>`<div class="ai-lab">${I.spark}${t||'AI 해석'}</div>`;
+function msg([k,v,mode,q]){if(k==='u')return `<div class="bub">${esc(v)}</div>`;
+ const cx=D.capex.skt;
+ if(v==='capex'&&mode==='fact')return `<div class="fact">${tagsFact()}<div class="para">SKT 단독 CapEx는 2023년 1조 7,430억원, 2024년 1조 5,440억원, 2025년 1조 2,440억원이에요. 2년 동안 28.6% 줄었어요.</div>
+  <div class="rhead">검색 결과 ${RES.length}건 · SKT 공시</div><div class="res">${RES.map(rcard).join('')}</div></div>`;
+ if(v==='capex')return `<div class="fact">${tagsFact()}
+   <div class="para">SKT 단독 CapEx는 2023년 1조 7,430억원에서 2025년 1조 2,440억원으로 2년 동안 28.6% 줄었어요 [1]. 사업보고서는 감소 이유를 "5G 투자가 안정화 단계에 들어섰기 때문"이라고 적었어요.</div>
+   <div class="srcgrid">${card('','[1] CapEx (SKT 단독)','공시',bars({W:420,H:200,labels:['2023','2024','2025'],series:[{name:'CapEx',v:cx.slice(2),c:'--s1',fade:1}],labelLast:1,bw:48,aria:'CapEx 3년'}),'',false)}
+    ${card('','[1] 전년 대비','계산',`<div class="tbl"><table class="ftbl" style="min-width:0"><thead><tr><th></th><th class="n">2024</th><th class="n">2025</th></tr></thead><tbody><tr><td>증감</td><td class="n">−11.4%</td><td class="n">−19.4%</td></tr><tr class="b"><td>2년 누적</td><td class="n"></td><td class="n">−28.6%</td></tr></tbody></table></div>`,'',false)}</div>
+   ${card('','[2] 유형자산 감가상각비 (2021–2025)','SKB 포함',ftable(YR,[['SKT',D.cons.ppeDep]],'억원'),'',false)}
+   <div class="srcline">출처: [1] SKT 2025 사업보고서 II-3-라, 61쪽 (공시 2026-03-17), SKT 2024 사업보고서 (공시 2025-03-18) · [2] SKT 사업보고서 2021~2025, DART. 증감은 계산 값.</div></div>
+  <div class="aip">${aiLab()}
+   <div class="para">같은 기간 유형자산 감가상각비도 줄어, 대규모 5G 설비 투자가 끝나 가는 흐름과 맞아요 [2]. 업계 기사도 5G 이후 투자 우선순위가 AI 인프라 쪽으로 재편되고 있다고 봐요 [3]. 다만 2026년 투자 계획 금액과 AI 인프라 비중은 공시에 없어서, 예산서에서 이 근거를 보완해야 해요.</div>
+   <div class="srcline">근거 기사: [3] ${nref(0)}</div></div>`;
+ if(v==='why')return `<div class="fact"><div class="mnote">사실 모드에서는 "왜", "어떻게 봐야 하나요" 같은 해석을 하지 않아요. <button class="btn line sm" data-act="toIns" data-v="${esc(q)}">인사이트 모드로 묻기</button></div></div>`;
+ return mode==='ins'?`<div class="aip">${aiLab()}<div class="para" style="color:var(--t-sub)">데모에는 CapEx 질문의 답변만 들어 있어요. 예: SKT CapEx가 줄어든 이유는?</div></div>`
+  :`<div class="fact">${tagsFact()}<div class="para" style="color:var(--t-sub)">데모에는 CapEx 결과만 들어 있어요. 실제 서비스에서는 적재된 공시와 예산서에서 숫자, 문서, 위치, 원문 문장을 찾아 보여 줘요.</div></div>`;}
+function send(q){const mode=S.cmode,key=/capex|설비투자/i.test(q)?'capex':(mode==='fact'&&/왜|이유|어떻게|전망|의미/.test(q))?'why':'none';
+ const m=[['u',q,mode],['a',key,mode,q]];
+ if(S.route==='i20'||S.cside)curS().log.push(...m);
+ else{const id='s'+Date.now();S.sess.unshift({id,t:q,log:m});S.cur=id;S.cside=true;}
+ S.cq='';render(true);if(S.route==='i20'){const d=$('#dash');d.scrollTop=d.scrollHeight;}$('#cq')?.focus();}
 
 /* ================= S00 login ================= */
 function vLogin(){return `<div class="login"><form data-form="login"><div class="brand">Telescope<small>예산서를 애널리스트 눈으로 미리 검토해요</small></div>
  <label class="field" for="em">이메일<input class="inp" id="em" type="email" value="seoyeon.lee@sktelecom.com" autocomplete="username"></label>
  <label class="field" for="pw">비밀번호<input class="inp" id="pw" type="password" value="telescope2026" autocomplete="current-password"></label>
- <button class="btn fill lg" style="width:100%">로그인</button></form></div>`;}
+ <button class="btn fill lg" style="width:100%">로그인</button></form>${themeBtn().replace(' style="margin-top:auto"','')}</div>`;}
 
 /* ================= 분석 Agent: B10 / B11 ================= */
 function menu(id,items,cur,pos='up'){return S.menu===id?`<div class="menu ${pos}" role="menu">${items.map(([v,l,d])=>`<button role="menuitemradio" aria-checked="${v===cur}" data-act="pick" data-m="${id}" data-v="${esc(v)}" ${d?'disabled style="opacity:.5;cursor:default"':''}><span>${l||v}</span>${d?'<small>준비 중</small>':''}</button>`).join('')}</div>`:'';}
-function vB10(){const f=S.files,ready=!!f.budget&&S.attached;
- return shell(`<div class="scroll"><div class="hero"><div class="compose">
+const EXAMPLES=['CapEx가 줄어든 근거가 충분한지 봐 주세요','애널리스트가 물을 만한 감가상각 질문을 뽑아 주세요','AI 데이터센터 투자 계획의 근거를 점검해 주세요'];
+/* v05: 위 예산서 칸 → 가운데 한 줄 검토 기준 → 아래 근거 자료 칸. 입력창을 누르면 아래가 블러되고 예시 프롬프트가 펼쳐져요 */
+/* v05: 첫 화면은 입력 한 줄(챗봇 입력창과 같은 형식). + → B11 자료 첨부 팝업, AI 모델은 입력 왼쪽 */
+function vB10(){const f=S.files,ready=!!f.budget&&!pending(f);
+ const chips=f.budget||f.ev.length?`<div class="files">${f.budget?`<span class="fchip budget"><span class="k">예산서</span>${esc(f.budget.n)}<button data-act="rmChip" data-k="b" aria-label="${esc(f.budget.n)} 빼기">${I.x}</button></span>`:''}${f.ev.map((e,i)=>`<span class="fchip"><span class="k">근거</span>${e.w?`<span class="wi" title="${esc(e.w.m)}">${I.warn}</span>`:''}${esc(e.n)}<button data-act="rmChip" data-k="${i}" aria-label="${esc(e.n)} 빼기">${I.x}</button></span>`).join('')}</div>`:'';
+ return shell(`<div class="topbar">${modeSeg('b10')}</div><div class="scroll"><div class="hero"><div class="compose b10">
   <h2>어떤 예산서를 검토할까요?</h2>
-  <div class="tray"><div class="box">
-   ${S.attached&&(f.budget||f.ev.length)?`<div class="files">${f.budget?`<span class="fchip budget"><span class="k">예산서</span>${esc(f.budget.n)}<button data-act="rmChip" data-k="b" aria-label="${esc(f.budget.n)} 빼기">${I.x}</button></span>`:''}${f.ev.map((e,i)=>`<span class="fchip"><span class="k">근거</span>${e.w?`<span class="wi" title="${esc(e.w.m)}">${I.warn}</span>`:''}${esc(e.n)}<button data-act="rmChip" data-k="${i}" aria-label="${esc(e.n)} 빼기">${I.x}</button></span>`).join('')}</div>`:''}
-   <textarea id="prompt" rows="2" placeholder="검토할 내용을 적어 주세요. 예: CapEx가 줄어든 근거가 충분한지 봐 주세요" aria-label="검토할 내용">${esc(S.prompt)}</textarea>
-   <div class="boxrow"><button class="plus" data-act="openB11" aria-label="자료 첨부">${I.plus}</button><span class="sp"></span>
-    <div class="menuwrap"><button class="pick bordered" data-act="menu" data-m="model" aria-haspopup="menu" aria-expanded="${S.menu==='model'}">AI 모델 <b>${S.model}</b>${I.down}</button>${menu('model',[['범용 LLM'],['로컬 LLM']],S.model,'up right')}</div>
-    <button class="btn fill" data-act="start" ${ready?'':'disabled'} title="${ready?'':'예산서를 첨부하면 켜져요'}">분석 시작</button></div>
-  </div>
-  <div class="settings">
-   <div class="menuwrap"><button class="pick" data-act="menu" data-m="co" aria-haspopup="menu" aria-expanded="${S.menu==='co'}">회사 <b>${S.co}</b>${I.down}</button>${menu('co',[['SKT'],['KT','KT',1],['LG유플러스','LG유플러스',1]],S.co,'down')}</div>
-   <div class="menuwrap"><button class="pick" data-act="menu" data-m="dept" aria-haspopup="menu" aria-expanded="${S.menu==='dept'}">부서 <b>${S.dept}</b>${I.down}</button>${menu('dept',DEPTS.map(d=>[d]),S.dept,'down')}</div>
-   <div class="menuwrap"><button class="pick" data-act="menu" data-m="qtr" aria-haspopup="menu" aria-expanded="${S.menu==='qtr'}">분기 <b>${S.qtr}</b>${I.down}</button>${menu('qtr',[['2025 4Q'],['2025 3Q'],['2025 2Q']],S.qtr,'down')}</div>
-  </div></div>
-  <div class="examples">${['CapEx가 줄어든 근거가 충분한지 봐 주세요','애널리스트가 물을 만한 감가상각 질문을 뽑아 주세요','AI 데이터센터 투자 계획의 근거를 점검해 주세요'].map(e=>`<button data-act="example" data-v="${esc(e)}">${e}</button>`).join('')}</div>
+  <div class="qwrap"><form class="cin qin" data-form="start">
+    <button type="button" class="cbtn" data-act="openB11" aria-label="자료 첨부" title="자료 첨부">${I.plus}</button>
+    <input id="prompt" value="${esc(S.prompt)}" placeholder="검토 기준을 적어 주세요. 예: CapEx가 줄어든 근거가 충분한지 봐 주세요" aria-label="검토 기준" autocomplete="off">
+    <div class="menuwrap"><button type="button" class="cbtn pk" data-act="menu" data-m="model" aria-haspopup="menu" aria-expanded="${S.menu==='model'}" title="AI 모델">${S.model}</button>${menu('model',[['범용 LLM'],['로컬 LLM']],S.model,'down right')}</div>
+    <button type="button" class="send" data-act="start" ${ready?'':'disabled'} aria-label="분석 시작" title="${ready?'분석 시작':'+로 예산서를 넣으면 켜져요'}">${I.up}</button></form>
+   ${chips}
+   ${S.exOpen?`<div class="exlist" aria-label="예시 프롬프트">${EXAMPLES.map((e,i)=>`<button data-act="example" data-v="${esc(e)}" style="--d:${i*50}ms">${e}</button>`).join('')}</div>`:''}</div>
  </div></div></div>`)+(S.modal==='b11'?vB11():'');}
 const kind=n=>(n.split('.').pop()||'').toUpperCase().slice(0,4);
 function frow(f,zone,i){const w=f.w,open=w&&!f.keep,rm=zone==='b'?'data-act="rmB"':`data-act="rmEv" data-i="${i}"`;
  return `<div class="frow ${open?'w':''}"><span class="k">${kind(f.n)}</span><div class="grow"><b>${esc(f.n)}</b><small>${f.m}${w&&f.keep?' · <span class="ok">경고 확인함</span>':''}</small></div>
   ${zone==='b'&&!open?`<button class="btn line sm" data-act="pickFile" data-k="b">바꾸기</button>`:''}${zone==='e'&&!open?`<button class="icon-btn" ${rm} aria-label="${esc(f.n)} 빼기">${I.x}</button>`:''}
   ${open?`<div class="wmsg" role="alert">${I.warn}<span>${w.m}</span><button class="btn grey sm" ${rm}>빼기</button>${w.t!=='fmt'?`<button class="btn line sm" data-act="keepWarn" data-k="${zone}" data-i="${i}">그대로 두기</button>`:''}</div>`:''}</div>`;}
+/* B11 자료 첨부 팝업. 문제 있는 자료는 팝업 안에서 바로 경고(B12) */
 function vB11(){const d=S.draft,np=pending(d);
  return `<div class="dim" data-act="dimClose"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="b11t">
   <div class="mh"><h3 id="b11t">자료 첨부</h3><button class="btn grey sm" data-act="closeModal">닫기</button></div>
@@ -566,69 +793,34 @@ function vB11(){const d=S.draft,np=pending(d);
 /* ================= B20 ================= */
 function vB20(){const p=S.progress,st=['예산서 읽기','주장과 숫자 뽑기','근거 자료, DART와 대조','예상 질문 만들기'];
  return shell(header('SKT 2025 4Q 예산서',false)+`<div class="scroll"><div class="hero"><div class="run">
-  <h2>예산서를 검토하고 있어요</h2><p>${S.dept} 부서 기준으로 애널리스트가 물을 만한 곳을 찾고 있어요.</p>
+  <h2>예산서를 검토하고 있어요</h2><p>입력한 검토 기준으로 애널리스트가 물을 만한 곳을 찾고 있어요.</p>
   <div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="4" aria-valuenow="${p}"><i style="transform:scaleX(${Math.min(1,(p+0.5)/4)})"></i></div>
   <div>${st.map((a,i)=>{const c=i<p?'done':i===p?'run':'wait';return `<div class="rs ${c}"><span>${a}</span><em>${c==='done'?'완료':c==='run'?'진행 중':'대기'}</em></div>`}).join('')}</div>
  </div></div></div>`);}
 
-/* ================= B30 / B31 / B32 ================= */
-function mk(k,cls,txt){const on=S.mark===k?'on':'';const sups=cls==='both'?'<sup class="mk">근거</sup><sup class="mk">질문</sup>':`<sup class="mk">${cls==='y'?'질문':'근거'}</sup>`;
- return `<mark tabindex="0" role="button" data-act="mark" data-k="${k}" class="${cls==='both'?'r':cls} ${on}">${txt}</mark>${sups}`;}
-const pg=(head,body,no)=>`<section class="paper" data-page="${no}"><div class="crumb"><span>${head}</span><span>사업보고서 214쪽 중 ${no}쪽</span></div>${body}<div class="pgno"><span>사업보고서</span><span>- ${no} -</span></div></section>`;
-function pages(){const H='II. 사업의 내용 &gt; 3. 원재료 및 생산설비';return [
- pg(H,`<h2>라. 설비투자 현황</h2>
-  <p>당사는 2025년 별도 기준 1조 2,440억원의 설비투자를 집행하였습니다. ${mk('capex','both','이는 5G 네트워크 투자가 안정화 단계에 진입함에 따라 효율적인 투자 집행을 추진한 결과입니다.')}</p>
-  <table><thead><tr><th>(단위: 억원)</th><th class="n">2023</th><th class="n">2024</th><th class="n">2025</th></tr></thead><tbody>
-   <tr><td>네트워크 투자</td><td class="n">17,430</td><td class="n">15,440</td><td class="n">12,440</td></tr><tr><td>전년 대비</td><td class="n"></td><td class="n">−11.4%</td><td class="n">−19.4%</td></tr></tbody></table>
-  <p class="fn">※ 별도 재무제표 기준, 건설중인자산 포함</p>
-  <p>당사는 AI 데이터센터, GPUaaS 등 AI 인프라 사업을 ${mk('ai','y','향후 핵심 성장동력으로 육성하기 위해 관련 투자를 지속 확대할 계획입니다.')}</p>
-  <p>감가상각비는 ${mk('dep','r','5G 설비의 상각이 진행됨에 따라 점진적으로 감소할 것으로 예상됩니다.')} 2026년 설비투자는 네트워크 품질 유지와 AI 인프라 수요를 고려하여 집행할 예정입니다.</p>`,61),
- pg(H,`<h2>마. 주요 가입자 현황</h2>
-  <p>2025년 말 5G 가입자는 전년 대비 증가하였으며, 전체 무선 가입자 중 5G 비중이 꾸준히 확대되고 있습니다. 유선 부문은 초고속인터넷과 IPTV 가입자 기반이 안정적으로 유지되고 있습니다.</p>
-  <p>당사는 투자 우선순위를 ① 네트워크 품질 유지, ② AI 인프라 확충, ③ 운영 효율화 순으로 두고 있습니다.</p>`,62)].join('');}
-function accA(k,i){const a=ANALYSIS[k],open=S.openA===k;
- return `<div class="acc"><button data-act="accA" data-k="${k}" aria-expanded="${open}">${i}. ${a.t}<span class="s st-bad">근거 부족</span>${I.down}</button>
-  ${open?`<div class="accb"><div><div class="lab">주장</div><div class="quote">${a.claim}<small>${a.at}</small></div></div>
-   <div><div class="lab">근거</div><div class="ev">${a.ev.length?a.ev.map(([l,v])=>`<div><span>${l}</span><span><b class="num">${v}</b> <span class="tag">공시</span></span></div>`).join(''):'<p style="color:var(--t-cap)">예산서에 제시된 근거가 없어요</p>'}</div></div>
-   <div><div class="lab">부족한 점</div><p>${a.gap} <span class="tag">AI</span></p></div>
-   ${a.calc?`<div><div class="lab">계산 과정</div><div class="calc">${a.calc.map(([b,f])=>`<div><span class="big">${b}</span> <span class="tag">계산</span><div class="f">${f}</div></div>`).join('')}</div></div>`:''}
-   <div><div class="lab">출처</div><p style="color:var(--t-sub);font-size:13px">${a.src}</p></div></div>`:''}</div>`;}
-function accQ(k,i){const q=QUESTIONS[k],open=S.openQ===k,po=!!S.promptOpen[k];
- return `<div class="acc"><button data-act="accQ" data-k="${k}" aria-expanded="${open}">Q${i}. ${q.t}<span class="s" style="color:var(--t-cap)">중요도 ${q.lv}</span>${I.down}</button>
-  ${open?`<div class="accb"><div><div class="lab">질문</div><p style="color:var(--t-strong)">${q.q}</p></div>
-   <div><div class="lab">왜 묻나요</div><p>${q.why} <span class="tag">AI</span></p></div>
-   <div><div class="lab">미리 준비할 근거</div><p>${q.prep}</p></div>
-   <div><div class="lab">원문 위치</div><p style="color:var(--t-sub);font-size:13px">${q.loc}</p></div>
-   <div class="prompt"><button data-act="promptTog" data-k="${k}" aria-expanded="${po}">프롬프트${I.down}</button>
-    ${po?`<div class="pb"><p id="pr-${k}">${q.prompt}</p><button class="icon-btn" data-act="copy" data-k="${k}" aria-label="프롬프트 복사">${I.copy}</button></div>`:''}</div></div>`:''}</div>`;}
-function vB30(){const bad=SUMMARY.filter(s=>s[3]==='bad').length,qn=Object.keys(QUESTIONS).length;
- const list=S.tab==='a'?['capex','dep'].map((k,i)=>accA(k,i+1)).join(''):['q1','q2'].map((k,i)=>accQ(k,i+1)).join('');
- return shell(header('SKT 2025 4Q 예산서')+`<div class="body">
-  <div class="docarea" id="docarea"><div class="docin">
-   <div class="sumwrap"><div class="sum"><button data-act="sum" aria-expanded="${S.sumOpen}"><b>요약</b><span class="c st-bad">근거 부족 ${bad}개</span><span class="c st-q">질문 ${qn}개</span><span class="tog">${S.sumOpen?'접기':'펼치기'}${I.down}</span></button>
-    ${S.sumOpen?`<ul class="sumlist">${SUMMARY.map(([a,b,s,c,k])=>`<li><button ${k?`data-act="sumGo" data-k="${k}"`:'disabled'}><i style="background:var(${c==='bad'?'--red-line':c==='q'?'--yel-line':'--green'})"></i><span class="c1">${a}</span><span class="st st-${c}">${s}</span><span class="c2">${b}</span></button></li>`).join('')}</ul>`:''}</div></div>
-   ${pages()}</div></div>
-  <div class="rpanel"><div class="rtop"><div class="rtabs"><div class="seg" role="tablist"><button role="tab" aria-selected="${S.tab==='a'}" data-act="tab" data-v="a">분석</button><button role="tab" aria-selected="${S.tab==='q'}" data-act="tab" data-v="q">질문</button></div></div>
-   <div class="rlist">${list}</div></div>${S.chat?chatBox('b30'):''}</div></div>`);}
-
 /* ================= B40 / B41 / B50 ================= */
 const tg=t=>`<span class="tag">${t}</span>`;
-function repMeta(){return `<div class="meta"><span>작성 일자: <span class="num">2026-03-20</span></span><button class="btn line sm" data-act="openB41">내보내기</button></div>`;}
-function withChat(key,inner){return `<div class="body"><div class="scroll" id="scroller">${inner}</div>${S.chat?`<aside class="chatside">${chatBox(key)}</aside>`:''}</div>`;}
+const tgAI='<span class="tag ai">AI 판단</span>';
+/* v05: 항목 제목 줄 = 제목 + 근거 부족(빨강) + 원문 위치(글자). 근거 숫자, 계산 과정, 부족한 근거(보라 테두리) */
+const evRows=ev=>ev.length?`<div class="ev">${ev.map(([l,v])=>`<div><span>${l}</span><span><b class="num">${v}</b> ${tg('공시')}</span></div>`).join('')}</div>`:'<p class="none">예산서에 제시된 근거가 없어요</p>';
+const calcBox=c=>c?`<div class="blk"><div class="lab">계산 과정</div><div class="calc">${c.map(([b,f])=>`<div><span class="big">${b}</span> ${tg('계산')}<div class="f">${f}</div></div>`).join('')}</div></div>`:'';
+const item=(no,title,loc,claim,ev,calc,lack)=>`<section class="it"><h3 class="ih"><span>${no} ${title}</span><span class="tag bad">근거 부족</span><span class="srcbox">${I.doc}원문 위치 · ${loc}</span></h3>
+ <p class="claim">${claim}</p><div class="blk"><div class="lab">근거</div>${evRows(ev)}</div>${calcBox(calc)}
+ <div class="aip">${aiLab('부족한 근거 · AI 판단')}<ul>${lack.map(x=>`<li>${x}</li>`).join('')}</ul></div></section>`;
+function repMeta(){return `<div class="meta"><span>작성 일자: <span class="num">2026-03-20</span></span></div>`;}
+const exBtn='<button class="btn line sm" data-act="openB41">내보내기</button>';
+function withChat(key,inner){return `<div class="body"><div class="scroll" id="scroller">${inner}</div></div>`;}
 function vB40(){return shell(header('SKT 2025 4Q 예산서')+withChat('b40',`<div class="rep">
- <nav class="toc" aria-label="목차"><p>목차</p><button data-toc="r1">1. 총평</button><button data-toc="r2">2. 점검 항목별 검토</button><button data-toc="r3">3. 보완하면 좋을 근거</button><button data-toc="r4">출처</button></nav>
+ <nav class="toc" aria-label="목차"><p>목차</p><button data-toc="r1" aria-current="true">1. 총평</button><button data-toc="r2">2. 점검 항목별 검토</button><button data-toc="r3">3. 보완하면 좋을 근거</button><button data-toc="r4">출처</button>${exBtn}</nav>
  <article class="doc"><div class="dtop"><h1>분석 보고서</h1>${repMeta()}</div>
   <h2 id="r1">1. 총평</h2>
   <p>예산서에서 주장 12개를 뽑았고 7개는 근거가 충분해요. 근거가 부족한 4개는 모두 CapEx, 운영비, 감가상각에 몰려 있어요. 금액은 공시돼 있지만 줄어든 이유와 2026년 계획 금액이 빠져 있어서, 이 두 가지를 보완하면 예상 질문 6개 중 4개에 미리 답할 수 있어요.</p>
   <div class="tbl"><table><thead><tr><th>점검 항목</th><th class="n">주장</th><th class="n">근거 충분</th><th class="n">근거 부족</th><th class="n">질문</th></tr></thead><tbody>
    ${[['투자 효과 (CapEx)',3,1,2,3],['전년 대비 증감',3,2,1,1],['재무 영향 (감가상각)',2,1,1,1],['전략 연결',2,2,0,1],['산출 근거',2,1,0,0]].map(r=>`<tr><td>${r[0]}</td>${r.slice(1).map((v,i)=>`<td class="n ${i===2&&v?'st-bad':''}">${v}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
   <h2 id="r2">2. 점검 항목별 검토</h2>
-  <h3>2.1 투자 효과 (CapEx)</h3>
-  <dl class="dl"><dt>주장</dt><dd>5G 투자가 안정화돼 CapEx를 효율적으로 집행했다</dd><dt>원문 위치</dt><dd><a class="link" data-act="jump" data-k="capex">사업보고서 II-3-라, 61쪽</a></dd><dt>판정</dt><dd class="st-bad">근거 부족</dd><dt>받쳐 준 근거</dt><dd>2025 CapEx 1조 2,440억원, 전년 대비 −19.4% ${tg('공시')} ${tg('계산')}</dd><dt>부족한 근거</dt><dd>5G 커버리지와 트래픽당 투자비, 2026년 CapEx 계획 금액 ${tg('AI')}</dd></dl>
-  <h3>2.2 전년 대비 증감</h3>
-  <dl class="dl"><dt>주장</dt><dd>운영 자동화로 네트워크 운영비를 크게 절감했다</dd><dt>원문 위치</dt><dd>IR 발표자료 9쪽</dd><dt>판정</dt><dd class="st-bad">근거 부족</dd><dt>부족한 근거</dt><dd>절감액과 산출 근거, 전년 운영비 ${tg('AI')}</dd></dl>
-  <h3>2.3 재무 영향 (감가상각)</h3>
-  <dl class="dl"><dt>주장</dt><dd>감가상각비가 점진적으로 줄어든다</dd><dt>원문 위치</dt><dd><a class="link" data-act="jump" data-k="dep">사업보고서 II-3-라, 61쪽</a></dd><dt>판정</dt><dd class="st-bad">근거 부족</dd><dt>부족한 근거</dt><dd>연도별 상각 일정, 영업이익 영향 ${tg('AI')}</dd></dl>
+  ${item('2.1','투자 효과 (CapEx)','SKT 2025 사업보고서 II-3-라, 61쪽','예산서는 "5G 네트워크 투자가 안정화 단계에 진입함에 따라 효율적인 투자 집행을 추진했다"고 설명해요. 2025년 CapEx가 전년보다 줄어든 것을 효율적으로 집행한 결과로 보고 있어요.',ANALYSIS.capex.ev,ANALYSIS.capex.calc,['5G 커버리지와 품질 지표','트래픽당 투자비','2026년 CapEx 계획 금액'])}
+  ${item('2.2','전년 대비 증감','SKT 2025 4Q 실적 발표자료, 9쪽','예산서는 운영 자동화로 네트워크 운영비를 크게 절감했다고 설명해요. 절감한 금액이나 전년 운영비는 적지 않았어요.',[],null,['절감액과 산출 근거','전년 네트워크 운영비'])}
+  ${item('2.3','재무 영향 (감가상각)','SKT 2025 사업보고서 II-3-라, 61쪽','예산서는 5G 설비 상각이 진행되면서 감가상각비가 점진적으로 줄어들 것으로 전망해요. 줄어드는 시점과 규모는 적지 않았어요.',[['2025년 유형자산 감가상각비 (SKB 포함)','2조 7,833억원'],['2024년 유형자산 감가상각비 (SKB 포함)','2조 8,538억원']],[['−2.5%','전년 대비, (27,833 − 28,538) ÷ 28,538']],['연도별 상각 일정','영업이익에 주는 영향'])}
   <h2 id="r3">3. 보완하면 좋을 근거</h2>
   <ol class="fix"><li>2026년 CapEx 계획 금액과 AI 인프라 비중</li><li>CapEx 감소를 받쳐 줄 5G 품질 지표</li><li>감가상각 연도별 일정과 영업이익 영향</li><li>네트워크 운영비 절감액 산출 근거</li></ol>
   <h2 id="r4" style="font-size:15px">출처</h2>
@@ -637,15 +829,19 @@ function vB40(){return shell(header('SKT 2025 4Q 예산서')+withChat('b40',`<di
 const QA=[['Q1','높음','AI 인프라 투자를 "지속 확대"한다고 했는데, 2026년 CapEx 안에서 AI 데이터센터와 GPUaaS에 얼마를 쓰나요? 언제부터 매출로 돌아오나요?','투자 효과(CapEx) 점검 항목, 엄격. "확대"에 금액과 회수 시점이 없어요.','사업보고서 II-3-라 61쪽, IR 발표자료 12쪽','AI 인프라 CapEx 비중, GPUaaS 매출 추이, 데이터센터 가동률'],
  ['Q2','높음','CapEx가 2년 동안 28.6% 줄었는데, 5G 품질과 커버리지는 어떻게 유지하나요?','전년 대비 증감 점검 항목, 엄격. 감소 사유를 받쳐 줄 품질 지표가 없어요.','사업보고서 II-3-라 61쪽','5G 커버리지, 품질 평가 결과, 트래픽당 투자비'],
  ['Q3','보통','감가상각비는 얼마나 빨리 줄고, 2026년 영업이익에 얼마나 보탬이 되나요?','재무 영향 점검 항목, 엄격. 상각 일정이 없어요.','사업보고서 II-3-라 61쪽','연도별 상각 일정, 유무형자산 내용연수']];
-const qa=q=>`<div class="qa"><div class="no"><b>${q[0]}</b><span class="tag ${q[1]==='높음'?'p':''}">중요도 ${q[1]}</span></div><div class="qt">${q[2]}</div>
- <dl class="dl"><dt>왜 묻나요</dt><dd>${q[3]} ${tg('AI')}</dd><dt>원문 위치</dt><dd>${q[4]}</dd><dt>미리 준비할 근거</dt><dd>${q[5]}</dd></dl></div>`;
-function vB50(){return shell(header('SKT 2025 4Q 예산서')+withChat('b50',`<div class="rep">
- <nav class="toc" aria-label="목차"><p>목차</p><button data-toc="q1">1. 투자 효과 (CapEx)</button><button data-toc="q2">2. 재무 영향 (감가상각)</button></nav>
- <article class="doc"><div class="dtop"><h1>예상 질문 보고서</h1>${repMeta()}</div>
-  <p>중요도가 높은 질문 2개는 모두 CapEx 감소와 AI 인프라 투자 규모에 대한 것이에요. 예산서에 금액은 있지만 줄어든 이유와 앞으로의 계획이 없어서 나온 질문이에요.</p>
-  <h2 id="q1">1. 투자 효과 (CapEx)</h2>${qa(QA[0])}${qa(QA[1])}
-  <h2 id="q2">2. 재무 영향 (감가상각)</h2>${qa(QA[2])}
-  <div style="margin-top:28px"><button class="btn fill" data-go="b60">평가하기</button></div>
+const imp=l=>l==='높음'?'<span class="tag bad">중요도 높음</span>':'<span class="tag">중요도 보통</span>';
+const qa=q=>`<div class="qa"><div class="no"><b>${q[0]}</b>${imp(q[1])}</div><div class="qt">${q[2]}</div>
+ <div class="blk"><div class="lab">왜 묻나요</div><p>${q[3]}</p></div><div class="blk"><div class="lab">미리 준비할 근거</div><p>${q[5]}</p></div>
+ <div class="qloc"><span class="srcbox">${I.doc}원문 위치 · ${q[4]}</span></div></div>`;
+function vB50(){return shell(header('SKT 2025 4Q 예산서')+withChat('b50',`<div class="rep ai">
+ <nav class="toc" aria-label="목차"><p>목차</p><button data-toc="p1" aria-current="true">1. 총평</button><button data-toc="p2">2. 투자 효과 (CapEx)</button><button data-toc="p3">3. 재무 영향 (감가상각)</button>${exBtn}</nav>
+ <article class="doc"><div class="dtop"><div class="meta" style="margin:0"><h1>예상 질문 보고서</h1><button class="btn fill sm" data-go="b60">평가하기</button></div>${repMeta()}</div>
+  <h2 id="p1">1. 총평</h2>
+  <p>예상 질문 3개를 뽑았고 2개는 중요도가 높아요. 중요도가 높은 질문은 모두 CapEx 감소와 AI 인프라 투자 규모에 대한 것이에요. 예산서에 금액은 있지만 줄어든 이유와 앞으로의 계획이 없어서 나온 질문이에요.</p>
+  <div class="tbl"><table><thead><tr><th>점검 항목</th><th class="n">질문</th><th class="n">중요도 높음</th><th class="n">보통</th></tr></thead><tbody>
+   ${[['투자 효과 (CapEx)',2,2,0],['재무 영향 (감가상각)',1,0,1]].map(r=>`<tr><td>${r[0]}</td>${r.slice(1).map((v,i)=>`<td class="n ${i===1&&v?'st-bad':''}">${v}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+  <h2 id="p2">2. 투자 효과 (CapEx)</h2>${qa(QA[0])}${qa(QA[1])}
+  <h2 id="p3">3. 재무 영향 (감가상각)</h2>${qa(QA[2])}
  </article></div>`)+(S.modal==='b41'?vB41():''));}
 function vB41(){const it=[['a1','분석','1. 5G 투자 안정화로 효율적 집행'],['a2','분석','2. 감가상각비 점진 감소'],['a3','분석','3. 네트워크 운영비 절감'],['q1','질문','Q1. AI 인프라 투자 규모'],['q2','질문','Q2. CapEx 2년 연속 감소와 5G 품질'],['q3','질문','Q3. 감가상각 감소 속도'],['q4','질문','Q4. 운영비 절감 산출']];
  const sel=S.ex.sel,all=sel.length===it.length;
@@ -674,7 +870,7 @@ function vB60(){const rows=[['Q1 AI 인프라 투자 규모','AI 데이터센터
   <h2 id="e2">2. 질문별 판정</h2>
   <div class="tbl"><table><thead><tr><th>예상 질문</th><th>대응한 리포트 쟁점</th><th>판정</th><th>판정자</th></tr></thead><tbody>
    ${rows.map(([q,i,s,v,w,why],k)=>`<tr class="click" data-act="exp" data-i="${k}" tabindex="0" aria-expanded="${S.exp===k}"><td>${q}</td><td>${i}${s?` <span style="color:var(--t-cap);font-size:12px">${s}</span>`:''}</td><td class="${V[v]}">${v}</td><td style="color:var(--t-cap)">${w}</td></tr>
-    ${S.exp===k?`<tr class="exp"><td colspan="4"><div style="font-size:13.5px;margin-bottom:8px">판정 이유 ${tg('AI')}: ${why}</div>
+    ${S.exp===k?`<tr class="exp"><td colspan="4"><div class="aib" style="font-size:13.5px;margin-bottom:8px">판정 이유 ${tgAI} ${why}</div>
      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span class="vt">${['맞힘','부분','빗나감'].map(x=>`<button aria-pressed="${x===v}" data-act="verdict" data-i="${k}" data-v="${x}">${x}</button>`).join('')}</span><input class="inp" style="flex:1;height:34px;font-size:13px;min-width:180px;background:var(--surface)" placeholder="판정 메모를 적어 주세요" id="memo-${k}"><button class="btn fill sm" data-act="confirm">확정</button></div></td></tr>`:''}`).join('')}
   </tbody></table></div>
   <h2 id="e3">3. 놓친 쟁점</h2>
@@ -683,7 +879,7 @@ function vB60(){const rows=[['Q1 AI 인프라 투자 규모','AI 데이터센터
    <tr><td>SK브로드밴드 합산 CapEx</td><td style="color:var(--t-cap)">B증권 05-02</td><td>부서 집중 포인트에 자회사가 없음</td></tr>
    <tr><td>배당 성향 상향 가능성</td><td style="color:var(--t-cap)">C증권 05-08</td><td>주주환원이 이 부서의 집중 포인트에 없음</td></tr></tbody></table></div>
   <h2 id="e4">4. 근거 부족 추적</h2>
-  <div class="tbl"><table><thead><tr><th>B30에서 지적한 근거 부족</th><th>다음 분기 자료</th><th>상태</th></tr></thead><tbody>
+  <div class="tbl"><table><thead><tr><th>분석 보고서에서 지적한 근거 부족</th><th>다음 분기 자료</th><th>상태</th></tr></thead><tbody>
    ${[['2026년 CapEx 계획 금액 없음','2026 1Q IR 발표자료 5쪽','보완됨'],['감가상각 연도별 일정 없음','2026 1Q IR 발표자료 8쪽','보완됨'],['CapEx 감소를 받쳐 줄 5G 품질 지표 없음','없음','여전히 없음'],['운영비 절감액 산출 근거 없음','분기보고서 미공시','확인 불가']].map(([a,b,c])=>`<tr><td>${a}</td><td style="color:var(--t-cap)">${b}</td><td class="${V[c]}" style="${c==='확인 불가'?'color:var(--t-cap)':''}">${c}</td></tr>`).join('')}</tbody></table></div>
  </article></div>`));}
 function vB61(){const rows=[['A증권','2026-04-30','AI 데이터센터 투자 가이던스 부재','Q1'],['A증권','2026-04-30','인건비 중심 비용 효율화','Q4 (부분)'],['B증권','2026-05-02','CapEx 축소의 지속 가능성','Q2'],['B증권','2026-05-02','SK브로드밴드 합산 CapEx','없음'],['C증권','2026-05-08','상각비 감소에 따른 이익 개선','Q3'],['C증권','2026-05-08','배당 성향 상향 가능성','없음'],['D증권','2026-05-12','고객 보상 비용이 일회성인지','없음']];
@@ -742,10 +938,10 @@ function waterfall(o){const W=o.W||720,H=o.H||250,pl=48,pr=8,pt=24,pb=34,st=o.st
 function legend(items){return `<div class="legend">${items.map(([n,c])=>`<span><i style="background:var(${c})"></i>${n}</span>`).join('')}</div>`;}
 function spark(v){const w=72,h=34,mn=Math.min(...v),mx=Math.max(...v),pts=v.map((x,i)=>[i*(w-6)/(v.length-1)+3,h-4-(x-mn)/((mx-mn)||1)*(h-8)]);
  return `<svg viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline points="${pts.map(p=>p.join(',')).join(' ')}" style="fill:none;stroke:var(--s1);stroke-width:1.6;opacity:.6"/><circle cx="${pts[pts.length-1][0]}" cy="${pts[pts.length-1][1]}" r="3" style="fill:var(--s1)"/></svg>`;}
-function card(span,title,tag,body,cap){return `<section class="card ${span}"><div class="ch"><h3>${title}</h3>${tag?`<span class="tag">${tag}</span>`:''}<button class="ask" data-act="ask" data-t="${esc(title)}">질문하기</button></div>${body}${cap?`<div class="cap">${cap}</div>`:''}</section>`;}
+function card(span,title,tag,body,cap,ask=true){return `<section class="card ${span}"><div class="ch"><h3>${title}</h3>${tag?`<span class="tag">${tag}</span>`:''}${ask?`<button class="ask" data-act="ask" data-t="${esc(title)}">인사이트에 묻기</button>`:''}</div>${body}${cap?`<div class="cap">${cap}</div>`:''}</section>`;}
 function ftable(cols,rows,lw){return `<div class="tbl"><table class="ftbl"><thead><tr><th>${lw||''}</th>${cols.map(c=>`<th class="n">${c}</th>`).join('')}</tr></thead><tbody>${rows.map(([n,v,b])=>`<tr class="${b?'b':''}"><td>${n}</td>${v.map(x=>`<td class="n">${typeof x==='number'?com(x):x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;}
 
-/* ================= I10 인사이트 Agent 대시보드 ================= */
+/* ================= B70 회사 재무 차트 (예전 I10 인사이트 대시보드) ================= */
 const SC=()=>S.scope==='skb'?{tag:'SKB 포함',...D.cons}:{tag:'SKT 단독',rev:D.sep.rev,op:D.sep.op,L:D.sep.L,E:D.sep.E};
 function kpis(){const c=SC(),q=S.period==='q',qd=S.scope==='skb'?D.qtr.cons:D.qtr.sep,ql=D.qtr.lab;
  const last=ql.length-1,prevY=last-4;
@@ -842,59 +1038,105 @@ function tPeer(){const P={SKT:{...D.cons,cx:D.capex.sum},KT:{...D.peer.KT,cx:D.c
   ${card('c12','주요 지표 3사 비교 (2025)','각 사 자회사 포함',`<div class="tbl"><table class="ftbl"><thead><tr><th></th><th class="n">매출</th><th class="n">영업이익</th><th class="n">영업이익률</th><th class="n">부채비율</th><th class="n">CapEx</th></tr></thead><tbody>${nm.map(k=>`<tr class="${k==='SKT'?'b':''}"><td>${k}</td><td class="n">${com(P[k].rev[4])}</td><td class="n">${com(P[k].op[4])}</td><td class="n">${(P[k].op[4]/P[k].rev[4]*100).toFixed(1)}%</td><td class="n">${(P[k].L[4]/P[k].E[4]*100).toFixed(1)}%</td><td class="n">${com(P[k].cx[4])}</td></tr>`).join('')}</tbody></table></div>`,'CapEx: SKT+SKB 합산 / 그 외: 각 사 자회사 포함')}
  </div>`;}
 const FTABS=[['over','한눈에',tOverview],['pl','손익',tPL],['bs','재무상태',tBS],['cf','현금흐름',tCF],['capex','설비투자',tCapex],['peer','동종사 비교',tPeer]];
-function fInput(){return `<div class="fin"><form class="cin" data-form="fask"><div class="menuwrap"><button type="button" class="pick bordered" data-act="menu" data-m="fco" aria-haspopup="menu" aria-expanded="${S.menu==='fco'}">회사 <b>SKT</b>${I.down}</button>${menu('fco',[['SKT'],['KT','KT',1],['LG유플러스','LG유플러스',1]],'SKT','up')}</div>
- <input id="fq" placeholder="SKT에 대해 궁금한 것을 물어보세요" autocomplete="off" aria-label="인사이트 질문" value="${esc(S.fq)}"><button class="btn fill sm">보내기</button></form></div>`;}
-function vI10(){const t=FTABS.find(x=>x[0]===S.ftab);
- return shell(`<div class="fwrap"><div class="dash" id="dash">
-  <div class="dhead"><h2>SK텔레콤</h2><span class="sub num">017670 · 2021–2025 · DART 공시, 단위 억원</span>
-   <span class="brk"></span><div class="tabs" role="tablist" aria-label="보기">${FTABS.map(([k,l])=>`<button role="tab" aria-selected="${S.ftab===k}" data-act="ftab" data-v="${k}">${l}</button>`).join('')}</div>
-   <div class="ctl"><div class="seg" role="radiogroup" aria-label="기준"><button aria-pressed="${S.scope==='skb'}" data-act="scope" data-v="skb">SKB 포함</button><button aria-pressed="${S.scope==='skt'}" data-act="scope" data-v="skt">SKT 단독</button></div>
-    <div class="seg" role="radiogroup" aria-label="기간"><button aria-pressed="${S.period==='y'}" data-act="period" data-v="y">연간</button><button aria-pressed="${S.period==='q'}" data-act="period" data-v="q">분기</button></div></div></div>
-  ${t[2]()}
- </div>${fInput()}</div>`);}
+/* ================= v04 분석하기 보기 전환 (예산서 검토 | 회사 재무) ================= */
+function modeSeg(cur){return `<div class="seg" role="tablist" aria-label="분석하기 보기"><button role="tab" aria-selected="${cur==='b10'}" data-go="b10">예산서 검토</button><button role="tab" aria-selected="${cur==='b70'}" data-go="b70">회사 재무</button></div>`;}
 
-/* ================= I20 인사이트 답변 ================= */
-function vI20(){const cx=D.capex.skt;
- return shell(`<header class="hdr"><h1>SK텔레콤 <span style="font-size:13px;font-weight:400;color:var(--t-cap)" class="num">017670</span></h1><div class="r"><span class="tag p">인사이트</span></div></header>
- <div class="fwrap"><div class="dash" id="dash"><div class="conv">
-  <div class="bub">SKT CapEx가 2년 동안 줄어든 이유는?</div>
-  <div class="para">SKT 단독 CapEx는 2023년 1조 7,430억원에서 2025년 1조 2,440억원으로 2년 동안 28.6% 줄었어요 [1].<div class="tags">${tg('공시')}${tg('계산')}</div></div>
-  <div class="srcgrid">${card('','[1] CapEx (SKT 단독)','공시',bars({W:420,H:200,labels:['2023','2024','2025'],series:[{name:'CapEx',v:cx.slice(2),c:'--s1',fade:1}],labelLast:1,bw:48,aria:'CapEx 3년'}))}
-   ${card('','[1] 전년 대비','계산',`<div class="tbl"><table class="ftbl" style="min-width:0"><thead><tr><th></th><th class="n">2024</th><th class="n">2025</th></tr></thead><tbody><tr><td>증감</td><td class="n">−11.4%</td><td class="n">−19.4%</td></tr><tr class="b"><td>2년 누적</td><td class="n"></td><td class="n">−28.6%</td></tr></tbody></table></div>`)}</div>
-  <div class="srcline">출처: SKT 2025 사업보고서 II-3-라, 61쪽 (공시 2026-03-17), SKT 2024 사업보고서 (공시 2025-03-18). 증감은 계산 값.</div>
-  <div class="para">사업보고서는 감소 이유를 "5G 투자가 안정화 단계에 들어섰기 때문"이라고 설명해요. 같은 기간 감가상각비도 줄어 대규모 5G 설비 투자가 끝나 가는 흐름과 맞아요 [2]. 다만 2026년 투자 계획 금액은 공시에 없어요.<div class="tags">${tg('공시')}${tg('AI')}</div></div>
-  ${card('','[2] 유형자산 감가상각비 (2021–2025)','SKB 포함',ftable(YR,[['SKT',D.cons.ppeDep]],'억원'))}
-  <div class="srcline">출처: SKT 사업보고서 2021~2025, DART</div>
-  ${S.i20extra.map(q=>`<div class="bub">${esc(q)}</div><div class="para" style="color:var(--t-sub)">데모에는 CapEx 질문의 답변만 들어 있어요. 아래 이어서 물어보기나 인사이트 대시보드의 차트에서 질문해 보세요.</div>`).join('')}
-  <div class="sugg"><p>이어서 물어보기</p>${['KT, LG유플러스의 같은 기간 CapEx는 얼마인가요?','감가상각비 감소가 영업이익에 준 영향은?','AI 데이터센터 투자는 어느 공시에 나오나요?'].map(s=>`<button data-act="sugg" data-v="${esc(s)}">${s}</button>`).join('')}</div>
- </div></div>${fInput()}</div>`);}
+/* ================= B70 회사 재무 (사실만). v05: 기준·기간 토글 없음, 차트마다 기준 태그 ================= */
+function vB70(){const t=FTABS.find(x=>x[0]===S.ftab);
+ return shell(`<div class="topbar">${modeSeg('b70')}</div><div class="fwrap"><div class="dash" id="dash">
+  <div class="dhead"><h2>SK텔레콤</h2><span class="sub num">017670 · 2021–2025 · DART 공시, 단위 억원</span>
+   <div class="tabs" role="tablist" aria-label="보기" style="margin-left:auto">${FTABS.map(([k,l])=>`<button role="tab" aria-selected="${S.ftab===k}" data-act="ftab" data-v="${k}">${l}</button>`).join('')}</div></div>
+  ${t[2]()}
+ </div></div>`);}
+
+/* ================= B80 공시 검색 결과 (예전 I20의 사실 부분) ================= */
+const RES=[
+ {l:'CapEx 2025 (SKT 단독)',v:'1조 2,440억원',tag:'공시',doc:'SKT 2025 사업보고서',loc:'II. 사업의 내용 › 3-라. 설비투자 현황, 61쪽',d:'공시 2026-03-17',ex:'당사는 2025년 별도 기준 <mark>1조 2,440억원</mark>의 설비투자를 집행하였습니다.'},
+ {l:'CapEx 2023, 2024 (SKT 단독)',v:'1조 7,430억원, 1조 5,440억원',tag:'공시',doc:'SKT 2025 사업보고서',loc:'II. 사업의 내용 › 3-라. 설비투자 현황 표, 61쪽',d:'공시 2026-03-17',ex:'네트워크 투자 (단위: 억원) 2023 <mark>17,430</mark> · 2024 <mark>15,440</mark> · 2025 12,440'},
+ {l:'2년 누적 증감 (2023→2025)',v:'−28.6%',tag:'계산',doc:'계산식',loc:'(12,440 − 17,430) ÷ 17,430 · 위 두 결과의 공시값으로 계산'},
+ {l:'CapEx 5년 표 (SKT 단독, SKB, 3사)',v:'2021–2025',tag:'공시',doc:'DART 사업보고서 2021~2025',loc:'회사 재무 › 설비투자 탭',tab:'capex'}];
+function rcard(r){return `<div class="rcard"><div class="rv"><span class="l">${r.l}</span><b>${r.v}</b>${r.tag==='AI 판단'?tgAI:tg(r.tag)}</div>
+ <div class="loc">${r.doc}${r.loc?` · ${r.loc}`:''}${r.d?` · ${r.d}`:''}</div>${r.ex?`<div class="ex">${r.ex}</div>`:''}
+ ${r.tab?`<div><button class="btn line sm" data-act="goTab" data-v="${r.tab}">설비투자 탭에서 보기</button></div>`:''}</div>`;}
+/* ================= I10 인사이트 홈 (뉴스 + 3사 해석) ================= */
+/* 실제 헤드라인: data/news.json (corp-finance-agent 뉴스 수집 백업, 기준 시점 2026-03-17 이전) */
+const NEWS=[
+ ["2026-03-11", "3사", "투데이e코노믹", "[기획] 통신사 CAPEX 전략 변화… 5G 이후 투자 우선순위 재편", "https://www.todayeconomic.com/news/article.html?no=29854", "https://www.todayeconomic.com/data/photos/20260311/art_17732153020454_8806ab.png"],
+ ["2026-02-19", "SKT", "인사이트코리아", "영업익 40% 급감 SKT, 정석근 CTO 앞세워 '돈 버는 AI' 만든다", "https://www.insightkorea.co.kr/news/articleView.html?idxno=241397", "https://cdn.insightkorea.co.kr/news/thumbnail/202602/241397_249466_70_v150.jpg"],
+ ["2026-02-11", "3사", "뉴스락", "이통3사, 2025년 성적표 희비교차..누가 웃었을까", "http://www.newslock.co.kr/news/articleView.html?idxno=125065", "https://cdn.newslock.co.kr/news/thumbnail/202602/125065_113452_1953_v150.jpg"],
+ ["2026-02-11", "LG유플러스", "더벨", "[Rating Watch] 나신평, LG유플 등급 AA+로 상향…SKT·KT와 한노치 차", "https://www.thebell.co.kr/free/content/ArticleView.asp?key=202602091625297720101215", "https://image.thebell.co.kr/news/photo/2026/02/09/20260209162623264_n.png"],
+ ["2026-02-10", "KT", "디지털타임스", "KT, 해킹 여파에도 영업익 2.5조 '트리플업' 깜짝실적", "https://www.dt.co.kr/article/12046089", "https://wimg.dt.co.kr/news/cms/2026/02/10/news-p.v1.20260210.9c412a3fbe6244078f57cf693a6ab6b4_R.jpg"],
+ ["2026-02-10", "3사", "뉴스웨이", "통신3사, 해킹에도 영업익 4兆…KT '부동산·구조조정'에 선방(종합)", "https://www.newsway.co.kr/news/view?ud=2026021017085795373", "https://nimage.newsway.co.kr/photo/2026/02/10/20260210000068_1200.png"],
+ ["2026-02-09", "SKT", "블로터", "SKT, 2026년 통신·AI로 실적 회복 집중", "https://www.bloter.net/news/articleView.html?idxno=653745", "https://cdn.bloter.net/news/thumbnail/202602/653745_264504_247_v150.jpg"],
+ ["2026-02-06", "3사", "이코리아", "해킹사태 겪은 통신 3사... 보안 강화, AI 인프라 확장 관건", "https://www.ekoreanews.co.kr/news/articleView.html?idxno=84426", "https://cdn.ekoreanews.co.kr/news/photo/202602/84426_105384_3440.jpg"],
+ ["2026-02-06", "LG유플러스", "경인방송", "LG유플러스, 2026년 '영업이익 1조 클럽' 입성 하나", "https://news.ifm.kr/news/articleView.html?idxno=464255", "https://cdn.news.ifm.kr/news/thumbnail/202602/464255_141320_5539_v150.jpg"],
+ ["2026-02-05", "SKT", "노컷뉴스", "SKT, 해킹 여파에 영업이익 40% 감소…4분기 현금배당 안 하기로", "https://www.nocutnews.co.kr/news/6467814", "https://file2.nocutnews.co.kr/newsroom/image/2026/02/05/202602051800400662_0.jpg"],
+ ["2026-02-05", "SKT", "딜사이트경제TV", "[컨콜] [SK텔레콤] 올해 최우선 경영 과제 '실적 정상화'", "https://news.dealsitetv.com/articles/165161", "https://d2k8i5ah8p7h3l.cloudfront.net/photos/49afe86acbe2758326d7d82b2959d865/thumb.jpg"],
+ ["2026-02-05", "LG유플러스", "조세일보", "LGU+, 작년매출 15조 돌파…서비스수익 4년 내 최고 성장", "http://www.joseilbo.com/news/news_read.php?uid=562350&class=17&grp=", "https://www.joseilbo.com/gisa_img/17702678691770267869_godisrain.jpg"],
+ ["2026-02-05", "LG유플러스", "뉴스핌", "[컨콜] LG유플러스 \"연내 5G SA 상용화...SW 업그레이드로 대규모 투자 없어\"", "https://www.newspim.com/news/view/20260205000525", "https://img.newspim.com/news/2026/01/25/2601250940477090_t1.jpg"]];
+const nref=i=>{const n=NEWS[i];return `<a class="nref" href="${n[4]}" target="_blank" rel="noopener">${n[2]} ${n[0].slice(5).replace('-','.')} · ${esc(n[3])}</a>`;};
+function insCards(){const c=D.cons,K=D.peer.KT,L=D.peer['LG유플러스'],cx=D.capex,f=v=>sgn(v);
+ const op=[['SKT',c.op[3],c.op[4]],['KT',K.op[3],K.op[4]],['LG유플러스',L.op[3],L.op[4]]];
+ const cp=[['SKT+SKB',cx.sum[2],cx.sum[4]],['KT',cx.kt[2],cx.kt[4]],['LG유플러스',cx.lgu[2],cx.lgu[4]]];
+ const tb=(h,rows)=>`<div class="tbl facts"><table class="ftbl"><thead><tr><th></th><th class="n">${h[0]}</th><th class="n">${h[1]}</th><th class="n">증감</th></tr></thead><tbody>${rows.map(([n,a,b])=>`<tr class="${n.startsWith('SKT')?'b':''}"><td>${n}</td><td class="n">${com(a)}</td><td class="n">${com(b)}</td><td class="n">${f(pct(b,a))}</td></tr>`).join('')}</tbody></table></div>`;
+ const C=[
+  {t:'3사 중 SKT만 2025년 영업이익이 줄었어요',fact:tb(['2024','2025'],op),ft:'영업이익, 억원 · 각 사 자회사 포함',tab:'peer',
+   ai:'SKT 감소는 유심 해킹 사고에 따른 가입자 이탈과 보상 비용 영향이라는 보도가 많아요. KT 증가는 2024년 인력 구조조정 비용이 빠진 기저효과와 부동산 개발 이익이 컸어요. 그래서 본업 경쟁력 차이로만 읽기는 어려워요.',n:[9,4],q:'SKT 영업이익 감소 중 일회성 비용은 얼마인가요?'},
+  {t:'3사 모두 2년째 CapEx를 줄이고 있어요',fact:tb(['2023','2025'],cp),ft:'CapEx, 억원 · SKT는 SKT+SKB 합산',tab:'capex',
+   ai:'5G 전국망 투자가 끝나고 투자 우선순위가 AI 인프라로 옮겨 가는 흐름이라는 분석과 맞아요. LG유플러스는 5G SA를 대규모 투자 없이 소프트웨어로 전환한다고 밝혔어요. 다만 3사 모두 AI 데이터센터 투자 금액은 공시에 따로 없어서, 예산서에서 이 금액을 물을 가능성이 높아요.',n:[0,12],q:'3사 AI 데이터센터 투자 계획을 비교해 주세요'},
+  {t:'SKT 주당 배당금이 절반 넘게 줄었어요',fact:`<div class="tbl facts"><table class="ftbl"><thead><tr><th></th><th class="n">2024</th><th class="n">2025</th><th class="n">증감</th></tr></thead><tbody><tr class="b"><td>주당 배당금</td><td class="n">${com(D.div.dps[3])}원</td><td class="n">${com(D.div.dps[4])}원</td><td class="n">${f(pct(D.div.dps[4],D.div.dps[3]))}</td></tr><tr><td>배당성향</td><td class="n">${D.div.payout[3]}%</td><td class="n">${D.div.payout[4]}%</td><td class="n">${sgn(D.div.payout[4]-D.div.payout[3],1,'%p')}</td></tr></tbody></table></div>`,ft:'SKT 단독 · dart.duckdb 배당 데이터',tab:'cf',
+   ai:'순이익이 줄어 배당금은 줄었지만 배당성향은 오히려 높아졌어요. 컨콜에서 올해 최우선 과제를 실적 정상화로 꼽은 만큼, 배당 회복 시점과 재원이 다음 리포트의 쟁점이 될 수 있어요.',n:[9,10],q:'SKT 배당은 언제 회복될 수 있을까요?'}];
+ return `<div class="icards">${C.map(x=>`<section class="icard"><h3>${x.t}</h3>
+  <div><div class="lab2">사실 ${tg('공시')}${tg('계산')}</div>${x.fact}<div class="cap">${x.ft} · <button class="link" data-act="goTab" data-v="${x.tab}">회사 재무에서 보기</button></div></div>
+  <div class="aip"><div class="ai-lab">${I.spark}AI 해석</div><p>${x.ai}</p><div class="nrefs">${x.n.map(nref).join('')}</div></div>
+  <button class="ask2" data-act="iask" data-v="${esc(x.q)}">이어서 묻기 · ${esc(x.q)}</button></section>`).join('')}</div>`;}
+function vI10(){const fl=['전체','SKT','KT','LG유플러스','3사'],list=NEWS.filter(n=>S.nf==='전체'||n[1]===S.nf);
+ return shell(`<div class="fwrap"><div class="dash" id="dash">
+  <div class="dhead"><h2>인사이트</h2><div class="seg" role="radiogroup" aria-label="뉴스 회사" style="margin-left:auto">${fl.map(x=>`<button aria-pressed="${S.nf===x}" data-act="nf" data-v="${x}">${x==='3사'?'3사 공통':x}</button>`).join('')}</div></div>
+  <div class="sech"><h3>3사 비교 인사이트</h3><span class="tag ai">AI 해석</span></div>
+  ${insCards()}
+  <div class="sech"><h3>관련 뉴스</h3><span class="sub">${list.length}건</span></div>
+  <div class="news">${list.map(([d,co,p,t,u,img])=>`<a class="ncard" href="${u}" target="_blank" rel="noopener">
+   <div class="ntext"><div class="nm">${p}<span class="dotsep">·</span><span class="num">${d.replace(/-/g,'.')}</span></div>
+    <div class="nt">${esc(t)}</div><div><span class="tag">${co==='3사'?'3사 공통':co}</span></div></div>
+   <div class="nimg"><img src="${img}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.classList.add('noimg');this.remove()"><span>${p.slice(0,1)}</span></div></a>`).join('')}</div>
+ </div></div>`);}
+
+/* ================= I20 대화 화면 (챗봇 세션 전체 화면). 사실 = 회색 칸, AI 해석 = 보라 테두리 ================= */
+function vI20(){const s=curS();
+ return shell(`<header class="hdr"><h1>${esc(s.t)}</h1></header>
+ <div class="fwrap"><div class="dash" id="dash"><div class="conv">${s.log.map(msg).join('')}</div></div></div>`);}
 
 /* ================= router ================= */
-const VIEWS={login:vLogin,b10:vB10,b20:vB20,b30:vB30,b40:vB40,b50:vB50,b60:vB60,b61:vB61,i10:vI10,i20:vI20};
+const VIEWS={login:vLogin,b10:vB10,b20:vB20,b40:vB40,b50:vB50,b60:vB60,b61:vB61,b70:vB70,i10:vI10,i20:vI20};
 let authed=false;
 function render(keep){const sc=keep?[...document.querySelectorAll('.scroll,.docarea,.rlist,.dash')].map(e=>e.scrollTop):null;
  root.innerHTML=VIEWS[S.route]();
  if(sc)[...document.querySelectorAll('.scroll,.docarea,.rlist,.dash')].forEach((e,i)=>{if(sc[i]!==undefined)e.scrollTop=sc[i];});
- const m=$('#msgs');if(m)m.scrollTop=m.scrollHeight;}
+ const m=$('#msgs');if(m){const b=[...m.querySelectorAll('.bub')].pop();if(b)m.scrollTop+=b.getBoundingClientRect().top-m.getBoundingClientRect().top-8;else m.scrollTop=m.scrollHeight;}}
 function go(r){if(location.hash.slice(1)===r)onHash();else location.hash=r;}
 function onHash(){let r=location.hash.slice(1);if(!VIEWS[r])r=authed?'b10':'login';if(!authed&&r!=='login')r='login';
- S.route=r;S.menu=null;S.modal=null;S.sideOpen=false;if(r==='b20')startRun();if(r==='b30'&&S.tab==='q'&&!S.openQ)S.openQ='q1';render();window.scrollTo(0,0);}
+ S.route=r;S.menu=null;S.modal=null;S.sideOpen=false;if(r==='b20')startRun();render();window.scrollTo(0,0);}
 window.addEventListener('hashchange',onHash);
-let runT;function startRun(){S.progress=0;clearInterval(runT);runT=setInterval(()=>{S.progress++;if(S.route!=='b20'){clearInterval(runT);return;}if(S.progress>=4){clearInterval(runT);setTimeout(()=>{if(S.route==='b20')go('b30');},500);}render();},800);}
+let runT;function startRun(){S.progress=0;clearInterval(runT);runT=setInterval(()=>{S.progress++;if(S.route!=='b20'){clearInterval(runT);return;}if(S.progress>=4){clearInterval(runT);setTimeout(()=>{if(S.route==='b20')go('b40');},500);}render();},800);}
 
 /* ================= events ================= */
+/* 데모: 빈 칸을 처음 누르면 샘플 파일이 들어가요. 그다음부터는 파일 선택 창 */
 const SAMPLE={budget:{n:'SKT_2025_사업보고서.html',m:'214쪽'},ev:[{n:'SKT_2025_4Q_실적발표.pdf',m:'18쪽'},{n:'SKT_네트워크_투자내역.xlsx',m:'3시트'},{n:'KT_2025_사업보고서.html',m:'198쪽'},{n:'SKT_2026_1Q_실적발표.pdf',m:'16쪽'}]};
-/* 자료 점검: 회사 불일치, 기준 시점(2026-03-17) 이후, 예산서 형식. 데모는 파일명으로 판단 */
+/* 자료 점검(B12): 형식, 예산서와 회사 불일치, 기준 시점(2026-03-17) 이후. 데모는 파일명으로 판단 */
+const coOf=n=>/(^|[_\s])KT[_\s]/i.test(n)?'KT':/LG|LGU|유플러스/i.test(n)?'LG유플러스':/SKT|SK텔레콤/i.test(n)?'SKT':null;
 function checkFile(f,zone){const n=f.n,ext=(n.split('.').pop()||'').toLowerCase();
  if(zone==='b'&&!['pdf','html','htm'].includes(ext))return {t:'fmt',m:'예산서는 PDF, HTML만 받아요'};
- const co=/(^|[_\s])KT[_\s]/i.test(n)?'KT':/LG|LGU|유플러스/i.test(n)?'LG유플러스':null;if(co&&co!==S.co)return {t:'co',m:`회사가 달라요. ${co} 자료예요 (선택한 회사 ${S.co})`};
+ const base=(S.draft.budget&&coOf(S.draft.budget.n))||'SKT',co=coOf(n);
+ if(zone==='e'&&co&&co!==base)return {t:'co',m:`회사가 달라요. ${co} 자료예요 (예산서 ${base})`};
  const q=n.match(/(20\d\d)_?([1-4])Q/i);if(q&&(+q[1]>2026||(+q[1]===2026&&+q[2]>=1)))return {t:'date',m:'기준 시점(2026-03-17) 이후 자료예요. 예측 평가가 공정하지 않아요'};
  return null;}
 function withWarn(f,zone){const w=checkFile(f,zone);return {...f,w,keep:false};}
 const pending=d=>[d.budget?['b',d.budget]:null,...d.ev.map(e=>['e',e])].filter(x=>x&&x[1].w&&!x[1].keep).length;
-function addFiles(k,list){const arr=[...list].map(f=>withWarn({n:f.name,m:Math.max(1,Math.round(f.size/1024))+'KB'},k));if(!arr.length)return;
- if(k==='b')S.draft.budget=arr[0];else S.draft.ev.push(...arr);render(true);}
+function addFiles(k,arr){if(!arr.length)return;if(k==='b')S.draft.budget=withWarn(arr[0],'b');else S.draft.ev.push(...arr.map(f=>withWarn(f,'e')));render(true);}
+const fromList=l=>[...l].map(f=>({n:f.name,m:Math.max(1,Math.round(f.size/1024))+'KB'}));
 document.addEventListener('click',e=>{
+ if(S.exOpen&&!e.target.closest('.qwrap')){S.exOpen=false;render(true);}
  const g=e.target.closest('[data-go]');if(g){e.preventDefault();if(g.dataset.go==='login')authed=false;go(g.dataset.go);return;}
  const t=e.target.closest('[data-toc]');if(t){const el=document.getElementById(t.dataset.toc);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});return;}
  const a=e.target.closest('[data-act]');
@@ -906,27 +1148,16 @@ document.addEventListener('click',e=>{
   case 'ktSession':toast('KT 2025 4Q 예산서는 아직 분석 결과가 없어요');break;
   case 'menu':S.menu=S.menu===a.dataset.m?null:a.dataset.m;render(true);break;
   case 'pick':{if(a.disabled)return;const m=a.dataset.m;if(m==='model')S.model=v;if(m==='co')S.co=v;if(m==='dept')S.dept=v;if(m==='qtr')S.qtr=v;S.menu=null;if(m==='model')toast(v==='로컬 LLM'?'로컬 LLM으로만 분석해요':'범용 LLM으로 분석해요');render(true);break;}
-  case 'example':S.prompt=v;render(true);$('#prompt')?.focus();break;
-  case 'openB11':S.prompt=$('#prompt')?.value||S.prompt;S.draft=S.attached?{budget:S.files.budget,ev:[...S.files.ev]}:{budget:withWarn(SAMPLE.budget,'b'),ev:SAMPLE.ev.map(e=>withWarn(e,'e'))};S.modal='b11';render(true);break;
+  case 'example':S.prompt=v;S.exOpen=false;render(true);break;
   case 'closeModal':S.modal=null;render(true);break;
-  case 'pickFile':$(k==='b'?'#fileB':'#fileE').click();break;
+  case 'openB11':S.prompt=$('#prompt')?.value||S.prompt;S.exOpen=false;S.draft={budget:S.files.budget,ev:[...S.files.ev]};S.modal='b11';render(true);break;
+  case 'attach':S.files={budget:S.draft.budget,ev:[...S.draft.ev]};S.modal=null;render(true);break;
+  case 'rmChip':if(k==='b')S.files.budget=null;else S.files.ev.splice(+k,1);render(true);break;
+  case 'pickFile':if(k==='b'&&!S.draft.budget)addFiles('b',[SAMPLE.budget]);else if(k==='e'&&!S.draft.ev.length)addFiles('e',SAMPLE.ev);else $(k==='b'?'#fileB':'#fileE').click();break;
   case 'rmEv':S.draft.ev.splice(+a.dataset.i,1);render(true);break;
   case 'rmB':S.draft.budget=null;render(true);break;
   case 'keepWarn':{const it=k==='b'?S.draft.budget:S.draft.ev[+a.dataset.i];it.keep=true;render(true);break;}
-  case 'attach':S.files={budget:S.draft.budget,ev:[...S.draft.ev]};S.attached=true;S.modal=null;render(true);break;
-  case 'rmChip':if(k==='b')S.files.budget=null;else S.files.ev.splice(+k,1);render(true);break;
   case 'start':S.prompt=$('#prompt')?.value||S.prompt;go('b20');break;
-  case 'sum':S.sumOpen=!S.sumOpen;render(true);break;
-  case 'sumGo':S.sumOpen=false;selectMark(k);break;
-  case 'mark':selectMark(k);break;
-  case 'tab':S.tab=v;render(true);break;
-  case 'accA':S.openA=S.openA===k?null:k;S.mark=S.openA?Object.keys(MARKS).find(m=>MARKS[m].a===k):null;render(true);break;
-  case 'accQ':S.openQ=S.openQ===k?null:k;S.mark=S.openQ?Object.keys(MARKS).find(m=>MARKS[m].q===k):null;render(true);break;
-  case 'promptTog':S.promptOpen[k]=!S.promptOpen[k];render(true);break;
-  case 'copy':{const txt=QUESTIONS[k].prompt;const ok=()=>toast('프롬프트를 복사했어요');
-   (navigator.clipboard?.writeText(txt)||Promise.reject()).then(ok).catch(()=>{const p=$('#pr-'+k);if(p){const r=document.createRange();r.selectNodeContents(p);const s=getSelection();s.removeAllRanges();s.addRange(r);}toast('프롬프트를 선택했어요. 복사해서 쓰세요');});break;}
-  case 'chat':S.chat=!S.chat;render(true);if(S.chat)$('#chatIn')?.focus();break;
-  case 'jump':selectMark(k);go('b30');break;
   case 'openB41':S.modal='b41';render(true);break;
   case 'exAll':S.ex.sel=S.ex.sel.length===7?[]:['a1','a2','a3','q1','q2','q3','q4'];render(true);break;
   case 'exItem':{const i=S.ex.sel.indexOf(k);if(i<0)S.ex.sel.push(k);else S.ex.sel.splice(i,1);render(true);break;}
@@ -940,29 +1171,39 @@ document.addEventListener('click',e=>{
   case 'saveCrit':S.crit=$('#crit').value;S.editCrit=false;render(true);toast('판정 기준을 저장했어요');break;
   case 'confirm':toast('판정을 확정했어요');S.exp=null;render(true);break;
   case 'ftab':S.ftab=v;render();$('#dash').scrollTop=0;break;
-  case 'scope':S.scope=v;render(true);break;
-  case 'period':S.period=v;if(v==='q'&&!['over','pl'].includes(S.ftab))toast('분기 보기는 한눈에, 손익 탭의 매출·영업이익에 적용돼요');render(true);break;
-  case 'ask':S.fq=`${a.dataset.t} 기준으로 설명해 주세요`;render(true);const q=$('#fq');q.focus();q.setSelectionRange(q.value.length,q.value.length);break;
-  case 'sugg':S.i20extra.push(v);render(true);const d=$('#dash');d.scrollTop=d.scrollHeight;break;
+  case 'ask':S.cmode='ins';S.cq=`${a.dataset.t}을(를) 어떻게 봐야 하나요?`;render(true);{const q=$('#cq');q.focus();q.setSelectionRange(q.value.length,q.value.length);}break;
+  case 'theme':{const n=isDark()?'light':'dark';document.documentElement.dataset.theme=n;try{localStorage.setItem('telescope-theme',n);}catch(err){}render(true);break;}
+  case 'goTab':S.ftab=v;go('b70');setTimeout(()=>{const d=$('#dash');if(d)d.scrollTop=0;},60);break;
+  case 'toIns':S.cmode='ins';send(v);break;
+  case 'iask':S.cmode='ins';S.cq=v;render(true);{const q=$('#cq');q.focus();q.setSelectionRange(q.value.length,q.value.length);}break;
+  case 'cmode':S.cmode=v;S.cq=$('#cq')?.value||S.cq;render(true);$('#cq')?.focus();break;
+  case 'cclose':S.cside=false;render(true);break;
+  case 'sess':S.cur=k;go('i20');break;
+  case 'nf':S.nf=v;render(true);break;
+  case 'sugg':send(v);break;
  }});
 document.addEventListener('keydown',e=>{
- if(e.key==='Escape'){if(S.modal){S.modal=null;render(true);}else if(S.menu){S.menu=null;render(true);}else if(S.chat&&S.route!=='i10'){S.chat=false;render(true);}else if(S.sumOpen){S.sumOpen=false;render(true);}}
+ if(e.key==='Escape'&&S.exOpen){S.exOpen=false;render(true);return;}
+ if(e.key==='Escape'){if(S.modal){S.modal=null;render(true);}else if(S.menu){S.menu=null;render(true);}else if(S.cside){S.cside=false;render(true);}}
  if((e.key==='Enter'||e.key===' ')&&e.target.matches('mark[data-act],tr[data-act]')){e.preventDefault();e.target.click();}});
 document.addEventListener('submit',e=>{e.preventDefault();const f=e.target.dataset.form;
  if(f==='login'){authed=true;go('b10');}
- if(f==='chat'){const inp=e.target.querySelector('input'),q=inp.value.trim();if(!q)return;const key=e.target.dataset.k;S.chatLog[key].push(['u',q],['a','데모 챗봇은 미리 준비한 답만 보여 줘요. 실제 서비스에서는 이 화면의 분석 결과와 공시 데이터로 답해요.']);render(true);$('#chatIn')?.focus();}
- if(f==='fask'){const q=$('#fq').value.trim();if(!q){toast('질문을 적어 주세요');return;}S.fq='';if(S.route==='i20'){S.i20extra.push(q);render(true);const d=$('#dash');d.scrollTop=d.scrollHeight;}else{if(!/capex/i.test(q))S.i20extra=[q];else S.i20extra=[];go('i20');}}});
-document.addEventListener('input',e=>{if(e.target.id==='prompt')S.prompt=e.target.value;if(e.target.id==='fq')S.fq=e.target.value;});
-document.addEventListener('change',e=>{if(e.target.id==='fileB')addFiles('b',e.target.files);if(e.target.id==='fileE')addFiles('e',e.target.files);});
+ if(f==='start'){const b=$('[data-act=start]');if(b&&!b.disabled){S.exOpen=false;go('b20');}else toast('예산서를 넣으면 분석을 시작할 수 있어요');}
+ if(f==='chat'){const q=$('#cq').value.trim();if(!q){toast('질문을 적어 주세요');return;}send(q);}
+});
+document.addEventListener('focusin',e=>{if(e.target.id==='prompt'&&!S.exOpen){S.exOpen=true;render(true);const p=$('#prompt');p.focus();p.setSelectionRange(p.value.length,p.value.length);}});
+document.addEventListener('input',e=>{if(e.target.id==='prompt')S.prompt=e.target.value;if(e.target.id==='cq')S.cq=e.target.value;});
+document.addEventListener('change',e=>{if(e.target.id==='fileB')addFiles('b',fromList(e.target.files));if(e.target.id==='fileE')addFiles('e',fromList(e.target.files));});
 document.addEventListener('dragover',e=>{const z=e.target.closest('[data-zone]');if(z){e.preventDefault();z.classList.add('over');}});
 document.addEventListener('dragleave',e=>{const z=e.target.closest('[data-zone]');if(z)z.classList.remove('over');});
-document.addEventListener('drop',e=>{const z=e.target.closest('[data-zone]');if(z){e.preventDefault();addFiles(z.dataset.zone,e.dataTransfer.files);}});
-function selectMark(k){const m=MARKS[k];S.mark=k;if(m.a){S.tab='a';S.openA=m.a;}else{S.tab='q';S.openQ=m.q;}if(m.a&&m.q&&S.tab==='a'&&S.lastMark===k){S.tab='q';S.openQ=m.q;}S.lastMark=k;render(true);
- const el=document.querySelector(`mark[data-k="${k}"]`);el?.scrollIntoView({block:'center',behavior:'smooth'});}
+document.addEventListener('drop',e=>{const z=e.target.closest('[data-zone]');if(z){e.preventDefault();addFiles(z.dataset.zone,fromList(e.dataTransfer.files));}});
 /* tooltip */
 const tip=$('#tip');
 document.addEventListener('pointermove',e=>{const m=e.target.closest&&e.target.closest('[data-tip]');if(!m){tip.hidden=true;return;}tip.textContent=m.dataset.tip;tip.hidden=false;
  const w=tip.offsetWidth;let x=e.clientX+12;if(x+w>innerWidth-8)x=e.clientX-w-12;tip.style.left=x+'px';tip.style.top=(e.clientY-36)+'px';});
 document.addEventListener('pointerleave',()=>tip.hidden=true);
+/* 목차: 지금 읽는 장 표시 */
+document.addEventListener('scroll',e=>{const sc=e.target;if(sc.id!=='scroller')return;const bs=[...document.querySelectorAll('.toc [data-toc]')];let cur=bs[0];
+ bs.forEach(b=>{const h=document.getElementById(b.dataset.toc);if(h&&h.getBoundingClientRect().top<sc.getBoundingClientRect().top+170)cur=b;});bs.forEach(b=>b.setAttribute('aria-current',b===cur));},true);
 onHash();
 </script>

@@ -12,16 +12,11 @@ pipeline {
   }
 
   stages {
+    // DB 테스트는 Testcontainers가 빌드마다 임의 이름·포트의 MySQL 컨테이너를 띄우고 정리
     stage('Backend Test') {
       steps {
-        sh '''
-          docker compose up -d --wait mysql
-          docker compose run --rm backend-test
-        '''
-      }
-      post {
-        always {
-          sh 'docker compose down -v || true'
+        dir('backend') {
+          sh 'chmod +x gradlew && ./gradlew test --no-daemon'
         }
       }
     }
@@ -54,7 +49,13 @@ pipeline {
   }
 
   post {
-    always {
+    always { 
+      script {
+        def isMain = env.BRANCH_NAME == 'main' || env.GIT_BRANCH in ['origin/main', 'main']
+        if (env.TAG && !isMain) {
+          sh 'docker rmi $BACKEND_IMAGE_NAME:$TAG $FRONTEND_IMAGE_NAME:$TAG || true'
+        }
+      }
       sh 'docker image prune -f || true'
     }
   }
