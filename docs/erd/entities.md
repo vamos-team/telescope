@@ -25,6 +25,10 @@ MVP에서 제외한 것: 팀 단위 프로필(설정), 팀 개념(`Team`), 콜�
 > `Job`은 공통 테이블이지만 대상을 범용으로 가리키지 않는다. 자료 준비/분석/예측을 시작하는
 > 쪽(`DocumentVersion`/`AnalysisRun`/`PredictionRun`)이 각자 `jobId` FK로 `Job`을 가리키는
 > 일대일 관계로 통일했다. `jobType`은 조인용이 아니라 필터링·표시용 메타데이터로만 쓴다.
+>
+> 관계 표기: 대상(`DocumentVersion`/`AnalysisRun`/`PredictionRun`)은 `jobId`로 `Job`을 반드시 하나 가진다.
+> 반대로 `Job` 하나는 세 대상 중 **`jobType`에 맞는 정확히 하나**에만 연결된다(나머지 둘에는 연결되지 않는다).
+> Mermaid로는 "셋 중 하나만"을 표현할 수 없어서 `Job` 쪽을 선택(`o|`)으로 표시하고 이 규칙은 서버가 검증한다.
 
 ```mermaid
 erDiagram
@@ -51,7 +55,6 @@ erDiagram
         date publishedDate
         string source
         string fileStorageKey
-        string preparationStatus
     }
     DOCUMENT ||--o{ DOCUMENT_VERSION : "has"
     USER ||--o{ DOCUMENT_VERSION : "uploads"
@@ -65,7 +68,7 @@ erDiagram
         datetime startedAt
         datetime finishedAt
     }
-    JOB ||--|| DOCUMENT_VERSION : "자료 준비 작업"
+    JOB ||--o| DOCUMENT_VERSION : "자료 준비 작업"
 
     DATA_SYNC_RUN {
         bigint id PK
@@ -106,7 +109,7 @@ erDiagram
     ANALYSIS_RUN ||--o{ ANALYSIS_RUN_DOCUMENT : "snapshots"
     ANALYSIS_RUN ||--o{ ANALYSIS_FINDING : "produces"
     DOCUMENT_VERSION ||--o{ ANALYSIS_RUN_DOCUMENT : "referenced by"
-    JOB ||--|| ANALYSIS_RUN : "분석 작업"
+    JOB ||--o| ANALYSIS_RUN : "분석 작업"
     USER ||--o{ ANALYSIS_RUN : "requests"
     DATA_VERSION ||--o{ ANALYSIS_RUN : "재무 데이터 버전"
 
@@ -127,6 +130,7 @@ erDiagram
         bigint id PK
         bigint predictedQuestionId FK
         bigint comparedDocumentVersionId FK
+        date asOfDate
         datetime evaluatedAt
         string result
     }
@@ -134,7 +138,7 @@ erDiagram
     PREDICTION_RUN ||--o{ PREDICTED_QUESTION : "produces"
     PREDICTED_QUESTION ||--o{ PREDICTION_EVALUATION : "evaluated by"
     DOCUMENT_VERSION ||--o{ PREDICTION_EVALUATION : "compared against"
-    JOB ||--|| PREDICTION_RUN : "예측 작업"
+    JOB ||--o| PREDICTION_RUN : "예측 작업"
     USER ||--o{ PREDICTION_RUN : "requests"
 
     CHAT_SESSION {
@@ -168,8 +172,8 @@ erDiagram
 2. `Document`(없으면 새로)와 `DocumentVersion`(항상 새 row)을 만들고, `Job`을 만들어 `jobId`로 연결한다.
 3. 원본 파일은 `FileStorage`에 저장하고, 반환된 key를 `fileStorageKey`에 넣는다.
 4. backend가 `PythonAiClient`로 ai 서비스에 자료 준비(ingest)를 요청한다. ai가 파싱해 ChromaDB에 적재한다.
-5. 클라이언트는 `GET /jobs/{id}`를 폴링한다. 성공하면 `preparationStatus`가 완료가 된다.
-6. 준비가 끝나지 않은 문서 버전은 분석 허용 문서에 넣지 않는다.
+5. 클라이언트는 `GET /jobs/{id}`를 폴링한다. 연결된 `Job.status`가 `SUCCEEDED`이면 그 문서 버전은 준비가 끝난 것이다. 준비 상태를 `DocumentVersion`에 따로 저장하지 않으므로 문서 버전 row는 바뀌지 않는다.
+6. 준비가 끝나지 않은 문서 버전(연결된 `Job`이 `SUCCEEDED`가 아닌 것)은 분석 허용 문서에 넣지 않는다.
 
 ### 3.3 재무 데이터 적재
 
@@ -215,15 +219,16 @@ erDiagram
 ### 3.5 예측 (애널리스트 질문 예측)
 
 1. 사용자가 완료된 `AnalysisRun`을 골라 예측을 요청한다.
-2. 서버가 `PredictionRun`을 만든다. `asOfDate`(필수)와 `requestedBy`를 고정하고 `Job`을 연결한다.
+2. 서버가 `PredictionRun`을 만든다. `asOfDate`(필수)와 `requestedBy`를 고정하고 `Job`을 연결한다. 이때 예측의 `asOfDate`는 바탕이 되는 `AnalysisRun.asOfDate`보다 이르면 안 된다(`예측 ≥ 분석`). 어기면 서버가 거부한다. 분석에 쓰인 문서는 분석 기준 시점 이전 발행분뿐이라, 이 규칙이 있으면 예측 기준 시점 이후 정보가 분석 결과를 통해 섞이지 않는다.
 3. ai는 기준 시점 이전에 발행된 자료만 사용한다. 이후 발행 문서는 서버가 허용 문서에서 제외한다. 결과가 비어도 전체 문서로 되돌아가지 않는다.
 4. 결과로 `PredictedQuestion`(질문, 근거)이 여러 건 저장된다.
 
 ### 3.6 예측 평가
 
-1. 기준 시점 이후에 새 리포트가 발행되어 `DocumentVersion`으로 들어온다.
-2. 예측했던 `PredictedQuestion`과 그 리포트를 견주어 맞았는지 평가한다.
-3. 결과를 `PredictionEvaluation`(`predictedQuestionId`, `comparedDocumentVersionId`, `evaluatedAt`, `result`)으로 새로 쌓는다. 다시 평가하면 새 row를 추가한다.
+1. 예측의 기준 시점(`PredictionRun.asOfDate`) 이후에 새 리포트가 발행되어 `DocumentVersion`으로 들어온다.
+2. 평가를 요청할 때 평가 기준 시점(`asOfDate`, 필수)을 정한다. 비교 대상은 예측 기준 시점 이후부터 평가 기준 시점까지 발행된 문서로 서버가 제한한다.
+3. 예측했던 `PredictedQuestion`과 그 리포트를 견주어 맞았는지 평가한다.
+4. 결과를 `PredictionEvaluation`(`predictedQuestionId`, `comparedDocumentVersionId`, `asOfDate`, `evaluatedAt`, `result`)으로 새로 쌓는다. 다시 평가하면 새 row를 추가한다.
 
 ### 3.7 채팅
 
@@ -274,9 +279,9 @@ erDiagram
 | `publishedDate` | date | 발행일. 모든 문서는 발행일과 출처를 가진다 |
 | `source` | string | 출처 |
 | `fileStorageKey` | string | `FileStorage`가 반환한 key |
-| `preparationStatus` | string | PENDING / 준비중 / 완료 |
 
-- 불변이다. 새 버전은 새 row로 추가하고, 기존 row는 고치지 않는다.
+- 불변이다. 새 버전은 새 row로 추가하고, 기존 row는 고치지 않는다. 모든 필드가 생성 시점에 정해지며 이후 바뀌지 않는다.
+- 자료 준비 상태는 이 테이블에 두지 않고 `jobId`로 연결된 `Job.status`에서 읽는다(`SUCCEEDED` = 준비 완료).
 - 예산서와 근거자료를 사용자가 올리면 여기에 저장된다(`uploadedBy` 있음).
 
 ### 4.3 job
@@ -293,7 +298,7 @@ erDiagram
 | `startedAt` | datetime | 시작 시각 |
 | `finishedAt` | datetime | 종료 시각 |
 
-- `Job`은 대상을 가리키지 않는다. `DocumentVersion`/`AnalysisRun`/`PredictionRun`이 각자 `jobId` FK로 `Job`을 가리킨다(1 : 1).
+- `Job`은 대상을 가리키지 않는다. `DocumentVersion`/`AnalysisRun`/`PredictionRun`이 각자 `jobId` FK로 `Job`을 가리킨다. 대상은 `Job`을 반드시 하나 가지고, `Job` 하나는 `jobType`에 맞는 대상 정확히 하나에만 연결된다(서버가 검증).
 - 재무 데이터 적재의 상태는 `DataSyncRun`이 따로 가진다.
 
 ### 4.4 datasync
@@ -367,7 +372,7 @@ erDiagram
 |---|---|---|
 | `id` | bigint PK | |
 | `analysisRunId` | bigint FK | 어느 분석을 바탕으로 했는지 |
-| `asOfDate` | date | 기준 시점. 필수 |
+| `asOfDate` | date | 기준 시점. 필수. `AnalysisRun.asOfDate`보다 이르면 안 된다(예측 ≥ 분석) |
 | `jobId` | bigint FK | 예측 작업(`Job`). 1 : 1 |
 | `requestedBy` | bigint FK | 요청한 사용자. 이 사용자만 결과를 조회한다 |
 
@@ -386,8 +391,9 @@ erDiagram
 |---|---|---|
 | `id` | bigint PK | |
 | `predictedQuestionId` | bigint FK | 평가 대상 질문 |
-| `comparedDocumentVersionId` | bigint FK | 견준 대상. 이후 발행된 리포트 |
-| `evaluatedAt` | datetime | 평가 시점 |
+| `comparedDocumentVersionId` | bigint FK | 견준 대상. 예측 기준 시점 이후, 평가 기준 시점까지 발행된 리포트 |
+| `asOfDate` | date | 평가 기준 시점. 필수. 예측의 `asOfDate`와 구분된다 |
+| `evaluatedAt` | datetime | 평가를 실행한 시각 (기준 시점이 아니다) |
 | `result` | string | 적중 여부 |
 
 - 평가는 `prediction`의 결과를 다루므로 별도 패키지 대신 `prediction`에 포함한다.
@@ -417,6 +423,8 @@ erDiagram
 - 문서 버전, 분석·예측·평가 결과는 수정하지 않고 새로 쌓는다.
 - 분석·예측 결과(`AnalysisRun`, `PredictionRun`과 그 하위 결과)는 요청한 본인만 조회한다. `requestedBy`로 서버가 강제한다.
 - 예측과 평가는 `asOfDate`가 필수이고, 기준 시점 이후에 발행된 문서는 서버가 허용 문서에서 제외한다.
+- 예측의 `asOfDate`는 바탕이 되는 분석의 `asOfDate`보다 이르면 안 된다(예측 ≥ 분석). 서버가 검증한다.
+- 평가는 예측의 `asOfDate`와 평가 자신의 `asOfDate`를 구분한다. 비교 문서는 예측 기준 시점 이후부터 평가 기준 시점까지 발행된 것만 쓴다.
 - 허용 문서 범위와 기준 시점 필터는 서버가 강제한다. 필터 결과가 비어도 전체 문서로 되돌아가지 않는다.
 - 모든 문서는 발행일(`publishedDate`)과 출처(`source`)를 가진다.
 - 저장소 경계: MySQL은 backend만 쓰고, DuckDB는 loader 배치만, ChromaDB는 자료 준비(ingest)만 쓴다. backend는 DuckDB·ChromaDB를 열지 않는다.
@@ -434,6 +442,7 @@ erDiagram
 | 예산서 1개 보장 방식 | 지금은 `role` 값을 서버가 검증한다. `AnalysisRun`에 FK로 둘지는 미정 |
 | `AnalysisRunDocument` 유니크 제약 | `(analysisRunId, documentVersionId)` 중복 방지 여부 |
 | `AnalysisFinding` | 예산서가 주장한 값을 담을 필드가 없다. `evidenceRef` 형식을 ai 담당자와 정해야 한다 |
-| `PredictionRun` | 사용자 입력(`userInput`) 필요 여부, `asOfDate`가 분석의 `asOfDate`와 같아야 하는지 |
+| `PredictionRun` | 사용자 입력(`userInput`) 필요 여부 |
+| 재무 데이터의 기준 시점 | `DataVersion`에는 기준 시점이 없다. 분석과 예측이 DuckDB의 재무 수치를 `asOfDate` 이전 것만 쓰도록 거르는 방법을 ai 담당자와 확인해야 한다 |
 | 채팅 응답 방식 | 일반 JSON vs SSE |
 | ai 서비스의 작업 상태 저장 위치 | |
