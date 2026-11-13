@@ -13,6 +13,10 @@ pipeline {
 
   stages {
     stage('Backend Test') {
+      environment {
+        COMPOSE_PROJECT_NAME = "telescope-ci-${env.BRANCH_NAME}-${env.BUILD_NUMBER}".toLowerCase().replaceAll('[^a-z0-9_-]', '-')
+        MYSQL_PORT           = '33000-33099'
+      }
       steps {
         sh '''
           docker compose up -d --wait mysql
