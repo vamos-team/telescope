@@ -25,7 +25,7 @@ pipeline {
       }
       post {
         always {
-          sh 'docker compose down -v || true'
+          sh 'docker compose down -v --rmi local || true'
         }
       }
     }
@@ -58,7 +58,13 @@ pipeline {
   }
 
   post {
-    always {
+    always { 
+      script {
+        def isMain = env.BRANCH_NAME == 'main' || env.GIT_BRANCH in ['origin/main', 'main']
+        if (env.TAG && !isMain) {
+          sh 'docker rmi $BACKEND_IMAGE_NAME:$TAG $FRONTEND_IMAGE_NAME:$TAG || true'
+        }
+      }
       sh 'docker image prune -f || true'
     }
   }
