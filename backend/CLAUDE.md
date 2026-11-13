@@ -25,7 +25,7 @@
 | `chat` | 대화와 메시지, Spring AI 오케스트레이션 |
 | `infra` | 외부 연동: `python`(ai 서비스 호출), `storage`(파일), `ai`(ChatClient, MCP Client 설정) |
 
-> 범용 설정(프로필), 예측 평가 기능의 패키지는 아직 만들지 않았다. 패키지가 추가되면 이 표도 갱신한다.
+> 예측 평가 기능의 패키지는 아직 만들지 않았다. 패키지가 추가되면 이 표도 갱신한다.
 
 - `global`, `infra`를 제외한 기능 패키지 안은 `controller / service / repository / entity / dto`로 나눈다.
 - 클래스 이름: `XxxController`, `XxxService`, `XxxRepository`, `Xxx`(Entity), `XxxRequest`, `XxxResponse`
@@ -85,13 +85,14 @@
 - 분석을 시작할 때 사용한 문서 버전을 `AnalysisRunDocument`로 **스냅샷**해서 남긴다.
 - 예측과 평가는 `as_of_date`가 필수다. 기준 시점 이후에 발행된 문서는 허용 문서에서 서버가 제외한다.
 - 허용 문서와 기준 시점은 LLM이 인자로 정하지 않는다. 서버가 강제로 주입한다. (Spring AI 도구 호출 방식의 구체적 구현은 PoC 후 확정)
-- 분석 실행 시 사용한 프로필(설정)은 스냅샷 JSON으로 함께 저장한다.
+- 분석 요청 때 사용자가 입력한 검토 기준 컨텍스트(`userInput`)는 분석 실행과 함께 저장하고 수정하지 않는다. 팀 단위 프로필 설정은 MVP에서 제외한다.
 - 자료 준비(ingest)가 끝나지 않은 문서 버전은 분석 허용 문서에 넣지 않는다.
 - Job 상태는 `QUEUED → RUNNING → SUCCEEDED/FAILED`로만 전이한다. 역방향 전이를 막는다.
 
 ## 7. 하지 않는 것
 
-- 인증/인가 코드를 만들지 않는다. (MVP 제외)
+- 사내 SSO 연동은 만들지 않는다. 인증은 JWT로만 구현한다. (SSO는 이후 확장 과제)
+- 권한 검사를 클라이언트에 맡기지 않는다. 공용 문서 수집·삭제는 관리자만, 분석·예측 결과는 요청한 본인만 조회하도록 서버가 강제한다.
 - 콜백 수신 엔드포인트를 만들지 않는다. 작업 상태는 폴링으로 조회한다.
 - ML·분석 로직, DuckDB·ChromaDB 접근을 구현하지 않는다.
 - `build.gradle`과 `application*.yml`의 큰 변경은 이슈에 명시된 경우에만 한다.
