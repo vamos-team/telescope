@@ -25,7 +25,7 @@ pipeline {
       }
       post {
         always {
-          sh 'docker compose down -v --rmi local || true'
+          sh 'docker compose --profile test down -v --rmi local || true'
         }
       }
     }
