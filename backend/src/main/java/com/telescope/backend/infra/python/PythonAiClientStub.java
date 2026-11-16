@@ -61,14 +61,14 @@ public class PythonAiClientStub implements PythonAiClient {
     public JobStatusResponse getJobStatus(String jobId) {
         Instant startedAt = startedAtByJobId.get(jobId);
         if (startedAt == null) {
-            throw new IllegalArgumentException("알 수 없는 jobId: " + jobId);
+            throw new AiJobNotFoundException(jobId);
         }
 
         boolean stillRunning = Duration.between(startedAt, Instant.now()).compareTo(RUNNING_DURATION) < 0;
         if (stillRunning) {
-            return new JobStatusResponse(jobId, JobStatus.RUNNING, null, null);
+            return new JobStatusResponse(jobId, AiJobStatus.RUNNING, null, null);
         }
-        return new JobStatusResponse(jobId, JobStatus.SUCCEEDED, fakeResult(), null);
+        return new JobStatusResponse(jobId, AiJobStatus.SUCCEEDED, fakeResult(), null);
     }
 
     private JobStartResponse startJob(String jobKind, String reference) {

@@ -15,7 +15,7 @@ package com.telescope.backend.infra.python;
  */
 public record JobStatusResponse(
         String jobId,
-        JobStatus status,
+        AiJobStatus status,
         Object result,
         String errorMessage
 ) {
