@@ -31,7 +31,7 @@ public interface PythonAiClient {
      * 작업 상태를 조회한다. 상태 폴링 용도로 반복 호출된다.
      *
      * @param jobId {@link JobStartResponse#jobId()}로 발급받은 식별자
-     * @throws IllegalArgumentException jobId에 해당하는 작업이 없으면 던진다 (TODO: 전용 예외로 교체 검토, global 패키지의 BusinessException/ErrorCode 확정 후)
+     * @throws AiJobNotFoundException jobId에 해당하는 작업이 없으면 던진다. 그 외 호출 실패(네트워크 등)는 다른 RuntimeException으로 구분된다
      */
     JobStatusResponse getJobStatus(String jobId);
 }
