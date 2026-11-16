@@ -12,7 +12,7 @@ import org.testcontainers.utility.DockerImageName;
  * Flyway 마이그레이션도 이 컨테이너에서 실행
  */
 @TestConfiguration(proxyBeanMethods = false)
-class TestcontainersConfig {
+public class TestcontainersConfig {
 
 	@Bean
 	@ServiceConnection
