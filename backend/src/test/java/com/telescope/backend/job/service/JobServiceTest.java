@@ -35,6 +35,13 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.List;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -77,7 +84,7 @@ class JobServiceTest {
         JobResponse response = jobService.getJob(job.getId());
 
         assertThat(response.status()).isEqualTo(JobStatus.QUEUED);
-        assertThat(aiClient.calls).isZero();
+        assertThat(aiClient.calls.get()).isZero();
     }
 
     @Test
@@ -135,7 +142,7 @@ class JobServiceTest {
         JobResponse response = jobService.getJob(id);
 
         assertThat(response.status()).isEqualTo(JobStatus.RUNNING);
-        assertThat(aiClient.calls).isEqualTo(2);
+        assertThat(aiClient.calls.get()).isEqualTo(2);
     }
 
     @Test
@@ -147,7 +154,7 @@ class JobServiceTest {
         jobService.getJob(id);
         jobService.getJob(id);
 
-        assertThat(aiClient.calls).isEqualTo(1);
+        assertThat(aiClient.calls.get()).isEqualTo(1);
     }
 
     @Test
@@ -177,6 +184,30 @@ class JobServiceTest {
         assertThatThrownBy(() -> jobService.getJob(999_999L))
                 .isInstanceOfSatisfying(BusinessException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    @Test
+    void 같은_작업을_동시에_조회해도_먼저_종료된_상태가_유지된다() throws Exception {
+        Long id = startedJob();
+        // 두 요청이 같은 순간 서로 다른 종료 결과를 받는 상황. 잠금이 없으면 나중 커밋이 앞선 결과를 덮어쓴다.
+        aiClient.barrier = new CyclicBarrier(2);
+        aiClient.sequence = List.of(
+                new JobStatusResponse("ext-1", AiJobStatus.SUCCEEDED, null, null),
+                new JobStatusResponse("ext-1", AiJobStatus.FAILED, null, "늦게 온 실패"));
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<JobResponse> first = pool.submit(() -> jobService.getJob(id));
+            Future<JobResponse> second = pool.submit(() -> jobService.getJob(id));
+            JobResponse firstResult = first.get(10, TimeUnit.SECONDS);
+            JobResponse secondResult = second.get(10, TimeUnit.SECONDS);
+
+            JobResponse saved = JobResponse.from(jobRepository.findById(id).orElseThrow());
+            assertThat(firstResult).isEqualTo(saved);
+            assertThat(secondResult).isEqualTo(saved);
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     private Long startedJob() {
@@ -210,12 +241,18 @@ class JobServiceTest {
 
         JobStatusResponse response;
         RuntimeException error;
-        int calls;
+        final AtomicInteger calls = new AtomicInteger();
+        /** 값이 있으면 호출 순서대로 이 응답을 준다. */
+        List<JobStatusResponse> sequence;
+        /** 값이 있으면 모든 호출이 여기서 만나 동시에 응답을 받는다. */
+        CyclicBarrier barrier;
 
         void reset() {
             response = null;
             error = null;
-            calls = 0;
+            calls.set(0);
+            sequence = null;
+            barrier = null;
         }
 
         void respond(AiJobStatus status, String errorMessage) {
@@ -224,11 +261,18 @@ class JobServiceTest {
 
         @Override
         public JobStatusResponse getJobStatus(String jobId) {
-            calls++;
+            int order = calls.incrementAndGet();
+            if (barrier != null) {
+                try {
+                    barrier.await(5, TimeUnit.SECONDS);
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            }
             if (error != null) {
                 throw error;
             }
-            return response;
+            return sequence != null ? sequence.get(order - 1) : response;
         }
 
         @Override

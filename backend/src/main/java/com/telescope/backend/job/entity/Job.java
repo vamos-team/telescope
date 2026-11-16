@@ -21,8 +21,8 @@ import java.time.LocalDateTime;
  * 오래 걸리는 작업(자료 준비, 분석, 예측)의 상태.
  * 대상(DocumentVersion 등)이 {@code jobId}로 이 Job을 가리키며, Job은 대상을 모른다.
  *
- * <p>MVP: 소유자 컬럼이 없고 낙관적 락({@code @Version})도 없다. 종료 상태는 바뀌지 않으므로
- * 같은 작업을 동시에 갱신해도 서비스가 종료 여부를 다시 확인하는 것으로 충분하다고 본다.
+ * MVP: 소유자 컬럼이 없고 낙관적 락({@code @Version})도 없다. 같은 작업의 동시 갱신은
+ * 서비스가 행 잠금({@code JobRepository#findByIdForUpdate})으로 직렬화해 막는다.
  */
 @Getter
 @Entity

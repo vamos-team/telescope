@@ -48,4 +48,12 @@ class JobRepositoryTest {
         assertThat(found.getCreatedAt()).isNotNull();
         assertThat(found.getUpdatedAt()).isNotNull();
     }
+
+    @Test
+    void 잠금_조회는_작업을_반환하고_없는_ID는_비어_있다() {
+        Long id = jobRepository.saveAndFlush(Job.create(JobType.PREDICTION)).getId();
+
+        assertThat(jobRepository.findByIdForUpdate(id)).isPresent();
+        assertThat(jobRepository.findByIdForUpdate(999_999L)).isEmpty();
+    }
 }

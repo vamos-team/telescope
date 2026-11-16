@@ -64,8 +64,8 @@ public class JobService {
      *
      * <p>MVP: 조회할 때 갱신한다. 별도 갱신 배치(스케줄러)는 트리거 주체가 정해지지 않아 두지 않았다.
      * 그래서 아무도 조회하지 않는 작업은 갱신되지 않고, 사용자가 늘면 ai 호출도 같이 늘어난다.
-     * ai 호출은 트랜잭션 밖에서 하며, 그 사이 다른 요청이 먼저 갱신했어도 종료 상태는
-     * 바뀌지 않으므로({@link Job#syncFrom}) 결과가 어긋나지 않는다.
+     * ai 호출은 트랜잭션 밖에서 한다. 저장할 때는 행을 잠그고 다시 읽으므로, 그 사이 다른 요청이
+     * 먼저 종료시켰다면 그 상태가 유지된다({@link Job#syncFrom}).
      */
     public JobResponse getJob(Long jobId) {
         Job job = inTx(() -> findOrThrow(jobId));
@@ -89,7 +89,7 @@ public class JobService {
 
     private JobResponse applyAiStatus(Long jobId, JobStatus aiStatus, String errorMessage) {
         return inTx(() -> {
-            Job job = findOrThrow(jobId);
+            Job job = jobRepository.findByIdForUpdate(jobId).orElseThrow(() -> notFound(jobId));
             job.syncFrom(aiStatus, errorMessage, now());
             return JobResponse.from(job);
         });
@@ -105,9 +105,11 @@ public class JobService {
     }
 
     private Job findOrThrow(Long jobId) {
-        return jobRepository.findById(jobId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "ID " + jobId + "번 작업을 찾을 수 없습니다."));
+        return jobRepository.findById(jobId).orElseThrow(() -> notFound(jobId));
+    }
+
+    private BusinessException notFound(Long jobId) {
+        return new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "ID " + jobId + "번 작업을 찾을 수 없습니다.");
     }
 
     private <T> T inTx(Supplier<T> action) {
