@@ -86,11 +86,9 @@ public class Job extends BaseTimeEntity {
 
     /**
      * ai 서비스가 알려 준 상태를 반영한다. 폴링 때마다 호출되므로 예외 대신 무시하는 경우가 있다.
-     * <ul>
-     *   <li>이미 종료됐거나 같은 상태면 아무것도 하지 않는다.</li>
-     *   <li>ai가 QUEUED라고 해도 되돌리지 않는다.</li>
-     *   <li>RUNNING을 건너뛰고 바로 SUCCEEDED를 받으면 시작 처리 후 완료한다.</li>
-     * </ul>
+     *  이미 종료됐거나 같은 상태면 아무것도 하지 않는다.
+     *  ai가 QUEUED라고 해도 되돌리지 않는다.
+     *  RUNNING을 건너뛰고 바로 SUCCEEDED를 받으면 시작 처리 후 완료한다.
      */
     public void syncFrom(JobStatus aiStatus, String aiErrorMessage, LocalDateTime now) {
         if (isTerminal() || status == aiStatus) {
