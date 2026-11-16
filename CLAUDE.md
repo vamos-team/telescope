@@ -23,7 +23,7 @@ MVP 제외: 콜백(작업 상태는 폴링으로 조회), 사내 데이터 연�
 | frontend | `frontend/` | Vue 3 + TypeScript |
 | backend | `backend/` | Spring Boot API 서버. 세부 규칙은 `backend/CLAUDE.md` |
 | ai | `pipelines/`, `mcp-server/`, `ai/`(확인 필요) | 수집, 파싱, 적재, 조회 도구, 분석·예측 서비스 |
-| infra | `infra/`, `Jenkinsfile`, `docker-compose.yml` | CI/CD, 실행 환경 |
+| infra | `infra/`, `.github/workflows/`, `docker-compose.yml` | CI/CD, 실행 환경 |
 
 - `pipelines/collectors`: 외부 원본 수집만 (파싱·가공 금지)
 - `pipelines/parsers`: 원본 → 구조화 (네트워크·DB 접근 금지)
@@ -61,7 +61,7 @@ MVP 제외: 콜백(작업 상태는 폴링으로 조회), 사내 데이터 연�
 ## 5. 작업 방식
 
 ### 브랜치 (Git Flow)
-- `main`: 배포용. 머지되면 Jenkins가 서버에 자동 배포한다.
+- `main`: 배포용. 머지되면 GitHub Actions가 이미지를 올리고 Argo CD가 K8s 클러스터에 자동 배포한다.
 - `develop`: 통합용. 모든 개발 브랜치의 기준이다.
 - `main`, `develop`에는 직접 push하지 않는다. PR로만 머지한다.
 - 작업 브랜치: `영역/#이슈번호-작업내용`
@@ -78,7 +78,7 @@ MVP 제외: 콜백(작업 상태는 폴링으로 조회), 사내 데이터 연�
 ### 커밋
 - 형식: `타입: 작업내용 #이슈번호` — 이슈 번호는 현재 브랜치명에서 가져온다. 작업 내용은 한국어.
   - 예: `feat: 사업보고서 파싱 기능 추가 #1`
-- 타입: feat(새 기능·타입 정의), fix(버그 수정), refactor(리팩토링·구조 개선, 파일 이동 포함), docs(문서), test(테스트), chore(코드 작동에 영향 없는 정리), ci(Jenkins, 배포)
+- 타입: feat(새 기능·타입 정의), fix(버그 수정), refactor(리팩토링·구조 개선, 파일 이동 포함), docs(문서), test(테스트), chore(코드 작동에 영향 없는 정리), ci(GitHub Actions, 배포)
 - 커밋 하나에는 하나의 목적만 담는다.
 - **`git commit`, `git push`, PR 생성은 사용자가 요청할 때만 한다.**
 
