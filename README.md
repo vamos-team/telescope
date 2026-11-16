@@ -10,6 +10,6 @@
   - `collectors/` — 외부 데이터 수집
   - `parsers/` — 수집한 데이터 파싱
   - `loaders/` — 파싱 결과 적재
-- `infra/jenkins/` — Jenkins CI 서버 구성
+- `infra/` — K8s 배포 매니페스트
 - `data/` — 로컬 데이터 저장 경로 (git에 커밋되지 않음)
 - `docs/` — 프로젝트 문서

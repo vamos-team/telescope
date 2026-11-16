@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: p3-1
+resources:
+  - mysql.yaml
+  - backend.yaml
+  - frontend.yaml
+  - ingress.yaml
+images:
+  - { name: skala-registry.skala-ai.com/p3-1/frontend, newTag: "3ceb954" }
+  - { name: skala-registry.skala-ai.com/p3-1/backend,  newTag: "3ceb954" }

@@ -1,0 +1,84 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["infra/k8s/**"]
+
+env:
+  REGISTRY: skala-registry.skala-ai.com
+  PROJECT: p3-1
+  APP: p3-1-web
+
+concurrency:
+  group: cd-main
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - name: 태그 = 커밋 해시 7자리
+        run: echo "TAG=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21", cache: gradle }
+      - name: Backend Test
+        working-directory: backend
+        run: chmod +x gradlew && ./gradlew test --no-daemon
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+      - name: Backend Image Build & Push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.PROJECT }}/backend:${{ env.TAG }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+      - name: Frontend Image Build & Push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.PROJECT }}/frontend:${{ env.TAG }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+      - name: 이미지 태그 갱신 (infra/k8s/kustomization.yaml)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -sL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.3/kustomize_v5.4.3_linux_amd64.tar.gz | tar xz -C "$RUNNER_TEMP" kustomize
+          KUSTOMIZE="$RUNNER_TEMP/kustomize"
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git config user.name ci && git config user.email ci@users.noreply.github.com
+          for i in 1 2 3 4 5; do
+            git fetch -q --depth=1 "$REMOTE" main
+            git checkout -q -B deploy FETCH_HEAD
+            for s in frontend backend; do
+              (cd infra/k8s && "$KUSTOMIZE" edit set image "$REGISTRY/$PROJECT/$s=$REGISTRY/$PROJECT/$s:$TAG")
+            done
+            if git diff --quiet; then echo "이미 $TAG 로 설정돼 있음"; exit 0; fi
+            git commit -qam "deploy: ${TAG}"
+            if git push -q "$REMOTE" HEAD:main; then exit 0; fi
+            echo "push 거절됨, 최신 main 으로 다시 시도 ($i/5)"; sleep 5
+          done
+          exit 1
+
+      - name: Argo CD sync
+        run: |
+          curl -sSL -o argocd https://skala-argocd.skala-ai.com/download/argocd-linux-amd64 && chmod +x argocd
+          ./argocd app sync "$APP" --server skala-argocd.skala-ai.com --grpc-web --auth-token "${{ secrets.ARGOCD_CI_TOKEN }}" --timeout 300
+          ./argocd app wait "$APP" --server skala-argocd.skala-ai.com --grpc-web --auth-token "${{ secrets.ARGOCD_CI_TOKEN }}" --health --timeout 300
