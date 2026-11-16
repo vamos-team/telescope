@@ -5,7 +5,7 @@
 
 저장 위치: data/raw/naver_research/<종목코드>/<수집시각 UTC>/
     page.html   렌더링된 목록 페이지 원본
-    links.json  출처 URL, 수집 시각, 상세 링크(url, text) 목록
+    links.json  출처 URL, 수집 시각, 상세 링크(url, text) 목록. 페이지 순서 그대로이며 중복도 남긴다
 
 실행: python -m pipelines.collectors.naver_research [종목코드 ...]
 """
@@ -60,14 +60,10 @@ def collect(
         )
     )
 
-    links = []
-    seen = set()
-    for anchor in anchors:
-        href = anchor.get_attribute("href")
-        if not href or href in seen:
-            continue
-        seen.add(href)
-        links.append({"url": href, "text": anchor.text.strip()})
+    # 페이지에 나온 순서 그대로 전부 남긴다. 중복 제거와 텍스트 정리는 parsers.research_links 담당
+    links = [
+        {"url": anchor.get_attribute("href"), "text": anchor.text} for anchor in anchors
+    ]
 
     # 이전 수집분을 덮어쓰지 않도록 수집 시각별 폴더에 새로 쌓는다
     out_dir = raw_dir / SOURCE / stock_code / collected_at.strftime("%Y%m%dT%H%M%SZ")
