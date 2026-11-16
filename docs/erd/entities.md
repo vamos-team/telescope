@@ -292,7 +292,7 @@ erDiagram
 |---|---|---|
 | `id` | bigint PK | |
 | `jobType` | string | `DOCUMENT_PREPARATION` / `ANALYSIS` / `PREDICTION`. 필터링·표시용 |
-| `status` | string | `QUEUED → RUNNING → SUCCEEDED/FAILED`. 역방향 전이 금지 |
+| `status` | string | `QUEUED → RUNNING → SUCCEEDED/FAILED`. 역방향 전이 금지. 시작하지 못하고 실패한 작업을 위해 `QUEUED → FAILED`만 예외로 허용 |
 | `externalJobId` | string | ai 서비스가 발급한 jobId. `PythonAiClient.JobStartResponse.jobId`와 매핑 |
 | `errorMessage` | string | 실패 사유 |
 | `startedAt` | datetime | 시작 시각 |
