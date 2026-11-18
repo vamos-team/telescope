@@ -6,14 +6,20 @@
 판정 단계(사람·LLM)는 없다. 항상 가장 가까운 후보 하나를 고른다. 숫자는 건드리지 않는다.
 
     from parsers.align import align
-    items = [{"path": ["매출액", "당해실적"]}]
-    slots = [{"id": "IS-1", "path": ["영업수익"]}, {"id": "IS-2", "path": ["영업이익"]}]
+    items = [{"doc": "서식: 연결 잠정실적", "path": ["매출액", "당해실적"], "value": "39,813"}]
+    slots = [{"id": "IS-1", "doc": "재무제표: 손익계산서", "path": ["영업수익"], "vtype": "number"},
+             {"id": "IS-2", "doc": "재무제표: 손익계산서", "path": ["영업이익"], "vtype": "number"}]
     align(items, slots)    # → [{"slot": "IS-1", "index": 0, "score": 0.83}]
 
-항목·후보는 `path`(라벨 경로, 위 → 아래) 또는 `label`(라벨 하나)을 가진 dict다.
+항목·후보 dict의 키
+  path / label   라벨 경로(위 → 아래) 또는 라벨 하나. 필수
+  doc            어느 문서·표의 칸인지 ("서식: 연결 잠정실적", "재무제표: 손익계산서"). 선택
+  vtype / value  값 형식(numbers.value_type의 결과) 또는 원문 값(형식을 여기서 판정). 선택
 
 이름이 글자 그대로 같은 항목만 짝짓는 방식은 "매출액"과 "영업수익"처럼 이름이 다른 같은 항목을
-찾지 못한다. 그래서 항목 이름을 임베딩해 뜻이 가장 가까운(코사인이 가장 큰) 후보를 고른다.
+찾지 못한다. 그래서 항목을 임베딩해 뜻이 가장 가까운(코사인이 가장 큰) 후보를 고른다.
+라벨만 넣으면 이름이 비슷한 다른 칸("배당기준일"과 "이사회결의일")을 헷갈리므로, 어느 문서의
+칸인지(doc)와 값 형식(금액·날짜·글자 등)을 라벨 경로와 함께 한 문장으로 넣는다.
 """
 from __future__ import annotations
 
@@ -21,6 +27,10 @@ import os
 import re
 from pathlib import Path
 
+from .numbers import value_type
+
+_VT_KO = {"number": "금액", "percent": "비율", "date": "날짜", "time": "시각", "datetime": "일시",
+          "text": "글", "period": "기간", "empty": "빈 값"}
 DEFAULT_MODEL = "BAAI/bge-m3"   # 파서가 쓰는 임베딩 모델. 환경변수 UNIVERSAL_PARSER_BGE_MODEL로 교체 가능
 _NO = re.compile(r"^\s*(\d{1,2}(-\d)?\s*[.)]|[-·]\s)\s*")
 _models: dict = {}
@@ -60,9 +70,22 @@ def _embed(texts: list[str], model: str):
 
 
 def label_text(item: dict) -> str:
-    """항목 → 임베딩에 넣을 문장. 라벨 앞 번호('1.', '2-1)', '- ')는 뗀다."""
+    """라벨 경로만. 라벨 앞 번호('1.', '2-1)', '- ')는 뗀다."""
     path = item.get("path") or ([item["label"]] if item.get("label") else [])
     return " > ".join(_NO.sub("", p).strip() for p in path)
+
+
+def item_text(item: dict) -> str:
+    """항목 → 임베딩에 넣을 문장: "[서식: 연결 잠정실적] 매출액 > 당해실적 [형식: 금액]".
+    doc·값 형식이 없으면 그 부분은 빠진다."""
+    path = item.get("path") or ([item["label"]] if item.get("label") else [])
+    vt = item.get("vtype") or (value_type(item["value"], path) if "value" in item else "")
+    text = label_text(item)
+    if item.get("doc"):
+        text = f"[{item['doc']}] {text}"
+    if vt:
+        text = f"{text} [형식: {_VT_KO.get(vt, vt)}]"
+    return text
 
 
 def align(items: list[dict], slots: list[dict], model: str | None = None) -> list[dict]:
@@ -76,8 +99,8 @@ def align(items: list[dict], slots: list[dict], model: str | None = None) -> lis
     if not slots:
         return [{"slot": None, "index": None, "score": None} for _ in items]
     model = model or _setting("UNIVERSAL_PARSER_BGE_MODEL") or DEFAULT_MODEL
-    x = _embed([label_text(i) for i in items], model)
-    y = _embed([label_text(s) for s in slots], model)
+    x = _embed([item_text(i) for i in items], model)
+    y = _embed([item_text(s) for s in slots], model)
     sim = x @ y.T
     out = []
     for row in sim:
