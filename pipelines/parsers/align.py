@@ -26,6 +26,9 @@
 임베딩은 뜻이 가까운 손익 항목(매출액·매출원가·매출총이익)을 서로 가깝게 놓아, 처음 보는 회사에서
 "매출액"을 "매출총이익"에 넣곤 한다. 이런 경우 글자가 얼마나 겹치는지가 결정적인 신호라서,
 점수 = ALPHA × 글자 유사도 + (1 − ALPHA) × 임베딩 유사도로 섞는다.
+
+값 형식이 다른 후보는 점수와 상관없이 고르지 않는다(날짜 칸을 글자 칸에 넣지 않는다). 일시는 날짜·시각과
+짝이 될 수 있다. 형식을 모르는 항목·후보는 거르지 않는다. 형식이 맞는 후보가 하나도 없으면 slot=None.
 """
 from __future__ import annotations
 
@@ -82,7 +85,10 @@ def _embed(texts: list[str], model: str):
                                f"승인제 저장소라면 HF_TOKEN이 필요합니다. ({type(e).__name__})") from e
         m.max_seq_length = 256
         _models[model] = m
-    return _models[model].encode(texts, batch_size=32, normalize_embeddings=True, show_progress_bar=False)
+    m = _models[model]
+    # 모델이 정해 둔 입력 앞머리(예: arctic "query: ")가 있으면 쓴다 — 모델을 바꿔도 맞게 돌도록
+    kw = {"prompt_name": "query"} if (getattr(m, "prompts", None) or {}).get("query") else {}
+    return m.encode(texts, batch_size=32, normalize_embeddings=True, show_progress_bar=False, **kw)
 
 
 def label_text(item: dict) -> str:
@@ -91,11 +97,21 @@ def label_text(item: dict) -> str:
     return " > ".join(_NO.sub("", p).strip() for p in path)
 
 
+def _vtype(item: dict) -> str:
+    """값 형식: 주어진 vtype, 없으면 원문 value에서 판정, 둘 다 없으면 ""(모름)."""
+    path = item.get("path") or ([item["label"]] if item.get("label") else [])
+    return item.get("vtype") or (value_type(item["value"], path) if "value" in item else "")
+
+
+def _same_kind(a: str, b: str) -> bool:
+    """값 형식이 짝이 될 수 있는가. 모르면(빈 값) 거르지 않는다. 일시는 날짜·시각과도 짝."""
+    return not a or not b or a == b or {a, b} in ({"datetime", "date"}, {"datetime", "time"})
+
+
 def item_text(item: dict) -> str:
     """항목 → 임베딩에 넣을 문장: "[서식: 연결 잠정실적] 매출액 > 당해실적 [형식: 금액]".
     doc·값 형식이 없으면 그 부분은 빠진다."""
-    path = item.get("path") or ([item["label"]] if item.get("label") else [])
-    vt = item.get("vtype") or (value_type(item["value"], path) if "value" in item else "")
+    vt = _vtype(item)
     text = label_text(item)
     if item.get("doc"):
         text = f"[{item['doc']}] {text}"
@@ -129,7 +145,7 @@ def align(items: list[dict], slots: list[dict]) -> list[dict]:
 
     반환: 항목마다 {"slot": 후보의 id(없으면 None), "index": 후보 위치,
                    "score": ALPHA × 글자 유사도 + (1 − ALPHA) × 임베딩 코사인}.
-    후보가 없으면 빈 목록이 아니라 항목마다 slot=None을 돌려준다.
+    후보가 없거나 값 형식이 맞는 후보가 없으면 그 항목은 slot=None.
     """
     if not items:
         return []
@@ -143,8 +159,14 @@ def align(items: list[dict], slots: list[dict]) -> list[dict]:
     y = _embed([item_text(s) for s in slots], model)
     names = [_NO.sub("", i["name"]).strip() if i.get("name") else label_text(i) for i in items + slots]
     sim = ALPHA * _char_sim(names[: len(items)], names[len(items):]) + (1 - ALPHA) * (x @ y.T)
+    sv = [_vtype(s) for s in slots]
     out = []
-    for row in sim:
+    for item, row in zip(items, sim):
+        iv = _vtype(item)
+        row = np.where([_same_kind(iv, v) for v in sv], row, -np.inf)
         j = int(row.argmax())
-        out.append({"slot": slots[j].get("id"), "index": j, "score": float(row[j])})
+        if row[j] == -np.inf:
+            out.append({"slot": None, "index": None, "score": None})
+        else:
+            out.append({"slot": slots[j].get("id"), "index": j, "score": float(row[j])})
     return out
