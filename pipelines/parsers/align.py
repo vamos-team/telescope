@@ -15,23 +15,34 @@
   path / label   라벨 경로(위 → 아래) 또는 라벨 하나. 필수
   doc            어느 문서·표의 칸인지 ("서식: 연결 잠정실적", "재무제표: 손익계산서"). 선택
   vtype / value  값 형식(numbers.value_type의 결과) 또는 원문 값(형식을 여기서 판정). 선택
+  name           글자 유사도에 쓸 항목 이름 (예: 경로가 "매출액 > 당해실적"이면 "매출액"). 없으면 라벨 경로.
+                 "당해실적" 같은 열 머리글이 글자 비교에 섞이면 엉뚱한 행과 겹쳐 보인다. 선택
 
 이름이 글자 그대로 같은 항목만 짝짓는 방식은 "매출액"과 "영업수익"처럼 이름이 다른 같은 항목을
 찾지 못한다. 그래서 항목을 임베딩해 뜻이 가장 가까운(코사인이 가장 큰) 후보를 고른다.
 라벨만 넣으면 이름이 비슷한 다른 칸("배당기준일"과 "이사회결의일")을 헷갈리므로, 어느 문서의
 칸인지(doc)와 값 형식(금액·날짜·글자 등)을 라벨 경로와 함께 한 문장으로 넣는다.
+
+임베딩은 뜻이 가까운 손익 항목(매출액·매출원가·매출총이익)을 서로 가깝게 놓아, 처음 보는 회사에서
+"매출액"을 "매출총이익"에 넣곤 한다. 이런 경우 글자가 얼마나 겹치는지가 결정적인 신호라서,
+점수 = ALPHA × 글자 유사도 + (1 − ALPHA) × 임베딩 유사도로 섞는다.
 """
 from __future__ import annotations
 
+import math
 import os
 import re
+from collections import Counter
 from pathlib import Path
+
+import numpy as np
 
 from .numbers import value_type
 
 _VT_KO = {"number": "금액", "percent": "비율", "date": "날짜", "time": "시각", "datetime": "일시",
           "text": "글", "period": "기간", "empty": "빈 값"}
 DEFAULT_MODEL = "BAAI/bge-m3"   # 파서가 쓰는 임베딩 모델. 환경변수 UNIVERSAL_PARSER_BGE_MODEL로 교체 가능
+ALPHA = 0.1                     # 글자 유사도 비중. 튜닝에 안 쓴 회사로 나눠 세 번 골라 세 번 모두 0.1
 _NO = re.compile(r"^\s*(\d{1,2}(-\d)?\s*[.)]|[-·]\s)\s*")
 _models: dict = {}
 
@@ -88,10 +99,31 @@ def item_text(item: dict) -> str:
     return text
 
 
+def _char_sim(a: list[str], b: list[str]) -> np.ndarray:
+    """글자 유사도: 2~3글자 조각의 TF-IDF 코사인 (소문자, 연속 공백은 하나로). a·b 전체로 IDF를 정한다."""
+    def grams(t: str) -> Counter:
+        t = re.sub(r"\s\s+", " ", t.lower())
+        return Counter(t[i:i + n] for n in (2, 3) for i in range(len(t) - n + 1))
+
+    docs = [grams(t) for t in a + b]
+    vocab = {g: k for k, g in enumerate({g for d in docs for g in d})}
+    df = Counter(g for d in docs for g in d)
+    idf = np.zeros(len(vocab))
+    for g, k in vocab.items():
+        idf[k] = math.log((1 + len(docs)) / (1 + df[g])) + 1
+    m = np.zeros((len(docs), len(vocab)))
+    for r, d in enumerate(docs):
+        for g, c in d.items():
+            m[r, vocab[g]] = c * idf[vocab[g]]
+    m /= np.maximum(np.linalg.norm(m, axis=1, keepdims=True), 1e-12)
+    return m[: len(a)] @ m[len(a):].T
+
+
 def align(items: list[dict], slots: list[dict], model: str | None = None) -> list[dict]:
     """각 항목에 가장 가까운 후보 하나.
 
-    반환: 항목마다 {"slot": 후보의 id(없으면 None), "index": 후보 위치, "score": 코사인 유사도}.
+    반환: 항목마다 {"slot": 후보의 id(없으면 None), "index": 후보 위치,
+                   "score": ALPHA × 글자 유사도 + (1 − ALPHA) × 임베딩 코사인}.
     후보가 없으면 빈 목록이 아니라 항목마다 slot=None을 돌려준다.
     """
     if not items:
@@ -101,7 +133,8 @@ def align(items: list[dict], slots: list[dict], model: str | None = None) -> lis
     model = model or _setting("UNIVERSAL_PARSER_BGE_MODEL") or DEFAULT_MODEL
     x = _embed([item_text(i) for i in items], model)
     y = _embed([item_text(s) for s in slots], model)
-    sim = x @ y.T
+    names = [_NO.sub("", i["name"]).strip() if i.get("name") else label_text(i) for i in items + slots]
+    sim = ALPHA * _char_sim(names[: len(items)], names[len(items):]) + (1 - ALPHA) * (x @ y.T)
     out = []
     for row in sim:
         j = int(row.argmax())
