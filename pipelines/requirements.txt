@@ -8,5 +8,8 @@ openai==3.46.0           # VLM 처리기(pipelines/vision). 키(OPENAI_API_KEY)�
 
 selenium==4.52.0         # 수집: JS 렌더링 페이지 (Chrome 필요, 드라이버는 Selenium Manager가 받는다)
 
-sentence-transformers==5.3.0 # bge
+# 항목 매칭(parsers/align.py) 임베딩. 모델(kf_deberta_ft_v1)이 6.3.0으로 저장돼 5.x로는 읽히지 않는다
+sentence-transformers==6.3.0
+transformers==5.23.0
+torch==2.15.0
 numpy==2.5.4
