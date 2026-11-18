@@ -9,7 +9,7 @@
     items = [{"doc": "서식: 연결 잠정실적", "path": ["매출액", "당해실적"], "value": "39,813"}]
     slots = [{"id": "IS-1", "doc": "재무제표: 손익계산서", "path": ["영업수익"], "vtype": "number"},
              {"id": "IS-2", "doc": "재무제표: 손익계산서", "path": ["영업이익"], "vtype": "number"}]
-    align(items, slots)    # → [{"slot": "IS-1", "index": 0, "score": 0.83}]
+    align(items, slots)    # → [{"slot": "IS-1", "index": 0, "score": 0.61}]
 
 항목·후보 dict의 키
   path / label   라벨 경로(위 → 아래) 또는 라벨 하나. 필수
@@ -41,7 +41,7 @@ from .numbers import value_type
 
 _VT_KO = {"number": "금액", "percent": "비율", "date": "날짜", "time": "시각", "datetime": "일시",
           "text": "글", "period": "기간", "empty": "빈 값"}
-DEFAULT_MODEL = "BAAI/bge-m3"   # 파서가 쓰는 임베딩 모델. 환경변수 UNIVERSAL_PARSER_BGE_MODEL로 교체 가능
+MODEL_ENV = "PARSER_EMBED_MODEL"   # 임베딩 모델은 .env의 설정값으로 정한다
 ALPHA = 0.1                     # 글자 유사도 비중. 튜닝에 안 쓴 회사로 나눠 세 번 골라 세 번 모두 0.1
 _NO = re.compile(r"^\s*(\d{1,2}(-\d)?\s*[.)]|[-·]\s)\s*")
 _models: dict = {}
@@ -71,7 +71,12 @@ def _embed(texts: list[str], model: str):
         # 공개 저장소면 토큰 없이 받는다. 저장소가 승인제(gated)이면 접근 동의를 한 계정의 토큰이 필요하다.
         token = _setting("HF_TOKEN") or None
         try:
-            m = SentenceTransformer(model, token=token)
+            path = model
+            if not Path(model).exists() and model.count("/") >= 2:      # "기관/저장소/하위폴더": 그 폴더만 받는다
+                from huggingface_hub import snapshot_download
+                repo, sub = "/".join(model.split("/")[:2]), "/".join(model.split("/")[2:])
+                path = f"{snapshot_download(repo, allow_patterns=[f'{sub}/*'], token=token)}/{sub}"
+            m = SentenceTransformer(path, token=token)
         except Exception as e:
             raise RuntimeError(f"모델 '{model}'을 불러오지 못했습니다 — 인터넷 연결과 모델 이름을 확인하세요. "
                                f"승인제 저장소라면 HF_TOKEN이 필요합니다. ({type(e).__name__})") from e
@@ -119,8 +124,8 @@ def _char_sim(a: list[str], b: list[str]) -> np.ndarray:
     return m[: len(a)] @ m[len(a):].T
 
 
-def align(items: list[dict], slots: list[dict], model: str | None = None) -> list[dict]:
-    """각 항목에 가장 가까운 후보 하나.
+def align(items: list[dict], slots: list[dict]) -> list[dict]:
+    """각 항목에 가장 가까운 후보 하나. 임베딩 모델은 설정값 PARSER_EMBED_MODEL로 정한다.
 
     반환: 항목마다 {"slot": 후보의 id(없으면 None), "index": 후보 위치,
                    "score": ALPHA × 글자 유사도 + (1 − ALPHA) × 임베딩 코사인}.
@@ -130,7 +135,10 @@ def align(items: list[dict], slots: list[dict], model: str | None = None) -> lis
         return []
     if not slots:
         return [{"slot": None, "index": None, "score": None} for _ in items]
-    model = model or _setting("UNIVERSAL_PARSER_BGE_MODEL") or DEFAULT_MODEL
+    model = _setting(MODEL_ENV)
+    if not model:
+        raise RuntimeError(f"임베딩 모델이 설정되지 않았습니다 — 환경변수 또는 .env의 {MODEL_ENV}에 "
+                           "모델 이름(저장소, 저장소/하위폴더, 로컬 경로)을 넣으세요. 예시는 .env.example")
     x = _embed([item_text(i) for i in items], model)
     y = _embed([item_text(s) for s in slots], model)
     names = [_NO.sub("", i["name"]).strip() if i.get("name") else label_text(i) for i in items + slots]
