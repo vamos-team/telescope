@@ -7,27 +7,21 @@
             print(c["row_path"], c["col_path"], c["value"], c["unit"], c["period"], c["src_ref"])
 
 지원 형식: HTML, DART XML, PDF, Excel(.xlsx/.xlsm), CSV, PowerPoint(.pptx), TXT/MD, JSON.
-설정 파일 없이 동작한다. 코드가 단위를 못 읽은 표는 힌트로 보완할 수 있다
-(suggest_unit_hints: 같은 문서의 비슷한 표에서 bge 임베딩으로 단위를 제안 → parse(unit_hints=...)).
+설정 파일 없이 동작한다. 코드가 단위를 못 읽은 표는 단위 미상(value_base=None)으로 둔다.
 """
 from pathlib import Path
 from typing import Callable, Optional
 
-from .hints import clear_hints, set_hints, suggest_unit_hints
+from .align import align
 from .loaders import load
 from .tables import analyze
 
 PARSER_VERSION = "ingest-1.1"
-__all__ = ["parse", "load", "analyze", "set_hints", "clear_hints", "suggest_unit_hints", "PARSER_VERSION"]
+__all__ = ["parse", "load", "analyze", "align", "PARSER_VERSION"]
 
 
-def parse(path, vision: Optional[Callable[[bytes, int], dict]] = None,
-          unit_hints: Optional[dict] = None) -> dict:
+def parse(path, vision: Optional[Callable[[bytes, int], dict]] = None) -> dict:
     """파일 하나 → {"file_type", "title", "page_count", "warnings", "blocks", "tables"}.
-
-    unit_hints={표 번호: 단위}를 주면, 코드가 단위를 못 찾은 그 표에만 그 단위를 쓴다
-    (unit_source="hint", 셀 note="unit_from_hint"). 코드가 찾은 단위는 덮어쓰지 않는다.
-    표 번호는 힌트 없이 parse()한 결과의 table_no와 같다. 힌트를 만드는 방법: hints.suggest_unit_hints
 
     vision(png_bytes, page_no) → {"paragraphs": [...], "tables": [[[칸,…],…],…]} 을 주면
     글자 없는 이미지 쪽(PDF)만 그 함수로 읽고, 그 값에는 origin="vision_llm"이 붙는다.
@@ -39,12 +33,7 @@ def parse(path, vision: Optional[Callable[[bytes, int], dict]] = None,
         tno = None
         if b.kind == "table":
             tno = len(tables)
-            hint = (unit_hints or {}).get(tno, "")
-            ta = analyze(b.grid, b.context, default_unit=hint)
-            hinted = bool(hint) and ta.unit_source == "default"
-            if hinted:
-                ta.unit_source = "hint"
-                ta.warnings = [w for w in ta.warnings if "기본값" not in w] + [f"단위 '{ta.unit}'은 힌트로 채움 — 확인 필요"]
+            ta = analyze(b.grid, b.context)
             tables.append({
                 "table_no": tno, "section_path": b.section_path, "page": b.page, "sheet": b.sheet,
                 "caption": ta.caption, "context": b.context,
@@ -59,7 +48,7 @@ def parse(path, vision: Optional[Callable[[bytes, int], dict]] = None,
                     "is_total": c.is_total, "src_ref": c.src_ref,
                     "number_format": c.number_format, "display_scale": c.display_scale,
                     "origin": c.origin,
-                    "note": c.note or ("unit_from_hint" if hinted and c.unit == ta.unit else "")}
+                    "note": c.note or ""}
                     for c in ta.cells],
             })
         blocks.append({"kind": b.kind, "level": b.level, "section_path": b.section_path,

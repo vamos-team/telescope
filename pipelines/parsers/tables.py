@@ -19,7 +19,6 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
-from . import hints as learned
 from .model import RawCell
 from .numbers import (clean, detect_period, detect_unit, is_money_unit, is_ratio_label,
                       normalize_kr_amount, parse_number, quantity_unit)
@@ -60,13 +59,13 @@ class TableAnalysis:
     label_cols: int
     unit: str
     multiplier: float
-    unit_source: str              # context | header | learned | default | none
+    unit_source: str              # context | header | none
     period_hint: str
     caption: str
     cells: list[Cell] = field(default_factory=list)
     header_paths: list[list[str]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
-    period_source: str = ""       # header | context | learned | none
+    period_source: str = ""       # header | context | none
 
 
 def _cell_numeric(rc: RawCell) -> bool:
@@ -103,12 +102,7 @@ def _trim(grid: list[list[RawCell]]) -> list[list[RawCell]]:
     return [[r[j] for j in keep] for r in rows]
 
 
-def _learned_period(label: str) -> str:
-    return learned.load()["periods"].get(learned.key(label), "")
-
-
-def analyze(grid: list[list[RawCell]], context: list[str] | None = None,
-            default_unit: str = "") -> TableAnalysis:
+def analyze(grid: list[list[RawCell]], context: list[str] | None = None) -> TableAnalysis:
     context = context or []
     grid = _trim(grid)
     if not grid:
@@ -157,23 +151,13 @@ def analyze(grid: list[list[RawCell]], context: list[str] | None = None,
     for j in range(n_cols):
         header_paths.append(_dedupe([grid[i][j].text for i in range(header_rows)]))
 
-    # ── 4. 단위: 주변 문단 → 머리글 → 승인된 매핑 → (명시적으로 넘긴) 기본값. 그래도 없으면 미상
-    lk = learned.load()["units"]
+    # ── 4. 단위: 주변 문단 → 머리글. 그래도 없으면 미상
     unit, mult = detect_unit(context)
     unit_source = "context" if unit else "none"
     if not unit:
         hdr_texts = [" ".join(p) for p in header_paths] + [c.text for c in grid[0]]
         unit, mult = detect_unit(hdr_texts)
         unit_source = "header" if unit else "none"
-    if not unit:
-        for t in context + [" ".join(p) for p in header_paths]:
-            if learned.key(t) in lk:
-                unit, mult = detect_unit([f"단위: {lk[learned.key(t)]}"])
-                unit_source = "learned" if unit else "none"
-                break
-    if not unit and default_unit:
-        unit, mult = detect_unit([f"단위: {default_unit}"])
-        unit_source = "default"
 
     # 기간 표지: 가장 가까운 문맥부터. '당기와 전기 중 …'처럼 둘 다 있는 문장은 근거 아님.
     # '1) 2021년' 같은 연도 표지도 인정(→ extract에서 회계연도와 비교해 당기/전기로 변환)
@@ -189,8 +173,6 @@ def analyze(grid: list[list[RawCell]], context: list[str] | None = None,
 
     ta = TableAnalysis(n_rows, n_cols, header_rows, label_cols, unit, mult, unit_source,
                        period_hint, context[0] if context else "", header_paths=header_paths)
-    if unit_source == "default":
-        ta.warnings.append(f"단위를 찾지 못해 기본값 '{unit}' 적용 (unit_source=default) — 확인 필요")
 
     # ── 5. 행 경로: 라벨 열 + 그룹 행(값 없는 라벨 행) + 들여쓰기 계층
     row_label_units: dict[int, str] = {}       # 행 라벨이 직접 알려준 원화 아닌 단위 (행 번호 → 단위)
@@ -292,7 +274,7 @@ def analyze(grid: list[list[RawCell]], context: list[str] | None = None,
             # 기간은 열 머리글 우선. 행 라벨은 '전기초'·'2024년' 같은 짧은 라벨만 본다
             period = ""
             for part in col_path + [p for p in row_path if len(clean(p)) <= 8]:
-                period = detect_period(part) or _learned_period(part)
+                period = detect_period(part)
                 if period:
                     break
             any_period = any_period or bool(period)
