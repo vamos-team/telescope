@@ -140,17 +140,20 @@ def _char_sim(a: list[str], b: list[str]) -> np.ndarray:
     return m[: len(a)] @ m[len(a):].T
 
 
-def align(items: list[dict], slots: list[dict]) -> list[dict]:
+def align(items: list[dict], slots: list[dict], one_to_one: bool = False) -> list[dict]:
     """각 항목에 가장 가까운 후보 하나. 임베딩 모델은 설정값 PARSER_EMBED_MODEL로 정한다.
 
+    one_to_one=True: 한 후보를 두 항목에 주지 않는다(한 표의 서로 다른 줄처럼 항목끼리 뜻이 겹치지 않을 때).
+    점수가 높은 짝부터 차례로 정하고, 이미 쓴 후보는 다음 항목에 주지 않는다. 후보가 모자라면 남는 항목은 slot=None.
     반환: 항목마다 {"slot": 후보의 id(없으면 None), "index": 후보 위치,
                    "score": ALPHA × 글자 유사도 + (1 − ALPHA) × 임베딩 코사인}.
     후보가 없거나 값 형식이 맞는 후보가 없으면 그 항목은 slot=None.
     """
+    none = {"slot": None, "index": None, "score": None}
     if not items:
         return []
     if not slots:
-        return [{"slot": None, "index": None, "score": None} for _ in items]
+        return [dict(none) for _ in items]
     model = _setting(MODEL_ENV)
     if not model:
         raise RuntimeError(f"임베딩 모델이 설정되지 않았습니다 — 환경변수 또는 .env의 {MODEL_ENV}에 "
@@ -160,13 +163,18 @@ def align(items: list[dict], slots: list[dict]) -> list[dict]:
     names = [_NO.sub("", i["name"]).strip() if i.get("name") else label_text(i) for i in items + slots]
     sim = ALPHA * _char_sim(names[: len(items)], names[len(items):]) + (1 - ALPHA) * (x @ y.T)
     sv = [_vtype(s) for s in slots]
-    out = []
-    for item, row in zip(items, sim):
-        iv = _vtype(item)
-        row = np.where([_same_kind(iv, v) for v in sv], row, -np.inf)
+    sim = np.array([np.where([_same_kind(_vtype(i), v) for v in sv], row, -np.inf) for i, row in zip(items, sim)])
+    out = [dict(none) for _ in items]
+    if one_to_one:
+        order = [(i, j) for i, j in zip(*np.unravel_index(np.argsort(-sim, axis=None), sim.shape)) if sim[i, j] > -np.inf]
+        used_i, used_j = set(), set()
+        for i, j in order:
+            if i not in used_i and j not in used_j:
+                used_i.add(i); used_j.add(j)
+                out[i] = {"slot": slots[j].get("id"), "index": int(j), "score": float(sim[i, j])}
+        return out
+    for i, row in enumerate(sim):
         j = int(row.argmax())
-        if row[j] == -np.inf:
-            out.append({"slot": None, "index": None, "score": None})
-        else:
-            out.append({"slot": slots[j].get("id"), "index": j, "score": float(row[j])})
+        if row[j] > -np.inf:
+            out[i] = {"slot": slots[j].get("id"), "index": j, "score": float(row[j])}
     return out

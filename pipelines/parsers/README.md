@@ -15,6 +15,7 @@
 | `numbers.py` | 숫자·단위·기간 판별, 한국어 금액 정규화 |
 | `model.py` | 데이터 구조 |
 | `facts.py` | 증감표 사실 추출, XBRL 값으로 확인 |
+| `xbrl_vocab.py`, `xbrl_vocab.json` | 증감표 후보 목록, DART XBRL zip에서 만든다 |
 | `align.py` | 항목 매칭: 이름이 달라도 같은 뜻인 항목 찾기 (`align()`). 임베딩 모델은 `.env`의 `PARSER_EMBED_MODEL`로 정한다 |
 | `requirements.txt` | 패키지와 버전 | 
 | `.env.example` | 환경변수 예시 (`PARSER_EMBED_MODEL`, `HF_TOKEN`) | 
