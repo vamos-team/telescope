@@ -5,14 +5,19 @@
     res = parse("LGU_3분기보고서.xml")
     report_period(res)       # → {"fiscal_year": 2026, "report_code": "11014", "period_end": "2026-09-30"}
     extract(res)             # → [{"kind": "movement", "account": "유형자산", "member": "토지", "item": "기초",
+                             #     "item_concept": "",
                              #     "period": "current", "value": 919615000000, "value_eok": 9196.15,
                              #     "status": "verified", ...}, ...]
 
 회사·연도별 형식 분기 없이 한 규칙으로 처리한다.
 1. 표 고르기: 항목 축에 기초·기말이 모두 있는 표만 증감표로 본다.
-2. 축 판별: 행 라벨과 열 머리글 중 항목 사전(ITEMS)에 더 많이 맞는 쪽이 항목 축.
+2. 축 판별: 행과 열 중 기초와 기말 사이에 줄이 더 많은 쪽이 항목 축.
    SK텔레콤(항목=행)과 SK브로드밴드(항목=열) 같은 방향 차이를 코드 분기 없이 흡수한다.
 3. 계정: 표 캡션 → 가까운 제목 순으로 계정 사전(ACCOUNTS).
+   증감 항목(기초·기말 사이 줄): 그 계정의 XBRL 증감 항목 이름표(xbrl_vocab.json) 중 가장 가까운 것을
+   임베딩으로 고른다(align). 한 표의 두 줄에 같은 항목을 주지 않는다(점수 높은 짝부터).
+   item = 그 이름표, item_concept = XBRL 개념. 감소 여부도 XBRL에서(negatedLabel).
+   임베딩 모델은 .env의 PARSER_EMBED_MODEL.
 4. 자산 종류(member): 반대 축의 경로에서 자산 사전(MEMBERS). 합계면 ''.
    모든 열에 똑같이 붙은 머리글('측정 전체 > 취득원가')은 구분 정보가 아니라서 무시한다.
 5. 측정 열·행(총장부금액·누계액)은 증감 항목이 아니라 잔액 구성요소 → kind="balance"로 따로 낸다.
@@ -40,6 +45,8 @@ from datetime import date
 from types import SimpleNamespace
 from typing import Optional
 
+from . import xbrl_vocab
+from .align import align
 from .numbers import detect_period, is_money_unit, unspace
 from .tables import is_total_label
 
@@ -61,19 +68,6 @@ ACCOUNTS = _c({
 ITEMS = _c({
     "기초": [r"^(당|전|전전)?\s*(기|분기|반기)?\s*초(\s|$|\(|,)", "기초", "beginning", "opening"],
     "기말": [r"^(당|전|전전)?\s*(기|분기|반기)?\s*말(\s|$|\(|,)", "기말", "ending", "closing"],
-    "손상차손환입": [r"손상\s*차손\s*환입", "^환입", "reversal"],
-    "손상차손": [r"손상(?!.*누계)"],
-    "감가상각비": [r"감가\s*상각(?!.*누계)", "상각비", r"^상각(?!.*누계|.*완료)", "depreciation", "amortization"],
-    "사업결합": [r"사업\s*결합(?!을\s*통한\s*취득\s*이외)", "합병", r"영업\s*양수"],
-    "연결범위변동": [r"연결\s*범위", r"지배력\s*상실", r"종속기업.*(처분|제외|매각)", r"영업\s*양도"],
-    "매각예정대체": [r"매각\s*예정", "처분자산집단"],
-    "처분": ["처분", "폐기", "매각", "disposal"],
-    "정부보조금": [r"정부\s*보조금"],
-    "외화환산": ["환율", r"외화\s*환산", r"환산\s*차"],
-    "재평가": ["재평가", r"공정가치\s*평가"],
-    "대체": ["대체", "재분류", "transfer", r"본\s*계정"],
-    "취득": ["취득", "증가", "매입", r"자본적\s*지출", r"외부\s*취득", "acquisition", "addition", "신규"],
-    "기타": [r"^기타(\s*(증감|변동|증가\(감소\)))?$", r"기타\s*변동", r"^기타\s*\(", "others?$"],
 })
 MEMBERS = _c({
     "토지": ["^토지"], "건물": ["^건물"], "구축물": ["구축물"], "기계장치": [r"기계\s*장치"],
@@ -99,7 +93,6 @@ MEASURES = _c({
 })
 _ACCT_NAMES = {a for a, _ in ACCOUNTS}
 _MEASURE_WORDS = re.compile(r"^(순\s*)?(장부\s*)?금액(\s*합계)?$|^(당기|전기)$|단위\s*[:：]|^공시\s*금액$")
-_DECREASE_ITEMS = {"감가상각비", "손상차손", "처분", "매각예정대체"}
 _END = {("current", "close"): "current_end", ("current", "open"): "prior_end",
         ("prior", "close"): "prior_end", ("prior", "open"): "prior2_end", ("prior2", "close"): "prior2_end"}
 
@@ -220,13 +213,13 @@ def _member_two(other_parts: list[str], measure_parts: list[str]) -> tuple[str, 
 
 # ─── 추출 ─────────────────────────────────────────────────────
 
-def _fact(t, kind, period, account, member, item, c, label, method, status, note) -> dict:
+def _fact(t, kind, period, account, member, item, c, label, method, status, note, concept="") -> dict:
     v = c.value_base
     if v is None and status != "breakdown":
         status = "unit_missing"
         note = (note + "; " if note else "") + "단위를 찾지 못해 환산하지 않음"
     return {"kind": kind, "scope": "", "label_source": "", "period": period, "account": account, "member": member,
-            "item": item,
+            "item": item, "item_concept": concept,
             "value": v, "value_eok": v / 1e8 if (v is not None and is_money_unit(c.unit)) else None,
             "unit": c.unit, "status": status, "note": note, "method": method, "label": _norm(label),
             "table_no": t.table_no, "r": c.r, "c": c.c, "src_ref": c.src_ref, "page": t.page, "sheet": t.sheet,
@@ -317,6 +310,53 @@ def extract(result: dict, fiscal_year: Optional[int] = None, xbrl: Optional[list
     return facts
 
 
+def _between(hits: dict, idx: set) -> list[int]:
+    """항목 축에서 첫 기초와 그 뒤 첫 기말 사이의 줄 번호."""
+    o = min((i for i, k in hits.items() if k == "기초"), default=None)
+    c = min((i for i, k in hits.items() if k == "기말" and (o is None or i > o)), default=None)
+    return [] if o is None or c is None else sorted(i for i in idx if o < i < c and i not in hits)
+
+
+# 계정의 증감 항목 후보에서, 그 계정 공시 중 이 비율 미만에서만 쓰인 드문 개념은 뺀다.
+# 튜닝에 안 쓴 회사로 나눠 세 번 골라 세 번 모두 5% (안 빼면 '취득'이 드문 '영업권의 증가'로 감)
+_RARE = 0.05
+
+
+def _vocab_accounts(account: str) -> list[str]:
+    """계정 이름 → 가까운 XBRL 계정 두 개. 두 계정의 항목을 함께 후보로 쓴다 — 표의 계정이 후보 목록에 없는
+    경우(통신사만 쓰는 '유형자산(사용권자산 포함)')에도 가까운 계정들의 항목으로 고를 수 있게."""
+    if account not in _ACC_CACHE:
+        accs = xbrl_vocab.load()["accounts"]
+        slots = [{"id": b, "path": [e["label"]], "vtype": "number"} for b, e in accs.items()]
+        first = align([{"path": [account], "vtype": "number"}], slots)[0]["slot"]
+        second = align([{"path": [account], "vtype": "number"}], [s for s in slots if s["id"] != first])[0]["slot"]
+        _ACC_CACHE[account] = [b for b in (first, second) if b]
+    return _ACC_CACHE[account]
+
+
+_ACC_CACHE: dict[str, list[str]] = {}
+
+
+def _name_items(account: str, paths: list[list[str]]) -> list[tuple[str, str, bool]]:
+    """증감 항목 줄의 라벨 경로들 → [(XBRL 개념, 한글 이름표, 감소 여부)]."""
+    accs = xbrl_vocab.load()["accounts"]
+    slots, seen = [], set()
+    for b in _vocab_accounts(account):
+        e = accs[b]
+        for c, (label, n, neg) in e["items"].items():
+            if c not in seen and n >= _RARE * e["n"]:
+                seen.add(c)
+                slots.append({"id": c, "path": [label], "vtype": "number", "neg": neg * 2 >= n})
+    items = [{"path": [_norm(p) for p in ps if _norm(p)] or ["-"], "name": _norm(ps[-1]) if ps else "-", "vtype": "number"}
+             for ps in paths]
+    out = []
+    # 한 표 안 서로 다른 줄은 서로 다른 항목: '상각'과 '처분'이 모두 '처분과 폐기'로 가는 것을 막는다
+    for p in align(items, slots, one_to_one=True):
+        s = slots[p["index"]] if p["index"] is not None else None
+        out.append((s["id"], s["path"][0], s["neg"]) if s else ("", "", False))
+    return out
+
+
 def _extract_table(t, fy) -> list[dict]:
     facts: list[dict] = []
 
@@ -343,15 +383,14 @@ def _extract_table(t, fy) -> list[dict]:
     col_ok = {"기초", "기말"} <= set(col_hits.values())
     if not (row_ok or col_ok):
         return _balance_table(t, fy)          # 증감표가 아니어도 한 축이 측정 구분이면 잔액표
-    if row_ok and col_ok:
-        item_axis = "row" if len(set(row_hits.values())) >= len(set(col_hits.values())) else "col"
-    else:
-        item_axis = "row" if row_ok else "col"
-    hits = row_hits if item_axis == "row" else col_hits
+    row_mid = _between(row_hits, {c.r for c in t.cells} - comp_rows) if row_ok else []
+    col_mid = _between(col_hits, {c.c for c in t.cells} - comp_cols) if col_ok else []
+    item_axis = "row" if (row_ok and len(row_mid) >= len(col_mid)) or not col_ok else "col"
+    hits, mid_idx = (row_hits, row_mid) if item_axis == "row" else (col_hits, col_mid)
     account = _account_of(t.context, t.section_path, t.caption)
     if not account:
         return []
-    if not set(hits.values()) - {"기초", "기말"}:
+    if not mid_idx:
         return _balance_openclose(t, fy, account, hits, item_axis)
 
     def item_side(c):
@@ -367,6 +406,12 @@ def _extract_table(t, fy) -> list[dict]:
         for p in paths:
             common &= set(p)
     comp_idx = comp_rows if item_axis == "row" else comp_cols
+    first = {}
+    for c in t.cells:
+        first.setdefault(item_side(c)[0], item_side(c)[1])
+    concept_of = _name_items(account, [first[i] for i in mid_idx])
+    concept_of = dict(zip(mid_idx, concept_of))
+    hits = {**hits, **{i: lab for i, (_, lab, _) in concept_of.items()}}
     open_idx = min((i for i, k in hits.items() if k == "기초"), default=None)
     # 기말이 두 번 나오는 표(증감 끝 + 구성요소 뒤)가 있어, 경계는 기초 뒤 '첫' 기말
     close_idx = min((i for i, k in hits.items() if k == "기말" and (open_idx is None or i > open_idx)), default=None)
@@ -420,7 +465,7 @@ def _extract_table(t, fy) -> list[dict]:
                 exact = max(2.0, float(len(mid)))
                 hit = [x for x in mid if x[2].value != 0 and abs((s - x[2].value) - close_v) <= exact]
                 # 감소 항목을 양수로 적는 표: 양수인 감소 항목을 빼면 맞는가
-                dec = [x for x in mid if x[1] in _DECREASE_ITEMS and x[2].value > 0]
+                dec = [x for x in mid if concept_of.get(x[0], ("", "", False))[2] and x[2].value > 0]
                 if len(hit) == 1:
                     breakdown_idx, status = hit[0][0], "verified"
                     note = f"'{_norm(hit[0][4])}'은 내역 행으로 판단해 합산에서 제외"
@@ -437,8 +482,10 @@ def _extract_table(t, fy) -> list[dict]:
             if idx in flipped:      # 검산으로 확인된 경우에만 부호를 바꾼다
                 c = SimpleNamespace(**{**vars(c), "value": -c.value,
                                        "value_base": None if c.value_base is None else -c.value_base})
+            how = "xbrl" if idx in concept_of else ("vocab" if item else "raw")
             facts.append(_fact(t, "movement", period, account, member, item or _norm(label), c, label,
-                               f"axis={item_axis};item={'vocab' if item else 'raw'};member={mmethod}", st, nt))
+                               f"axis={item_axis};item={how};member={mmethod}", st, nt,
+                               concept_of.get(idx, ("",))[0]))
 
     # 잔액: 총액 + 누계액(+손상·보조금) = 순액
     for (member, mmethod, period, side), ms in bal.items():
