@@ -14,6 +14,7 @@
 | `tables.py` | 표 → 셀 목록(행 경로·열 경로), 머리글·라벨 열 판별, 단위·기간·비율·표시 배율 |
 | `numbers.py` | 숫자·단위·기간 판별, 한국어 금액 정규화 |
 | `model.py` | 데이터 구조 |
+| `facts.py` | 증감표 사실 추출, XBRL 값으로 확인 |
 | `align.py` | 항목 매칭: 이름이 달라도 같은 뜻인 항목 찾기 (`align()`). 임베딩 모델은 `.env`의 `PARSER_EMBED_MODEL`로 정한다 |
 | `requirements.txt` | 패키지와 버전 | 
 | `.env.example` | 환경변수 예시 (`PARSER_EMBED_MODEL`, `HF_TOKEN`) | 
