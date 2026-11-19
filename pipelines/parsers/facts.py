@@ -27,6 +27,8 @@
    (장 제목의 연결/별도, 표 위 '당기/전기', 기대 날짜)와 맞는 것을 모아 표 단위로 연결/별도,
    자산 종류 축 단위로 기간·자산 종류를 다수결로 정해 다시 붙이고 다시 검산한다. 판정 단계 없음.
    같은 공시의 XBRL과 그 전에 제출된 정기보고서 XBRL을 넘기면 된다(파일은 부르는 쪽이 고른다).
+8. XBRL로 확인되지 않은 표(XBRL이 없으면 전부): 장 제목·표 위 문구로 연결/별도·기간, 열 사이 합계 관계로
+   소계·합계 열을 정한다(label_source="document").
 """
 from __future__ import annotations
 
@@ -311,6 +313,7 @@ def extract(result: dict, fiscal_year: Optional[int] = None, xbrl: Optional[list
         facts.extend(_extract_table(t, fy))
     if xbrl and period.get("period_end"):
         _confirm_with_xbrl(facts, result, [_instance(p) for p in xbrl], date.fromisoformat(period["period_end"]))
+    _label_from_document(facts, result)
     return facts
 
 
@@ -568,6 +571,26 @@ def _n(s: str) -> str:
     return re.sub(r"[\s()\[\]·ㆍ,]|구성요소", "", s or "")
 
 
+def _cells_and_mult(result: dict) -> tuple[dict, dict]:
+    """(표, 행, 열) → 셀, 표 → 단위 배율(백만원 → 1e6, 원래 값과 원 단위 값의 비율)."""
+    cells, mult = {}, {}
+    for t in result.get("tables", []):
+        for c in t["cells"]:
+            cells[(t["table_no"], c["r"], c["c"])] = c
+            if t["table_no"] not in mult and c.get("value") and c.get("value_base"):
+                mult[t["table_no"]] = abs(c["value_base"] / c["value"])
+    return cells, mult
+
+
+def _axis_of(mv: list[dict]):
+    """사실 → 자산 종류 축 ("c", 열) 또는 ("r", 행). 기초가 한 행에 모여 있으면 열, 아니면 행(전치 표)."""
+    rows_of = defaultdict(set)
+    for f in mv:
+        if f["item"] == "기초":
+            rows_of[f["table_no"]].add(f["r"])
+    return lambda f: ("c", f["c"]) if len(rows_of.get(f["table_no"], ())) <= 1 else ("r", f["r"])
+
+
 def _confirm_with_xbrl(facts: list[dict], result: dict, insts: list, end: date) -> None:
     """증감표 사실의 연결/별도·기간·자산 종류를 XBRL 값으로 확인해 제자리에서 고친다."""
     insts = [i for i in insts if i is not None]
@@ -575,19 +598,8 @@ def _confirm_with_xbrl(facts: list[dict], result: dict, insts: list, end: date) 
     if not insts or not mv:
         return
     hints = _table_hints(result)
-    cells, mult = {}, {}
-    for t in result.get("tables", []):
-        for c in t["cells"]:
-            cells[(t["table_no"], c["r"], c["c"])] = c
-            if t["table_no"] not in mult and c.get("value") and c.get("value_base"):
-                mult[t["table_no"]] = abs(c["value_base"] / c["value"])        # 표 단위 배율 (백만원 → 1e6)
-    rows_of = defaultdict(set)
-    for f in mv:
-        if f["item"] == "기초":
-            rows_of[f["table_no"]].add(f["r"])
-
-    def axis(f):          # 자산 종류 축: 기초가 한 행에 모여 있으면 열, 아니면 행(전치 표)
-        return ("c", f["c"]) if len(rows_of.get(f["table_no"], ())) <= 1 else ("r", f["r"])
+    cells, mult = _cells_and_mult(result)
+    axis = _axis_of(mv)
 
     hits_of, svote, kvote, big = [], defaultdict(Counter), defaultdict(Counter), defaultdict(float)
     for f in mv:
@@ -693,3 +705,90 @@ def _recheck(touched: dict) -> None:
                 f["status"] = new
                 f["note"] = ("XBRL 이름표로 다시 검산: 일치" if ok
                              else f"XBRL 이름표로 다시 검산: 기초+증감={s:,.0f} vs 기말={c['value']:,.0f}")
+
+
+# ─── XBRL로 확인되지 않은 표: 문서 안 단서와 숫자 관계 ──────────────────────
+
+_TOTAL_WORD = re.compile(r"합\s*계|총\s*계|^계$")
+
+
+def _label_from_document(facts: list[dict], result: dict) -> None:
+    """XBRL로 확인되지 않은 증감표 사실(XBRL을 안 넘긴 경우 전부)에 문서 안 단서로 이름표를 붙인다.
+    1) 연결/별도: 표가 속한 장 제목("3. 연결재무제표 주석" / "5. 재무제표 주석")·섹션의 "(연결)"
+       기간: 표 위 문구가 "당분기"·"전기" 중 한쪽만일 때
+    2) 자산 종류: 앞 열들의 기초·기말 합이 이 열과 같으면 이 열은 소계/합계 (머리글 이름과 무관하게 숫자로)
+    단서로 정한 사실은 label_source="document"."""
+    mv = [f for f in facts if f["kind"] == "movement" and f["label_source"] != "xbrl"]
+    if not mv:
+        return
+    hints = _table_hints(result)
+    cells, mult = _cells_and_mult(result)
+    axis = _axis_of(mv)
+    touched = defaultdict(list)
+    for f in mv:
+        h = hints.get(f["table_no"], {})
+        if len(h.get("scope", ())) == 1:
+            f["scope"], f["label_source"] = next(iter(h["scope"])), "document"
+        if len(h.get("period", ())) == 1:
+            f["period"], f["label_source"] = next(iter(h["period"])), "document"
+    by_t = defaultdict(list)
+    for f in mv:
+        by_t[f["table_no"]].append(f)
+    for tno, fs in by_t.items():
+        roles = _sum_roles(fs, axis, max(2.0 * mult.get(tno, 1.0), 1.0))
+        for f in fs:
+            role = roles.get(axis(f))
+            c = cells.get((tno, f["r"], f["c"]))
+            heads = (c["col_path"] if axis(f)[0] == "c" else c["row_path"]) if c else []
+            name = next((re.sub(r"\s+", "", h) for h in reversed(heads) if _n(h) and not _TOTAL_WORD.search(h)), "")
+            if role == "total":
+                member = ""
+            elif role == "sub":
+                member = f"{f['account']}(소계)" if (not name or _n(name) == _n(f["account"])) else name
+            elif f["member"] == "" and name and _n(name) != _n(f["account"]) and roles:
+                member = name        # 합계로 봤지만 숫자로는 합계가 아님 → 머리글의 구체 낱말
+            else:
+                member = f["member"]
+            if member != f["member"]:
+                f["member"], f["label_source"] = member, "document"
+        for f in fs:
+            if f["label_source"] == "document":
+                touched[(tno, axis(f))].append(f)
+    # 이름표를 바꾼 축은 그 축의 사실 전부로 다시 검산
+    full = defaultdict(list)
+    for f in mv:
+        if (f["table_no"], axis(f)) in touched:
+            full[(f["table_no"], axis(f))].append(f)
+    _recheck(full)
+
+
+def _sum_roles(fs: list[dict], axis, tol: float) -> dict:
+    """자산 종류 축마다 역할: 앞 축들의 기초·기말 합과 같으면 "sub"(소계) 또는 "total"(합계)."""
+    vals = defaultdict(dict)
+    for f in fs:
+        if f["item"] in ("기초", "기말") and f["value"] is not None:
+            vals[axis(f)].setdefault(f["item"], f["value"])
+    order = sorted(vals, key=lambda a: a[1])
+    if len(order) < 3:
+        return {}
+
+    def adds_up(parts, k):
+        for it in ("기초", "기말"):
+            if it not in vals[k] or any(it not in vals[p] for p in parts):
+                return False
+            if abs(sum(vals[p][it] for p in parts) - vals[k][it]) > max(tol * len(parts), abs(vals[k][it]) * 1e-6):
+                return False
+        return abs(vals[k]["기초"]) + abs(vals[k]["기말"]) > 0
+
+    roles, run, subs = {}, [], []
+    for j, k in enumerate(order):
+        if subs and adds_up(subs + run, k):
+            roles[k], run, subs = "total", [], []
+        elif len(run) >= 2 and adds_up(run, k):
+            roles[k] = "total" if (j == len(order) - 1 and not subs) else "sub"
+            if roles[k] == "sub":
+                subs.append(k)
+            run = []
+        else:
+            run.append(k)
+    return roles
