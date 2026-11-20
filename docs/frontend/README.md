@@ -1,6 +1,8 @@
 # Telescope 화면설계
 
-분석 Agent와 Chat Agent의 현재 화면설계와 데모를 `docs/frontend/`에서 관리합니다. 화면설계 작업 이슈는 #23이며, 기존 `docs/#21-frontend` 브랜치를 재사용합니다.
+분석 Agent와 Chat Agent의 현재 화면설계와 데모를 `docs/frontend/`에서 관리합니다. 화면설계 작업 이슈는 #55이며, 기존 `docs/#49-final-screen-design` 브랜치를 재사용합니다.
+
+- DART 대시보드(A10), Stella BI와 근거 탐색·인사이트 챗봇을 포함합니다.
 
 - [IA 및 화면별 기능·흐름](demo/ia.md)
 - [IA 최종 이미지](IA.png)
