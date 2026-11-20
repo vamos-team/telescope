@@ -1,7 +1,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Telescope</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap">
@@ -344,7 +343,6 @@ sup.mk{font-size:10.5px;margin-left:3px;padding:1px 5px;border-radius:4px;backgr
 .dash{flex:1;min-height:0;overflow:auto;padding-block:0 140px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px))}
 .dhead{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;margin:0 0 16px;padding:14px 0 14px;position:sticky;top:0;z-index:8;background:var(--bg)}
 .dhead h2{margin:0;font-size:22px;color:var(--t-strong)}
-.dhead .sub{font-size:13px;color:var(--t-cap)}
 .dhead .ctl{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
 .dhead .tabs{order:3;flex-basis:100%;width:max-content;max-width:100%}
 .dhead .tabs{flex-basis:auto}
@@ -611,6 +609,232 @@ button.srcloc:hover{background:var(--hover)}
   .dash{overflow:visible;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
   .fin{position:fixed}
 }
+
+/* ---------- BI 목업: 스텔라 (캐릭터만 크림 노랑, UI 색은 그대로) ---------- */
+.stl{display:inline-flex;flex:none;vertical-align:middle}
+.stl svg{display:block;overflow:visible}
+.stl-row{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--t-sub)}
+.chh .stl{margin-right:2px}
+.ai-lab .stl{margin:-4px 2px -4px -2px}
+/* ---------- 자산 계정 대시보드 ---------- */
+.asw{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:16px;align-items:start}
+@media (max-width:1180px){.asw{grid-template-columns:minmax(0,1fr)}}
+.apane{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px 20px;min-width:0}
+.ahead{display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;margin-bottom:12px}
+.ahead h3{margin:0;font-size:18px;color:var(--t-strong)}
+.ahead .r{margin-left:auto}
+.actl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:10px}
+.actl .lb{font-size:13.5px;font-weight:700;color:var(--t-strong)}
+.actl label{display:flex;align-items:center;gap:6px;font-size:13.5px;color:var(--t-sub)}
+.acos{display:flex;gap:6px;flex-wrap:wrap}
+.acos button{border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:13px;background:var(--surface);color:var(--t-sub)}
+.acos button[aria-pressed="true"]{border-color:var(--primary);color:var(--primary-text);background:var(--primary-weak);font-weight:700}
+.acap{font-size:12.5px;color:var(--t-cap);margin:4px 0 8px}
+.tbl table.atbl{width:100%;border-collapse:separate;border-spacing:0 3px;font-size:14px;min-width:640px}
+.tbl .atbl td{border-bottom:0;padding:0;vertical-align:middle}
+.atbl th{font-size:12.5px;color:var(--t-cap);font-weight:500;text-align:right;padding:6px 10px;border-bottom:1px solid var(--line)}
+.atbl th:first-child{text-align:left}
+.atbl td{padding:0}
+.tbl .atbl td.nm{padding:6px 10px;color:var(--t);white-space:nowrap}
+.atbl td.nm small{display:block;font-size:11.5px;color:var(--t-cap)}
+.tbl .atbl tr.ag td{background:var(--bg-grey);font-weight:700;color:var(--t-strong);padding:7px 10px;border-top:0}
+.tbl .atbl tr.ag td:first-child{border-radius:6px 0 0 6px}.tbl .atbl tr.ag td:last-child{border-radius:0 6px 6px 0}
+.acell{position:relative;display:block;width:100%;text-align:right;padding:5px 10px;border-radius:8px;border:1.5px solid transparent;background:none;font-variant-numeric:tabular-nums;color:var(--t-strong);font-weight:500}
+.acell small{display:block;font-size:11.5px;color:var(--t-cap);font-weight:400}
+.acell:hover{background:var(--hover)}
+.acell.lv1{background:rgba(98,80,214,.10)}.acell.lv2{background:rgba(98,80,214,.20)}.acell.lv3{background:rgba(98,80,214,.34)}
+.acell.unx{border:1.5px dashed var(--yel-line);background:var(--yel-weak)}
+.acell.sel{border:2px solid var(--t-strong)}
+.acell .bd{position:absolute;left:8px;top:50%;transform:translateY(-50%);width:20px;height:20px;border-radius:50%;background:var(--t-strong);color:var(--bg);font-size:11.5px;font-weight:700;display:grid;place-items:center}
+.acell .bd.q{background:transparent;border:1.5px dashed var(--yel-line);color:var(--yel)}
+.acell .bd.lt{background:transparent;border:1.5px solid var(--t-sub);color:var(--t-sub)}
+.alegend{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:12.5px;color:var(--t-sub);margin-top:12px}
+.alegend b{color:var(--t-strong)}
+.alegend i{display:inline-block;width:18px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-1px;border:1px solid var(--line)}
+.tmap{position:relative;height:440px;margin-top:6px}
+.tmap .sec{position:absolute;top:0;font-size:12.5px;font-weight:700;color:var(--t-strong)}
+.tmap .blk{position:absolute;box-sizing:border-box;border:2px solid var(--bg);border-radius:6px;background:var(--bg-grey);padding:6px 8px;overflow:hidden;text-align:left;font-size:12.5px;color:var(--t)}
+.tmap .blk b{display:block;color:var(--t-strong);font-size:13px}
+.tmap .blk small{display:block;color:var(--t-cap);font-size:11.5px}
+.tmap .blk.lv1{background:rgba(98,80,214,.14)}.tmap .blk.lv2{background:rgba(98,80,214,.26)}.tmap .blk.lv3{background:rgba(98,80,214,.42)}
+.tmap .blk.unx{background:var(--yel-weak);outline:1.5px dashed var(--yel-line);outline-offset:-4px}
+.tmap .blk.sel{box-shadow:inset 0 0 0 2px var(--t-strong)}
+.tmap .blk .bd{position:absolute;right:6px;top:6px;width:20px;height:20px;border-radius:50%;background:var(--t-strong);color:var(--bg);font-size:11px;font-weight:700;display:grid;place-items:center}
+.qscrub{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:14px}
+.qscrub button{border:1px solid var(--line);border-radius:10px;padding:8px 12px;text-align:left;background:var(--surface);font-size:13.5px;font-weight:700;color:var(--t-strong)}
+.qscrub button small{display:block;font-weight:400;font-size:12px;color:var(--t-cap)}
+.qscrub button[aria-pressed="true"]{border-color:var(--primary);background:var(--primary-weak);color:var(--primary-text)}
+.evp{position:sticky;top:76px;display:grid;gap:14px}
+.evp .ph{display:flex;align-items:flex-start;gap:10px}
+.evp .ph h3{margin:0;font-size:18px;color:var(--t-strong)}
+.evp .ph small{display:block;font-size:12.5px;color:var(--t-cap)}
+.evp .ph .x{margin-left:auto}
+.evp .acct{font-size:16.5px;font-weight:700;color:var(--t-strong)}
+.kv3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;background:var(--bg-grey);border-radius:12px;padding:12px 14px}
+.kv3 span{font-size:12px;color:var(--t-cap)}.kv3 b{display:block;font-size:17px;color:var(--t-strong);font-variant-numeric:tabular-nums}
+.kv3 .f{grid-column:1/-1;font-size:12px;color:var(--t-sub);line-height:1.6}
+.strength{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--t-sub)}
+.strength i{width:38px;height:6px;border-radius:3px;background:var(--line)}
+.strength i.on{background:var(--s1)}
+.evh{font-size:13px;font-weight:700;color:var(--t-strong);display:flex;align-items:center;gap:6px}
+.evc{border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:6px}
+.evc .top{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--t-cap)}
+.evc .top .r{margin-left:auto;color:var(--t-sub);font-weight:500}
+.evc .k{font-size:11.5px;font-weight:700;padding:1px 6px;border-radius:5px;background:var(--red-weak);color:var(--red)}
+.evc .k.d{background:var(--primary-weak);color:var(--primary-text)}
+.evc b{font-size:14.5px;color:var(--t-strong)}
+.evc p{margin:0;font-size:12.5px;color:var(--t-sub)}
+.evc .chips{display:flex;flex-wrap:wrap;gap:5px}
+.evc .chips span{font-size:11.5px;background:var(--bg-grey);border-radius:6px;padding:2px 7px;color:var(--t-sub)}
+.evc .bot{display:flex;align-items:center;gap:6px}
+.evc .bot a{font-size:12.5px;color:var(--primary-text);margin-right:auto}
+.pts{display:grid;gap:8px}
+.pt{background:var(--bg-grey);border-radius:12px;padding:12px 14px;display:grid;gap:4px;font-size:13px;color:var(--t-sub)}
+.pt .t{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--t-strong);font-size:14px}
+.pt .t .d{margin-left:auto;font-variant-numeric:tabular-nums}
+.pt button{justify-self:start;color:var(--primary-text);font-size:12.5px}
+.reg{display:grid;gap:6px;font-size:13px}
+.reg div{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:4px 0}
+.reg small{display:block;font-size:11.5px;color:var(--t-cap)}
+.evfoot{font-size:12px;color:var(--t-cap);line-height:1.6}
+
+/* 정렬 다듬기 */
+.tbl .atbl td.nm small{display:block!important;margin-top:2px;white-space:nowrap}
+.tbl table.atbl td{vertical-align:middle!important}
+.tbl .atbl td.nm{line-height:1.3}
+.tbl .atbl th{white-space:nowrap}
+.anote{background:var(--bg-grey);border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.65;color:var(--t-sub)}
+.anote b{color:var(--t-strong)}
+.evp .ph{align-items:center}
+.evp .ph .x{align-self:flex-start}
+.actl{row-gap:10px}
+.actl .lb{margin-left:4px}
+/* 로그인 문구 */
+.login .brand{text-align:center}
+.login .brand small{margin-top:10px;line-height:1.7;font-size:14.5px}
+/* 차트 */
+svg.chart .grid line{stroke:var(--line);stroke-dasharray:3 4}
+svg.chart .axis{stroke:var(--line-2);stroke-width:1.2}
+svg.chart text{font-size:11.5px}
+svg.chart text.m{fill:var(--t-sub);font-weight:500}
+svg.chart text.b{font-size:12px}
+.card{padding:18px 20px 16px}
+.ch{margin-bottom:12px}
+.ch h3{font-size:15px}
+.legend{gap:6px 16px;font-size:12.5px;margin:0 0 10px}
+.legend i{width:10px;height:10px;border-radius:50%}
+/* ---------- 챗봇: 우측 하단 플로팅 ---------- */
+.fab{position:fixed;right:max(24px,env(safe-area-inset-right,0px));bottom:calc(24px + env(safe-area-inset-bottom,0px));z-index:80;width:68px;height:68px;border-radius:50%;
+ display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow-pop);transition:transform .15s}
+.fab:hover{transform:translateY(-2px)}
+.fab.ins{background:#FFFBEB;border-color:#F3DE9A}
+:root[data-theme="dark"] .fab.ins{background:#2A2618;border-color:#5A4D22}
+.fab .ftip{position:absolute;right:calc(100% + 10px);top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--t-strong);color:var(--bg);font-size:12.5px;font-weight:500;padding:6px 10px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .15s}
+.fab:hover .ftip,.fab:focus-visible .ftip{opacity:1}
+.fab.on{background:var(--t-strong);border-color:var(--t-strong);color:var(--bg)}
+.fab .stl{display:grid;place-items:center}
+.fab.on svg.i{width:24px;height:24px}
+.chatside.float{position:fixed;right:max(24px,env(safe-area-inset-right,0px));bottom:calc(104px + env(safe-area-inset-bottom,0px));z-index:79;width:420px;height:min(680px,calc(100vh - 128px));padding:0;border:0;background:none;display:flex}
+.chatside.float .chat{flex:1;border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:var(--shadow-pop);background:var(--bg)}
+.chatside.float .chh{gap:10px;padding:14px 12px 10px 16px}
+.chatside.float .chh::after{display:none}
+.chatside.float .ct{flex:1;min-width:0;display:grid}
+.chatside.float .ct b{font-size:15.5px;color:var(--t-strong);line-height:1.3}
+.chatside.float .ct small{font-size:12.5px;color:var(--t-cap);line-height:1.4}
+.mswitch{margin:0 14px 6px;display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--bg-grey);border-radius:12px;padding:4px}
+.mswitch button{display:flex;align-items:center;justify-content:center;gap:6px;height:36px;border-radius:9px;font-size:13.5px;font-weight:500;color:var(--t-sub)}
+.mswitch button[aria-checked="true"]{background:var(--surface);color:var(--t-strong);font-weight:700;box-shadow:var(--shadow-seg)}
+.mswitch button[data-v="ins"][aria-checked="true"]{color:var(--ai-text)}
+.chatside.float .cin .seg,.chatside.float .cin .cstl{display:none}
+.chatside.float .cin input{flex-basis:auto;order:0}
+.chatside.float .cin{flex-wrap:nowrap}
+.stitle{align-self:center;font-size:12px;color:var(--t-cap);background:var(--bg-grey);border-radius:999px;padding:3px 10px}
+.hello{display:grid;justify-items:center;text-align:center;gap:10px;padding:18px 8px 6px}
+.hello h4{margin:0;font-size:17px;color:var(--t-strong)}
+.hello p{margin:0;font-size:13.5px;line-height:1.65;color:var(--t-sub)}
+.hello .qs{display:grid;gap:6px;width:100%;margin-top:6px}
+.hello .qs button{text-align:left;border:1px solid var(--line);border-radius:12px;padding:9px 12px;font-size:13.5px;color:var(--t);background:var(--surface)}
+.hello .qs button:hover{background:var(--hover)}
+.btn.cmini{display:inline-flex;align-items:center;gap:6px}
+.btn.cmini svg.i{width:16px;height:16px}
+.sugg.srch p{color:var(--t-cap)}
+.sugg.srch button{color:var(--t);border-color:var(--line)}
+.sugg.srch button:hover{background:var(--hover)}
+@media (max-width:600px){.chatside.float{inset:0;width:auto;height:auto}.chatside.float .chat{border-radius:0}.fab{width:60px;height:60px}}
+
+/* ---------- 로그인: 분할 화면 ---------- */
+.lg2{min-height:100vh;min-height:100dvh;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);background:var(--bg)}
+.lg-brand{position:relative;overflow:hidden;display:grid;place-items:center;padding:48px 56px;color:#fff;
+ background:radial-gradient(90% 70% at 80% 12%,rgba(74,47,224,.45) 0%,transparent 60%),linear-gradient(160deg,#160A5C 0%,#0C0638 55%,#06031F 100%)}
+.lg-sky{position:absolute;inset:0;width:100%;height:100%}
+.lg-logo{position:relative;display:grid;justify-items:center;gap:14px;text-align:center}
+.lg-logo b{font-size:clamp(40px,5.2vw,72px);font-weight:700;letter-spacing:.16em;margin-right:-.16em;line-height:1}
+.lg-logo span{font-size:13px;letter-spacing:.24em;margin-right:-.24em;color:rgba(255,255,255,.55);text-transform:uppercase}
+.lg-top{font-size:15px;font-weight:700;letter-spacing:.32em}
+.lg-copy h1{margin:0 0 18px;font-size:clamp(30px,3.4vw,46px);line-height:1.28;font-weight:700;letter-spacing:-.02em}
+.lg-copy p{margin:0 0 36px;font-size:16px;line-height:1.75;color:rgba(255,255,255,.78)}
+.lg-copy ul{list-style:none;margin:0;padding:0;display:grid;gap:14px;max-width:420px}
+.lg-copy li{display:grid;grid-template-columns:96px 1fr;align-items:baseline;gap:12px;padding-top:14px;border-top:1px solid rgba(255,255,255,.16);font-size:14.5px}
+.lg-copy li b{font-weight:700}
+.lg-copy li span{color:rgba(255,255,255,.72)}
+.lg-foot{font-size:12.5px;color:rgba(255,255,255,.55)}
+.lg-form{position:relative;display:grid;place-items:center;padding:48px 32px}
+.lg-form form{width:min(380px,100%);display:grid;gap:18px}
+.lg-head h2{margin:0 0 6px;font-size:28px;color:var(--t-strong);letter-spacing:-.01em}
+.lg-head p{margin:0;font-size:15px;color:var(--t-sub)}
+.lg-head{margin-bottom:10px}
+.lg-form .lgtheme{position:absolute;top:20px;right:20px;left:auto;width:auto;margin:0}
+.lg-note{margin:0;font-size:12.5px;color:var(--t-cap);text-align:center}
+@media (max-width:860px){.lg2{grid-template-columns:minmax(0,1fr)}.lg-brand{padding:32px 24px;min-height:240px}}
+:root{--hbase:#F4F5F8}:root[data-theme="dark"]{--hbase:#24242C}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--hbase:#24242C}}
+.tbl table.htbl{width:100%;border-collapse:separate;border-spacing:3px;min-width:560px;font-size:13.5px}
+.tbl .htbl th{text-align:center;font-size:12.5px;color:var(--t-cap);font-weight:500;padding:4px 0;border:0}
+.tbl .htbl th:first-child{text-align:left;padding-left:8px}
+.tbl .htbl td{padding:0;border:0;vertical-align:middle}
+.tbl .htbl td.hn{padding:0 10px 0 8px;white-space:nowrap;color:var(--t);font-size:13.5px}
+.tbl .htbl tr.hg td{padding:10px 8px 2px;font-weight:700;color:var(--t-strong);font-size:13px}
+.hcell{position:relative;display:block;width:100%;height:40px;border-radius:6px;font-weight:600;font-size:12.5px;letter-spacing:-.01em;font-variant-numeric:tabular-nums;border:2px solid transparent}
+.hcell:hover{box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--t-strong) 35%,transparent)}
+.hcell.sel{border-color:var(--t-strong)}
+.hcell.unx{outline:1.5px dashed var(--yel-line);outline-offset:-5px}
+.hcell i{position:absolute;top:4px;right:5px;min-width:16px;height:16px;border-radius:8px;background:var(--t-strong);color:var(--bg);font-size:10.5px;font-style:normal;display:grid;place-items:center;padding:0 3px}
+.hcell i.q{background:var(--yel-weak);color:var(--yel);border:1px dashed var(--yel-line)}
+.hleg{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:12px;font-size:12.5px;color:var(--t-sub)}
+.hleg i{width:220px;height:10px;border-radius:5px}
+.hleg small{flex-basis:100%;color:var(--t-cap)}
+
+/* 근거 색: 히트맵과 같은 인디고 톤, 바탕은 --hbase */
+:root{--ev1:color-mix(in oklab,#5B47D6 15%,var(--hbase));--ev2:color-mix(in oklab,#5B47D6 32%,var(--hbase));--ev3:color-mix(in oklab,#5B47D6 56%,var(--hbase));--unx:color-mix(in oklab,#D99A00 14%,var(--hbase))}
+.apane .acell.lv1{background:var(--ev1)}.apane .acell.lv2{background:var(--ev2)}.apane .acell.lv3{background:var(--ev3);color:#fff}.apane .acell.lv3 small{color:rgba(255,255,255,.8)}
+.apane .acell.unx{background:var(--unx);border:1.5px dashed #D99A00}
+.apane .acell .bd{width:18px;height:18px;font-size:10.5px;left:7px}
+.alegend i{border:0;border-radius:4px;width:16px;height:10px}
+.alegend .unxsw{background:var(--unx);outline:1.5px dashed #D99A00;outline-offset:-1.5px}
+/* 자산 맵 */
+.tmhead{display:flex;gap:18px;font-size:13px;color:var(--t-sub);margin:2px 0 8px}
+.tmhead b{color:var(--t-strong);font-weight:700;margin-left:2px}
+.tmhead .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;background:var(--hbase);border:1px solid var(--line-2)}
+.tmhead .sw.i{background:repeating-linear-gradient(135deg,var(--hbase) 0 3px,var(--line-2) 3px 4px)}
+.tmap{position:relative;margin-top:0}
+.tmap .blk{position:absolute;box-sizing:border-box;border:0;border-radius:8px;background:var(--hbase);padding:8px 10px;overflow:hidden;text-align:left;display:flex;flex-direction:column;gap:1px;color:var(--t);transition:box-shadow .12s}
+.tmap .blk:hover{box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--t-strong) 30%,transparent)}
+.tmap .blk.ig{background-image:repeating-linear-gradient(135deg,transparent 0 6px,color-mix(in oklab,var(--t-strong) 5%,transparent) 6px 7px)}
+.tmap .blk b,.tmap .blk .v,.tmap .blk small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.tmap .blk b{font-size:13px;font-weight:700;color:var(--t-strong)}
+.tmap .blk .v{font-size:12.5px;font-variant-numeric:tabular-nums;color:var(--t)}
+.tmap .blk small{font-size:11.5px;color:var(--t-cap)}
+.tmap .blk.m{padding:6px 8px}.tmap .blk.s{padding:4px 6px;justify-content:center}.tmap .blk.s b{font-size:11.5px;font-weight:600}
+.tmap .blk.lv1{background-color:var(--ev1)}.tmap .blk.lv2{background-color:var(--ev2)}.tmap .blk.lv3{background-color:var(--ev3)}
+.tmap .blk.lv3 b,.tmap .blk.lv3 .v{color:#fff}.tmap .blk.lv3 small{color:rgba(255,255,255,.78)}
+.tmap .blk.unx{background-color:var(--unx);outline:1.5px dashed #D99A00;outline-offset:-4px}
+.tmap .blk.sel{box-shadow:inset 0 0 0 2px var(--t-strong)}
+.tmap .blk .bd{position:absolute;right:7px;top:7px;width:18px;height:18px;font-size:10.5px}
+.tmap .blk.l .bd,.tmap .blk.m .bd{position:absolute}
+.tmap .blk.x .bd,.tmap .blk.s .bd{display:none}
+.qscrub button{transition:border-color .12s}
+.qscrub button[aria-pressed="true"]{background:var(--ev1);border-color:#5B47D6;color:var(--t-strong)}
+.qscrub button[aria-pressed="true"] small{color:var(--t-sub)}
 </style>
 
 <div id="root"></div>
@@ -658,7 +882,7 @@ const S={route:'login',sideOpen:false,
  exp:3,q4:'부분',
  ex:{sel:['a1','a2','a3','q1','q2','q3','q4'],fmt:'Markdown'},
  ftab:'over',editCrit:false,addRow:false,extraRows:[],crit:'같은 숫자나 사업을 두고 같은 방향의 의문을 품으면 맞힘이에요. 쟁점은 같지만 묻는 초점이 다르면 부분(0.5점)이에요. 예상 질문이 어느 리포트 쟁점과도 닿지 않으면 빗나감이에요.',scope:'skb',period:'y',
- nf:'전체',exOpen:false};
+ nf:'전체',exOpen:false,av:'tbl',al:'str',acell:'cip|2',aq:2,aco:'SKT',arou:false};
 /* 테마: 시스템 설정을 따르다가 토글하면 data-theme로 고정 */
 function isDark(){const t=document.documentElement.dataset.theme;if(t)return t==='dark';return !!(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches);}
 try{const t=localStorage.getItem('telescope-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;}catch(e){}
@@ -676,6 +900,9 @@ const I={
  chat:'<svg class="i" viewBox="0 0 20 20"><path d="M9 3.5H5A1.5 1.5 0 0 0 3.5 5v10A1.5 1.5 0 0 0 5 16.5h10a1.5 1.5 0 0 0 1.5-1.5v-4"/><path d="M14.5 2.5l3 3-6.5 6.5-3.5.5.5-3.5z"/></svg>',
  spark:'<svg class="i" viewBox="0 0 20 20"><path d="M10 2.5l1.6 4.4 4.4 1.6-4.4 1.6L10 14.5l-1.6-4.4L4 8.5l4.4-1.6z"/><path d="M15.5 13l.6 1.6 1.6.6-1.6.6-.6 1.7-.6-1.7-1.6-.6 1.6-.6z"/></svg>',
  x:'<svg class="i" viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15"/></svg>',
+ expand:'<svg class="i" viewBox="0 0 20 20"><path d="M12 3.5h4.5V8M16.5 3.5l-5 5M8 16.5H3.5V12M3.5 16.5l5-5"/></svg>',
+ shrink:'<svg class="i" viewBox="0 0 20 20"><path d="M16.5 8H12V3.5M12 8l4.5-4.5M3.5 12H8v4.5M8 12l-4.5 4.5"/></svg>',
+ grid:'<svg class="i" viewBox="0 0 20 20"><rect x="3" y="3" width="8" height="14" rx="1.5"/><rect x="11" y="3" width="6" height="7" rx="1.5"/><rect x="11" y="10" width="6" height="7" rx="1.5"/></svg>',
  down:'<svg class="i" viewBox="0 0 20 20" style="width:14px;height:14px"><path d="M5 8l5 5 5-5"/></svg>',
  plus:'<svg class="i" viewBox="0 0 20 20"><path d="M10 4v12M4 10h12"/></svg>',
  up:'<svg class="i" viewBox="0 0 20 20"><path d="M10 15V5M5.5 9.5L10 5l4.5 4.5"/></svg>',
@@ -687,6 +914,143 @@ const I={
  sun:'<svg class="i" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3.5"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.3 4.3l1.4 1.4M14.3 14.3l1.4 1.4M4.3 15.7l1.4-1.4M14.3 5.7l1.4-1.4"/></svg>',
  moon:'<svg class="i" viewBox="0 0 20 20"><path d="M16 12.5A6.5 6.5 0 0 1 7.5 4a6.5 6.5 0 1 0 8.5 8.5z"/></svg>'};
 
+
+/* ================= BI 목업: 스텔라 캐릭터 v1 (docs/brand/bi.md) ================= */
+const STL_STAR='100,34 132.9,62.7 170.4,85.1 153.3,125.3 143.5,167.9 100,164 56.5,167.9 46.7,125.3 29.6,85.1 67.1,62.7';
+let stlId=0;
+function stella(mode,expr,size){const ins=mode==='ins',tiny=size<=24,id='stl'+(stlId++),L='#2B2B33';
+ let dx=0,open=true,closed='',mouth='M95 121 Q100 125.5 105 121',mag=false,dots=false,drop=false;
+ if(expr==='search'){dx=3;mouth='M97 122.5 L103 122.5';mag=true;dots=true;}
+ if(expr==='found'){open=false;closed='M75 112 Q80 106 85 112 M115 112 Q120 106 125 112';mouth='M93 120 Q100 128 107 120';mag=true;}
+ if(expr==='none'){mouth='M95 124 Q100 120.5 105 124';mag=true;drop=true;}
+ if(expr==='think'){open=false;closed='M75 110 Q80 114.5 85 110 M115 110 Q120 114.5 125 110';mouth='M97 122 Q100 124 103 122';}
+ if(expr==='done'){open=false;closed='M75 112 Q80 106 85 112 M115 112 Q120 106 125 112';mouth='M93 120 Q100 128 107 120';}
+ const body=ins?'#FFE58F':'#E3E3E3';let g='';
+ if(ins&&!tiny)g+=`<defs><radialGradient id="${id}"><stop offset="0" stop-color="#FFE79A" stop-opacity=".95"/><stop offset="1" stop-color="#FFE79A" stop-opacity="0"/></radialGradient></defs><circle cx="100" cy="106" r="104" fill="url(#${id})"/>`;
+ g+=`<polygon points="${STL_STAR}" fill="${L}" stroke="${L}" stroke-width="35" stroke-linejoin="round"/><polygon points="${STL_STAR}" fill="${body}" stroke="${body}" stroke-width="30" stroke-linejoin="round"/>`;
+ if(!tiny){
+  if(ins)g+=`<ellipse cx="68" cy="124" rx="8" ry="4.5" fill="#FF9EB5" opacity=".6"/><ellipse cx="132" cy="124" rx="8" ry="4.5" fill="#FF9EB5" opacity=".6"/>`;
+  g+=open?`<ellipse cx="${80+dx}" cy="111" rx="4.6" ry="6" fill="${L}"/><ellipse cx="${120+dx}" cy="111" rx="4.6" ry="6" fill="${L}"/>`:`<path d="${closed}" fill="none" stroke="${L}" stroke-width="4" stroke-linecap="round"/>`;
+  g+=`<path d="${mouth}" fill="none" stroke="${L}" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>`;
+  if(drop)g+=`<path d="M146 86 Q151 95 146 99 Q141 95 146 86 Z" fill="${ins?'#9CCBFF':'#BDBDBD'}" stroke="${L}" stroke-width="1.6"/>`;
+  if(mag&&!ins)g+=`<line x1="160" y1="160" x2="174" y2="174" stroke="${L}" stroke-width="7" stroke-linecap="round"/><circle cx="150" cy="150" r="13" fill="#fff" stroke="${L}" stroke-width="4"/>`;
+  if(dots)g+=`<g fill="${L}"><circle cx="150" cy="40" r="4"/><circle cx="162" cy="40" r="4" opacity=".6"/><circle cx="174" cy="40" r="4" opacity=".3"/></g>`;
+  if(ins)g+=`<path d="M168 30 Q168 40 178 40 Q168 40 168 50 Q168 40 158 40 Q168 40 168 30 Z" fill="#FFFFFF" stroke="${L}" stroke-width="1.8" stroke-linejoin="round"/>`;
+ }
+ const label='스텔라, '+(ins?'인사이트 모드':'사실 모드');
+ return `<span class="stl" role="img" aria-label="${label}"><svg viewBox="12 18 176 176" width="${size}" height="${size}">${g}</svg></span>`;}
+const stlRow=(mode,expr,text)=>`<div class="stl-row">${stella(mode,expr,28)}<span>${text}</span></div>`;
+
+/* ================= 챗봇 아바타: 근거 탐색 = 별, 인사이트 = 별자리 ================= */
+function stlNested(mode,expr,x,y,w){return stella(mode,expr,w).replace(/^<span[^>]*>/,'').replace(/<\/span>$/,'').replace('<svg ',`<svg x="${x}" y="${y}" `);}
+function constel(size){const P=[[9,30],[24,8],[89,12],[95,60],[11,88]],sp=(x,y,r)=>`<path d="M${x} ${y-r} Q${x} ${y} ${x+r} ${y} Q${x} ${y} ${x} ${y+r} Q${x} ${y} ${x-r} ${y} Q${x} ${y} ${x} ${y-r} Z" fill="#FFE58F" stroke="#2B2B33" stroke-width="1.1" stroke-linejoin="round"/>`;
+ return `<span class="stl" role="img" aria-label="스텔라, 인사이트 모드 (별자리)"><svg viewBox="0 0 104 100" width="${size}" height="${size}" style="display:block;overflow:visible">
+  <g fill="none" stroke="#D9A72B" stroke-width="1.3" stroke-dasharray="2.5 2.5" stroke-linecap="round"><polyline points="${P[4]} ${P[0]} ${P[1]} ${P[2]} ${P[3]}"/></g>
+  ${P.map(([x,y],i)=>sp(x,y,i%2?5.5:4.5)).join('')}${stlNested('ins','default',18,18,68)}</svg></span>`;}
+const avatar=(ins,size)=>ins?(size<32?stella('ins','default',size):constel(size)):stella('fact',size<32?'default':'search',size);
+function fab(){const ins=S.cmode==='ins';return `<button class="fab ${ins?'ins':''} ${S.cside?'on':''}" data-act="fab" aria-expanded="${S.cside}" aria-label="${S.cside?'챗봇 닫기':`스텔라에게 묻기, ${ins?'인사이트':'근거 탐색'} 모드`}">${S.cside?I.x:(ins?constel(54):stella('ins','default',48))}<span class="ftip">${S.cside?'닫기':ins?'스텔라 · 인사이트':'스텔라 · 근거 탐색'}</span></button>`;}
+function hello(ins){const q=ins?['SKT CapEx가 2년 동안 줄어든 이유는?','3사 AI 데이터센터 투자 계획을 비교해 주세요']:['SKT CapEx 2023~2025','SKT 설비투자 원문 위치'];
+ return `<div class="hello">${avatar(ins,ins?92:84)}<h4>${ins?'무엇이든 물어보세요':'무엇을 검색할까요?'}</h4>
+  <p>${ins?'근거가 되는 숫자를 먼저 보여 드리고,<br>그 위에 AI 해석과 관련 뉴스를 더해 답해요.':'공시와 검토 자료에서 숫자, 문서, 원문 위치를<br>검색해요. 해석이나 추천은 하지 않아요.'}</p>
+  <div class="qs">${q.map(x=>`<button data-act="sugg" data-v="${esc(x)}">${esc(x)}</button>`).join('')}</div></div>`;}
+/* 자산 계정: SKT 별도 분기 장부금액(억원). 이전 대시보드 데모의 값 */
+const stlSay=(mode,expr,html)=>`<div class="anote">${html}</div>`;
+const AQ=['2024 4Q','2025 1Q','2025 2Q','2025 3Q','2025 4Q'];
+const AAC=[
+ ['t','land','토지',[7399,7619,7610,7612,7287]],['t','bldg','건물',[5774,5725,5593,5513,5238]],['t','strc','구축물',[2100,2032,1964,1889,1839]],
+ ['t','mach','기계장치',[51302,49132,46620,45562,46252]],['t','rou','사용권자산',[10830,10238,9543,9926,9693]],['t','oppe','기타유형자산',[3321,2935,2687,2326,2489]],
+ ['t','cip','건설중인자산',[4427,2731,5493,4853,4006]],
+ ['i','freq','주파수이용권',[11355,10178,9000,7823,6645],'정액 상각 · 포인팅 제외'],['i','ointg','기타무형자산',[4690,4536,4309,4253,4888]],
+ ['i','memb','회원권',[452,482,471,465,456]],['i','ip','저작권·특허권 등',[202,199,203,205,196]],['i','fac','시설사용이용권',[129,124,120,116,116]]];
+/* 근거 칸 상태 (화면 설명용 예시). lv 1약 2중 3강, n 근거 수, unx 설명 안 된 변동, later 이후 공시에서만 확인 */
+const AEV={'land|1':{later:1},'land|4':{unx:1},'bldg|4':{lv:2,n:1},'mach|4':{lv:3,n:2},'rou|2':{lv:1,n:1},'cip|1':{lv:1,n:1},'cip|2':{lv:3,n:3},'ointg|4':{unx:1}};
+const AREG={mach:'감가상각 추세 안',freq:'정액 상각'};
+const aD=(k,q)=>{const a=AAC.find(x=>x[1]===k);return q?a[3][q]-a[3][q-1]:null;};
+const aRows=()=>AAC.filter(a=>!(S.arou&&a[1]==='rou'));
+function aCls(k,q){const e=AEV[k+'|'+q];if(!e||S.al==='off')return '';if(S.al==='unx')return e.unx?'unx':'';return e.unx?'unx':e.lv?'lv'+e.lv:'';}
+function aBadge(k,q){const e=AEV[k+'|'+q];if(!e||S.al==='off')return '';if(e.unx)return '<span class="bd q">?</span>';if(S.al==='unx')return '';if(e.later)return '<span class="bd lt">1</span>';return e.n?`<span class="bd">${e.n}</span>`:'';}
+const sd=v=>v===null?'—':(v>0?'+':v<0?'−':'')+com(Math.abs(v));
+function aTable(){const rows=aRows();const grp=(g,l)=>`<tr class="ag"><td>${l}</td>${'<td></td>'.repeat(5)}</tr>`+rows.filter(a=>a[0]===g).map(([,k,n,v,note])=>`<tr><td class="nm">${n}${note?`<small>${note}</small>`:''}</td>${v.map((x,q)=>{const sel=S.acell===k+'|'+q;return `<td><button class="acell ${aCls(k,q)} ${sel?'sel':''}" data-act="acell" data-v="${k}|${q}" aria-label="${n} ${AQ[q]} ${com(x)}억원">${aBadge(k,q)}${com(x)}<small>${sd(aD(k,q))}</small></button></td>`;}).join('')}</tr>`).join('');
+ return `<div class="tbl"><table class="atbl"><thead><tr><th>계정</th>${AQ.map(q=>`<th>${q}</th>`).join('')}</tr></thead><tbody>${grp('t','유형자산')}${grp('i','무형자산')}</tbody></table></div>`;}
+function sqf(items,x,y,w,h){const out=[];let rest=items.slice();
+ const worst=(row,sh,tot,A)=>{const sm=row.reduce((a,i)=>a+i.v,0)*A/tot;let m=0;for(const i of row){const a=i.v*A/tot;m=Math.max(m,sh*sh*a/(sm*sm),(sm*sm)/(sh*sh*a));}return m;};
+ while(rest.length){const sh=Math.min(w,h),tot=rest.reduce((a,i)=>a+i.v,0),A=w*h;let row=[rest[0]],b=worst(row,sh,tot,A),i=1;
+  while(i<rest.length){const r2=row.concat(rest[i]),w2=worst(r2,sh,tot,A);if(w2<=b){row=r2;b=w2;i++;}else break;}
+  const rs=row.reduce((a,i)=>a+i.v,0),ar=A*rs/tot;
+  if(w>=h){const cw=ar/h;let cy=y;row.forEach(it=>{const ch=h*it.v/rs;out.push({...it,x,y:cy,w:cw,h:ch});cy+=ch;});x+=cw;w-=cw;}
+  else{const ch=ar/w;let cx=x;row.forEach(it=>{const cw=w*it.v/rs;out.push({...it,x:cx,y,w:cw,h:ch});cx+=cw;});y+=ch;h-=ch;}
+  rest=rest.slice(row.length);}
+ return out;}
+function aMap(){const q=S.aq,rows=aRows();
+ const all=rows.map(a=>({g:a[0],k:a[1],n:a[2],v:a[3][q],d:aD(a[1],q)}));
+ const tsum=all.filter(i=>i.g==='t').reduce((a,i)=>a+i.v,0),isum=all.filter(i=>i.g==='i').reduce((a,i)=>a+i.v,0);
+ const small=all.filter(i=>i.g==='i'&&i.v<isum*0.06);let items=all.filter(i=>!small.includes(i));
+ if(small.length)items.push({g:'i',k:'_etc',n:`기타 무형 ${small.length}종`,v:small.reduce((a,i)=>a+i.v,0),d:null,etc:1,sub:small.map(i=>i.n).join(', ')});
+ items.sort((a,b)=>b.v-a.v);const W=760,H=470;const L=sqf(items,0,0,W,H);
+ const blk=b=>{const key=b.k+'|'+q,sel=S.acell===key,cls=b.etc?'':aCls(b.k,q),bd=b.etc?'':aBadge(b.k,q).replace(/class="bd[^"]*"/,'class="bd"');
+  const pw=b.w/W*760,size=pw>=130&&b.h>=78?'l':pw>=86&&b.h>=46?'m':pw>=46&&b.h>=24?'s':'x';
+  const tip=`${b.n}${b.sub?` (${b.sub})`:''} · ${com(b.v)}억${b.d!==null?` · 전분기 ${sd(b.d)}`:''}`;
+  const inner=size==='l'?`<b>${b.n}</b><span class="v">${com(b.v)}억</span><small>전분기 ${sd(b.d)}${b.g==='i'?' · 무형':''}</small>${AREG[b.k]&&!AEV[key]?`<small>${AREG[b.k]}</small>`:''}`
+   :size==='m'?`<b>${b.n}</b><span class="v">${com(b.v)}억</span>`:size==='s'?`<b>${b.n}</b>`:'';
+  return `<button class="blk ${cls} ${sel?'sel':''} ${size} ${b.g==='i'?'ig':''}" ${b.etc?'':`data-act="acell" data-v="${key}"`} title="${esc(tip)}" style="left:calc(${b.x/W*100}% + 2px);top:${b.y+2}px;width:calc(${b.w/W*100}% - 4px);height:${b.h-4}px">${bd}${inner}</button>`;};
+ return `<div class="tmhead"><span><i class="sw t"></i>유형자산 <b>${com(tsum)}억</b></span><span><i class="sw i"></i>무형자산 <b>${com(isum)}억</b></span></div>
+ <div class="tmap" style="height:${H}px">${L.map(blk).join('')}</div>
+ <div class="qscrub" role="radiogroup" aria-label="분기">${AQ.map((l,i)=>{const pts=AAC.filter(a=>AEV[a[1]+'|'+i]).length,ux=AAC.filter(a=>(AEV[a[1]+'|'+i]||{}).unx).length;return `<button aria-pressed="${q===i}" data-act="aq" data-v="${i}">${l}<small>${i?`포인트 ${pts}${ux?` · 미설명 ${ux}`:''}`:'직전 분기 없음'}</small></button>`;}).join('')}</div>`;}
+const lvTxt=['없음','약','중','강'];
+function aPanel(){if(S.aco!=='SKT')return `<div class="apane evp">${stlSay('fact','none',`<b>${S.aco}</b> 자산 계정 데이터가 아직 없어요.`,44)}</div>`;
+ if(!S.acell){const q=S.aq,pts=AAC.filter(a=>AEV[a[1]+'|'+q]).map(a=>({k:a[1],n:a[2],d:aD(a[1],q),e:AEV[a[1]+'|'+q]})).sort((a,b)=>Math.abs(b.d||0)-Math.abs(a.d||0));
+  const reg=AAC.filter(a=>AREG[a[1]]&&!AEV[a[1]+'|'+q]&&q).map(a=>[a[2],AREG[a[1]],aD(a[1],q)]);
+  return `<div class="apane evp"><div class="ph"><div><h3>이번 분기 포인트</h3><small>SK텔레콤 별도 · ${AQ[q]} · 변동 큰 순</small></div></div>
+   ${q?(pts.length?`<div class="pts">${pts.map(p=>`<div class="pt"><div class="t">${p.e.unx?'<span class="bd q" style="position:static;transform:none;width:20px;height:20px;border-radius:50%;border:1.5px dashed var(--yel-line);display:grid;place-items:center;font-size:11px;color:var(--yel)">?</span>':p.e.n?`<span style="width:20px;height:20px;border-radius:50%;background:var(--t-strong);color:var(--bg);display:grid;place-items:center;font-size:11px">${p.e.n}</span>`:''}${p.n}<span class="d">${sd(p.d)}억</span></div>
+     <span>${p.e.unx?'설명 안 된 변동 · 근거를 찾지 못했어요':p.e.later?'이후 공시에서만 확인돼요':`근거 ${lvTxt[p.e.lv]} · ${p.e.n}건`}</span><button data-act="acell" data-v="${p.k}|${q}">근거 패널 열기 →</button></div>`).join('')}</div>`
+    :stlSay('fact','default','이 분기에는 짚을 만한 변동이 없어요.',32)):stlSay('fact','default','2024 4Q는 직전 분기가 없어 변동을 계산하지 않아요.',32)}
+   ${reg.length?`<div><div class="evh">표시 안 함 · 규칙적 변동</div><div class="reg">${reg.map(([n,r,d])=>`<div><span>${n}<small>${r}</small></span><span class="num">${sd(d)}억</span></div>`).join('')}</div></div>`:''}
+   <p class="evfoot">이 목록은 맵의 텍스트 대안이에요. 색을 못 봐도 읽을 수 있고, 챗봇에게 물어도 같은 순서로 답해요.</p>
+   <button class="btn fill" data-act="aask" data-v="${AQ[q]}">이번 분기를 챗봇에게 묻기</button></div>`;}
+ const [k,qs]=S.acell.split('|'),q=+qs,a=AAC.find(x=>x[1]===k),e=AEV[S.acell]||{},bal=a[3][q],d=aD(k,q);
+ const head=`<div class="ph"><div><h3>근거</h3><small>SK텔레콤 · 별도 · ${AQ[q]}</small><div class="acct">${a[0]==='t'?'유형자산':'무형자산'} › ${a[2]}</div></div><button class="icon-btn x" data-act="acell" data-v="" aria-label="근거 닫기">${I.x}</button></div>`;
+ const close=`<p class="evfoot">챗봇에게 물어도 같은 결과예요. 외부 자료: 뉴스 · 애널리스트 리포트 · IR · DART 공시</p><button class="btn fill" data-act="aask" data-v="${a[2]} ${AQ[q]}">이 칸을 챗봇에게 묻기</button>`;
+ if(S.acell!=='cip|2')return `<div class="apane evp">${head}<div class="kv3"><div><span>잔액</span><b>${com(bal)}억</b></div><div><span>전분기 대비</span><b>${sd(d)}${d===null?'':'억'}</b></div><div><span>근거 강도</span><b>${e.lv?lvTxt[e.lv]:'없음'}</b></div></div>
+  ${stlSay('fact',e.unx?'none':'default',e.unx?'이 변동을 설명할 자료를 아직 찾지 못했어요. 검토 자료에 이유가 적혀 있는지 확인해 보세요.':e.later?'분기 당시 자료에는 없고, 이후 공시에서만 확인되는 변동이에요.':e.n?`근거 ${e.n}건이 붙은 칸이에요.`:'근거가 붙지 않은 칸이에요.',36)}${close}</div>`;
+ const ev=[['뉴스','2025.08','관련도 높음','해인 GPU 클러스터 가동','엔비디아 B200 약 1천 장 · 구축 Penguin Solutions',['GPU 1,000장','구축사 Penguin','회사명 일치'],'기사 열기'],
+  ['뉴스','2024.07','배경 · 약 1년 전','SGH에 2억 달러 지분 투자','SGH = 현 Penguin Solutions · 시간 거리 커서 가중 낮음',['USD 2억','지분투자'],'기사 열기']];
+ const evc=([t,dt,r,ti,p,ch,l],dart)=>`<div class="evc"><div class="top"><span class="k ${dart?'d':''}">${t}</span><span class="num">${dt}</span><span class="r">${r}</span></div><b>${ti}</b><p>${p}</p><div class="chips">${ch.map(c=>`<span>${c}</span>`).join('')}</div>
+  <div class="bot"><a href="#" onclick="return false">${l} ↗</a><button class="btn line sm" data-act="afb" data-v="맞음">맞음</button><button class="btn line sm" data-act="afb" data-v="아님">아님</button></div></div>`;
+ return `<div class="apane evp">${head}
+  <div class="kv3"><div><span>잔액</span><b>5,493억</b></div><div><span>전분기 대비</span><b>+2,762억</b></div><div><span>분기 취득</span><b>3,623억</b></div>
+   <div class="f">분기 취득 = 반기 누적 3,797 − 1분기 누적 174<br>전년 같은 분기 취득 1,240 → 2.9배</div></div>
+  <div class="strength"><b style="color:var(--t-strong);margin-right:6px">근거 강도</b><i class="on"></i><i class="on"></i><i class="on"></i>강 · 근거 3건</div>
+  ${stlSay('fact','found','찾았어요. 분기 앞뒤 외부 자료 2건과 이후 공시 1건이 이 증가를 설명해요.',36)}
+  <div class="evh">분기 전후 외부 자료 · 2</div>${ev.map(x=>evc(x)).join('')}
+  <div class="evh">이후 공시에서 확인 · 1</div>${evc(['DART 주석','2025 사업보고서','사후 확인','Penguin Solutions 자산 매입 998억','특수관계자와의 거래 · 연결·별도 같은 금액',['998억','거래상대방 일치'],'원문 표 위치'],1)}
+  ${close}</div>`;}
+function aHeat(){const rows=aRows(),qs=[1,2,3,4];
+ const pc=(k,q)=>{const a=AAC.find(x=>x[1]===k)[3];return (a[q]/a[q-1]-1)*100;};
+ const cell=(k,n,q)=>{const p=pc(k,q),t=Math.min(Math.abs(p)/15,1),mx=Math.round(6+Math.pow(t,.8)*74),bg=`color-mix(in oklab, ${p>=0?'#5B47D6':'#4F6684'} ${mx}%, var(--hbase))`,dark=t>.6,key=k+'|'+q,e=AEV[key],sel=S.acell===key;
+  return `<td><button class="hcell ${sel?'sel':''} ${e&&e.unx?'unx':''}" style="background:${bg};color:${dark?'#fff':'var(--t-strong)'}" data-act="acell" data-v="${key}" title="${n} ${AQ[q]} · ${sd(aD(k,q))}억 (${(p>=0?'+':'−')+Math.abs(p).toFixed(1)}%)">${(p>=0?'+':'−')+Math.abs(p).toFixed(1)}%${e&&e.n?`<i>${e.n}</i>`:''}${e&&e.unx?'<i class="q">?</i>':''}</button></td>`;};
+ const grp=(g,l)=>`<tr class="hg"><td colspan="5">${l}</td></tr>`+rows.filter(a=>a[0]===g).map(([,k,n])=>`<tr><td class="hn">${n}</td>${qs.map(q=>cell(k,n,q)).join('')}</tr>`).join('');
+ return `<div class="tbl"><table class="htbl"><thead><tr><th>계정</th>${qs.map(q=>`<th>${AQ[q]}</th>`).join('')}</tr></thead><tbody>${grp('t','유형자산')}${grp('i','무형자산')}</tbody></table></div>
+ <div class="hleg"><span>감소</span><i style="background:linear-gradient(90deg,color-mix(in oklab,#4F6684 80%,var(--hbase)),var(--hbase) 50%,color-mix(in oklab,#5B47D6 80%,var(--hbase)))"></i><span>증가</span><small>색 진하기 = 전분기 대비 증감률 (±15% 이상은 가장 진하게) · 숫자 = 근거 수</small></div>`;}
+function tAsset(){const tbl=S.av==='tbl';
+ return `<div class="asw"><div class="apane">
+  <div class="ahead"><h3>유형·무형자산 계정별</h3><div class="r seg" role="tablist" aria-label="보기"><button role="tab" aria-selected="${tbl}" data-act="av" data-v="tbl">표</button><button role="tab" aria-selected="${S.av==='map'}" data-act="av" data-v="map">자산 맵</button><button role="tab" aria-selected="${S.av==='heat'}" data-act="av" data-v="heat">히트맵</button></div></div>
+  <div class="actl"><div class="acos" role="radiogroup" aria-label="회사">${['SKT','KT','LG유플러스','SK브로드밴드'].map(c=>`<button aria-pressed="${S.aco===c}" data-act="aco" data-v="${c}">${c}</button>`).join('')}</div>
+   <div class="seg" role="radiogroup" aria-label="기준"><button aria-pressed="false" data-act="anot" data-v="연결 기준">연결</button><button aria-pressed="true">별도</button></div>
+   <label><input type="checkbox" data-act="arou" ${S.arou?'checked':''}>사용권자산 제외</label></div>
+  <div class="actl"><div class="seg" role="radiogroup" aria-label="기간"><button aria-pressed="false" data-act="anot" data-v="연간 보기">연간</button><button aria-pressed="true">분기</button></div>
+   <span class="lb">근거 레이어</span><div class="seg" role="radiogroup" aria-label="근거 레이어">${[['off','끄기'],['str','근거 강도'],['unx','미설명만']].map(([v,l])=>`<button aria-pressed="${S.al===v}" data-act="al" data-v="${v}">${l}</button>`).join('')}</div></div>
+  ${S.aco!=='SKT'?stlSay('fact','none',`${S.aco} 자산 계정 데이터가 아직 없어요.`,40):`
+  <div class="acap">SK텔레콤 별도 · 단위 억원 · ${tbl?'칸 아래 숫자 = 전분기 대비 증감':S.av==='heat'?'칸 = 전분기 대비 증감률 · 칸을 누르면 근거 패널이 열려요':`${AQ[S.aq]} 장부금액 · 면적 = 장부금액, 색과 핀 = 근거`}</div>
+  ${tbl?aTable():S.av==='heat'?aHeat():aMap()}`}
+  <div class="alegend"><b>근거 강도</b><span><i style="background:var(--hbase)"></i>없음</span><span><i style="background:var(--ev1)"></i>약</span><span><i style="background:var(--ev2)"></i>중</span><span><i style="background:var(--ev3)"></i>강</span><span>● 근거 수</span><span><i class="unxsw"></i>설명 안 된 변동</span><span>① 이후 공시에서만 확인</span></div>
+  
+ </div>${aPanel()}</div>`;}
+
+/* 대화는 모드를 가진다. 모드를 바꾸면 그 모드의 대화로 옮겨 간다 */
+const sMode=x=>x.mode||(x.log[0]&&x.log[0][2])||'fact';
+function setMode(v){if(S.cmode===v)return;S.curBy=S.curBy||{};S.curBy[S.cmode]=S.cur;S.cmode=v;
+ let t=S.sess.find(x=>x.id===S.curBy[v]&&sMode(x)===v)||S.sess.find(x=>sMode(x)===v);
+ if(!t){t={id:'s'+Date.now(),t:'새 대화',log:[],mode:v};S.sess.unshift(t);}S.cur=t.id;}
 /* ================= shell ================= */
 const STEPS=[['b40','분석 보고서'],['b50','예상 질문 보고서']];
 const stepOf=r=>({b40:0,b50:1,b60:1,b61:1})[r];
@@ -694,7 +1058,7 @@ const SDOT='<span class="sdot" aria-hidden="true"></span>';
 function sidebar(){const r=S.route,st=stepOf(r);
  return `<aside class="side ${S.sideOpen?'open':''}" aria-label="메뉴">
   <button class="logo" data-go="b10" aria-label="Telescope 홈, 분석하기로 이동">Telescope</button>
-  <nav class="nav"><button data-go="b10" ${['b10','b70'].includes(r)?'aria-current="page"':''}>${I.doc}분석하기</button><button data-go="i10" ${r==='i10'?'aria-current="page"':''}>${I.spark}인사이트</button></nav>
+  <nav class="nav"><button data-go="b10" ${['b10','b70'].includes(r)?'aria-current="page"':''}>${I.doc}분석하기</button><button data-go="i10" ${r==='i10'?'aria-current="page"':''}>${I.spark}인사이트</button><button data-go="a10" ${r==='a10'?'aria-current="page"':''}>${I.grid}DART 대시보드</button></nav>
   <div class="grp"><p>분석 세션</p><button data-go="b40" ${st!==undefined?'aria-current="page"':''}><span class="st">SKT 2025 4Q 사업보고서</span>${st!==undefined?SDOT:''}</button><button data-act="ktSession">KT 2025 4Q 사업보고서</button></div>
   <div class="grp"><p>대화 세션</p>${S.sess.map(s=>{const on=S.cur===s.id&&(r==='i20'||(S.cside&&!NOCHAT.includes(r)));return `<button data-act="sess" data-k="${s.id}" title="${esc(s.t)}" ${on?'aria-current="page"':''}><span class="st">${esc(s.t)}</span>${on?SDOT:''}</button>`;}).join('')}</div>
   ${themeBtn()}
@@ -707,23 +1071,31 @@ function header(title){
   <span class="chip">회사 <b>${S.co}</b></span><span class="chip">분기 <b>${S.qtr}</b></span><span class="chip">기준 시점 <b class="num">2026-03-17</b></span></div></header>`;}
 function themeBtn(){const dk=isDark();return `<button class="themebtn" style="margin-top:auto" data-act="theme" aria-label="${dk?'라이트 모드로 바꾸기':'다크 모드로 바꾸기'}">${dk?I.sun:I.moon}${dk?'라이트 모드':'다크 모드'}</button>`;}
 /* v05: 챗봇은 B10(분석 입력), B20 빼고 모든 화면. 보내면 오른쪽 사이드 채팅(C20)이 열리고 본문은 왼쪽으로 줄어요 */
-const NOCHAT=['login','b10','b20'];
+const NOCHAT=['login'];
 function shell(inner){const r=S.route,ok=!NOCHAT.includes(r),side=ok&&r!=='i20'&&S.cside;
  return `<div class="app">${sidebar()}<div class="main"><div class="mobilebar"><button class="icon-btn" data-act="side" aria-label="메뉴 열기">${I.menu}</button><button class="logo" data-go="b10" style="padding:0">Telescope</button></div>
-  <div class="mwrap"><div class="mcol">${inner}${ok&&!side?`<div class="fin">${r==='i20'?sugg():''}${cForm()}</div>`:''}</div>${side?chatSide():''}</div></div></div>`;}
+  <div class="mwrap"><div class="mcol">${inner}${r==='i20'?`<div class="fin">${sugg()}${cForm()}</div>`:''}</div></div></div>${side?chatSide():''}${ok&&r!=='i20'?fab():''}</div>`;}
 const curS=()=>S.sess.find(x=>x.id===S.cur)||S.sess[0];
 function cForm(){const ins=S.cmode==='ins';
- return `<form class="cin ${ins?'ins':''}" data-form="chat"><div class="seg" role="radiogroup" aria-label="대화 모드"><button type="button" aria-pressed="${!ins}" data-act="cmode" data-v="fact">사실</button><button type="button" class="mi" aria-pressed="${ins}" data-act="cmode" data-v="ins">인사이트</button></div>
-  <input id="cq" value="${esc(S.cq)}" placeholder="${ins?'AI 해석과 추천까지 받아요. 예: SKT CapEx가 줄어든 이유는?':'적재된 공시와 검토 자료에서 사실만 찾아요. 예: SKT CapEx 2023~2025'}" autocomplete="off" aria-label="챗봇에 묻기"><button class="send" aria-label="보내기">${I.up}</button></form>`;}
-function chatSide(){const s=curS();
- return `<aside class="chatside" aria-label="챗봇"><section class="chat"><div class="chh"><b>${esc(s.t)}</b><button class="icon-btn" data-act="cclose" aria-label="채팅 닫기">${I.x}</button></div>
-  <div class="msgs" id="msgs"><div class="inner">${s.log.map(msg).join('')}</div></div>${sugg()}${cForm()}</section></aside>`;}
+ return `<form class="cin ${ins?'ins':''}" data-form="chat"><div class="seg" role="radiogroup" aria-label="대화 모드"><button type="button" aria-pressed="${!ins}" data-act="cmode" data-v="fact">근거 탐색</button><button type="button" class="mi" aria-pressed="${ins}" data-act="cmode" data-v="ins">인사이트</button></div>
+  <input id="cq" value="${esc(S.cq)}" placeholder="${ins?'AI에게 질문해요. 예: SKT CapEx가 줄어든 이유는?':'검색할 항목을 적어 주세요. 예: SKT CapEx 2023~2025'}" autocomplete="off" aria-label="챗봇에 묻기"><button class="send" aria-label="보내기">${I.up}</button></form>`;}
+function chatSide(){const s=curS(),ins=S.cmode==='ins';
+ return `<aside class="chatside float" aria-label="스텔라 챗봇"><section class="chat">
+  <div class="chh">${avatar(ins,40)}<div class="ct"><b>스텔라</b><small>${ins?'인사이트 · AI에게 질문해요':'근거 탐색 · 공시와 자료를 검색해요'}</small></div>
+   <button class="icon-btn" data-act="cnew" aria-label="새 대화" title="새 대화">${I.plus}</button><button class="icon-btn" data-act="cfull" aria-label="전체 화면으로 보기" title="전체 화면으로 보기">${I.expand}</button><button class="icon-btn" data-act="cclose" aria-label="챗봇 닫기">${I.x}</button></div>
+  <div class="mswitch" role="radiogroup" aria-label="챗봇 모드"><button role="radio" aria-checked="${!ins}" data-act="cmode" data-v="fact">${avatar(false,22)}근거 탐색</button><button role="radio" aria-checked="${ins}" data-act="cmode" data-v="ins">${avatar(true,22)}인사이트</button></div>
+  <div class="msgs" id="msgs"><div class="inner">${s.log.length?`<div class="stitle">${esc(s.t)}</div>`+s.log.map(msg).join(''):hello(ins)}</div></div>${sugg()}${cForm()}</section></aside>`;}
 /* AI 추천 · 이어서 물어보기: 답이 있으면 항상 입력창 바로 위 */
 function sugg(){if(!curS().log.some(m=>m[0]==='a'))return '';
- return `<div class="sugg"><p>${I.spark}AI 추천 · 이어서 물어보기</p>${['KT, LG유플러스도 같은 이유로 CapEx를 줄였나요?','감가상각비 감소가 영업이익에 준 영향은?','AI 데이터센터 투자 계획은 어떻게 봐야 하나요?'].map(x=>`<button data-act="sugg" data-v="${esc(x)}">${x}</button>`).join('')}</div>`;}
+ if(S.cmode!=='ins')return `<div class="sugg srch"><p>관련 검색</p>${['SKT CapEx 2021~2025','SKT 설비투자 원문 위치'].map(x=>`<button data-act="sugg" data-v="${esc(x)}">${x}</button>`).join('')}</div>`;
+ return `<div class="sugg"><p>${stella('ins','default',18)}AI 추천 · 이어서 물어보기</p>${['KT, LG유플러스도 같은 이유로 CapEx를 줄였나요?','감가상각비 감소가 영업이익에 준 영향은?','AI 데이터센터 투자 계획은 어떻게 봐야 하나요?'].map(x=>`<button data-act="sugg" data-v="${esc(x)}">${x}</button>`).join('')}</div>`;}
 const tagsFact=()=>`<div class="lab2">사실 ${tg('공시')}${tg('계산')}</div>`;
 const aiLab=t=>`<div class="ai-lab">${I.spark}${t||'AI 해석'}</div>`;
-function msg([k,v,mode,q]){if(k==='u')return `<div class="bub">${esc(v)}</div>`;
+const aiLabC=()=>`<div class="ai-lab">${stella('ins','done',26)}AI 해석</div>`;
+function msg(m){const [k,v,mode]=m;if(k==='u')return `<div class="bub">${esc(v)}</div>`;
+ const pre=mode==='fact'?(v==='capex'?stlRow('fact','found','검색 결과예요.'):v==='why'?stlRow('fact','none','검색할 항목이 없어요.'):stlRow('fact','none','요청한 값을 자료에서 찾지 못했어요.')):stlRow('ins','done','사실을 먼저 보여 드리고, 이어서 해석할게요.');
+ return pre+msg0(m);}
+function msg0([k,v,mode,q]){
  const cx=D.capex.skt;
  if(v==='capex'&&mode==='fact')return `<div class="fact">${tagsFact()}<div class="para">SKT 단독 CapEx는 2023년 1조 7,430억원, 2024년 1조 5,440억원, 2025년 1조 2,440억원이에요. 2년 동안 28.6% 줄었어요.</div>
   <div class="rhead">검색 결과 ${RES.length}건 · SKT 공시</div><div class="res">${RES.map(rcard).join('')}</div></div>`;
@@ -733,23 +1105,32 @@ function msg([k,v,mode,q]){if(k==='u')return `<div class="bub">${esc(v)}</div>`;
     ${card('','[1] 전년 대비','계산',`<div class="tbl"><table class="ftbl" style="min-width:0"><thead><tr><th></th><th class="n">2024</th><th class="n">2025</th></tr></thead><tbody><tr><td>증감</td><td class="n">−11.4%</td><td class="n">−19.4%</td></tr><tr class="b"><td>2년 누적</td><td class="n"></td><td class="n">−28.6%</td></tr></tbody></table></div>`,'',false)}</div>
    ${card('','[2] 유형자산 감가상각비 (2021–2025)','SKB 포함',ftable(YR,[['SKT',D.cons.ppeDep]],'억원'),'',false)}
    <div class="srcline">출처: [1] SKT 2025 사업보고서 II-3-라, 61쪽 (공시 2026-03-17), SKT 2024 사업보고서 (공시 2025-03-18) · [2] SKT 사업보고서 2021~2025, DART. 증감은 계산 값.</div></div>
-  <div class="aip">${aiLab()}
+  <div class="aip">${aiLabC()}
    <div class="para">같은 기간 유형자산 감가상각비도 줄어, 대규모 5G 설비 투자가 끝나 가는 흐름과 맞아요 [2]. 업계 기사도 5G 이후 투자 우선순위가 AI 인프라 쪽으로 재편되고 있다고 봐요 [3]. 다만 2026년 투자 계획 금액과 AI 인프라 비중은 공시에 없어서, 검토 자료에서 이 근거를 보완해야 해요.</div>
    <div class="srcline">근거 기사: [3] ${nref(0)}</div></div>`;
- if(v==='why')return `<div class="fact"><div class="mnote">사실 모드에서는 "왜", "어떻게 봐야 하나요" 같은 해석을 하지 않아요. <button class="btn line sm" data-act="toIns" data-v="${esc(q)}">인사이트 모드로 묻기</button></div></div>`;
- return mode==='ins'?`<div class="aip">${aiLab()}<div class="para" style="color:var(--t-sub)">데모에는 CapEx 질문의 답변만 들어 있어요. 예: SKT CapEx가 줄어든 이유는?</div></div>`
-  :`<div class="fact">${tagsFact()}<div class="para" style="color:var(--t-sub)">데모에는 CapEx 결과만 들어 있어요. 실제 서비스에서는 적재된 공시와 검토 자료에서 숫자, 문서, 위치, 원문 문장을 찾아 보여 줘요.</div></div>`;}
-function send(q){const mode=S.cmode,key=/capex|설비투자/i.test(q)?'capex':(mode==='fact'&&/왜|이유|어떻게|전망|의미/.test(q))?'why':'none';
+ if(v==='why')return `<div class="fact"><div class="mnote">근거 탐색은 숫자, 문서, 원문 위치만 검색해요. 이유나 전망처럼 해석이 필요한 질문은 검색 결과가 없어요. 찾을 항목을 적어 주세요. 예: SKT CapEx 2023~2025</div></div>`;
+ return mode==='ins'?`<div class="aip">${aiLabC()}<div class="para" style="color:var(--t-sub)">이 질문에 답할 근거를 찾지 못했어요. 질문을 바꿔 다시 물어봐 주세요.</div></div>`
+  :`<div class="fact">${tagsFact()}<div class="para" style="color:var(--t-sub)">검색 결과가 없어요. 회사, 항목, 기간을 함께 적어 주세요. 예: SKT CapEx 2023~2025</div></div>`;}
+function send(q){if(S.cside&&!curS().log.length)curS().t=q;const mode=S.cmode,key=/capex|설비투자/i.test(q)?'capex':(mode==='fact'&&/왜|이유|어떻게|전망|의미/.test(q))?'why':'none';
  const m=[['u',q,mode],['a',key,mode,q]];
  if(S.route==='i20'||S.cside)curS().log.push(...m);
- else{const id='s'+Date.now();S.sess.unshift({id,t:q,log:m});S.cur=id;S.cside=true;}
+ else{const id='s'+Date.now();S.sess.unshift({id,t:q,log:m,mode});S.cur=id;S.cside=true;}
  S.cq='';render(true);if(S.route==='i20'){const d=$('#dash');d.scrollTop=d.scrollHeight;}$('#cq')?.focus();}
 
 /* ================= S00 login ================= */
-function vLogin(){return `<div class="login"><form data-form="login"><div class="brand">Telescope<small>사업·예산 자료를 검토자의 눈으로 미리 점검해요</small></div>
- <label class="field" for="em">이메일<input class="inp" id="em" type="email" value="seoyeon.lee@sktelecom.com" autocomplete="username"></label>
- <label class="field" for="pw">비밀번호<input class="inp" id="pw" type="password" value="telescope2026" autocomplete="current-password"></label>
- <button class="btn fill lg" style="width:100%">로그인</button></form>${themeBtn().replace(' style="margin-top:auto"','')}</div>`;}
+function vLogin(){
+ return `<div class="lg2">
+  <section class="lg-brand" aria-label="Telescope 소개">
+   <svg class="lg-sky" viewBox="0 0 600 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <g fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1" stroke-dasharray="3 5"><polyline points="388,138 452,196 520,170 556,248 486,300"/><polyline points="360,712 424,668 488,716 548,662"/></g>
+    <g fill="#fff">${[[388,138,2.6],[452,196,2],[520,170,2.4],[556,248,2],[486,300,2.8],[360,712,2],[424,668,2.6],[488,716,1.8],[548,662,2.2],[60,120,1.2],[180,70,1],[300,210,1.1],[110,330,1],[560,420,1.2],[420,640,1],[520,720,1.3],[300,700,1],[40,760,1.1],[240,380,.9],[350,470,1]].map(([x,y,r])=>`<circle cx="${x}" cy="${y}" r="${r}" opacity="${r>1.5?.95:.55}"/>`).join('')}</g></svg>
+   <div class="lg-logo"><b>TELESCOPE</b><span>Team Vamos</span></div>
+  </section>
+  <section class="lg-form">${themeBtn().replace(' style="margin-top:auto"',' class="lgtheme"').replace('class="themebtn" class="lgtheme"','class="themebtn lgtheme"')}
+   <form data-form="login"><div class="lg-head"><h2>로그인</h2></div>
+    <label class="field" for="em">이메일<input class="inp" id="em" type="email" value="seoyeon.lee@sktelecom.com" autocomplete="username"></label>
+    <label class="field" for="pw">비밀번호<input class="inp" id="pw" type="password" value="telescope2026" autocomplete="current-password"></label>
+    <button class="btn fill lg" style="width:100%">로그인</button></form></section></div>`;}
 
 /* ================= 분석 Agent: B10 / B11 ================= */
 function menu(id,items,cur,pos='up'){return S.menu===id?`<div class="menu ${pos}" role="menu">${items.map(([v,l,d])=>`<button role="menuitemradio" aria-checked="${v===cur}" data-act="pick" data-m="${id}" data-v="${esc(v)}" ${d?'disabled style="opacity:.5;cursor:default"':''}><span>${l||v}</span>${d?'<small>준비 중</small>':''}</button>`).join('')}</div>`:'';}
@@ -904,11 +1285,11 @@ function frame(W,H,pl,pt,pr,pb,tk,Y){return `<g class="grid">${tk.map(t=>`<line 
 /* bars: series [{name,v,c,fade}] grouped; supports negatives */
 function bars(o){const W=o.W||560,H=o.H||220,pl=44,pr=8,pt=18,pb=26,labs=o.labels,ser=o.series,n=labs.length,k=ser.length;
  const all=ser.flatMap(s=>s.v);let mn=Math.min(0,...all),mx=Math.max(0,...all);const tk=ticks(mn,mx);mn=tk[0];mx=tk[tk.length-1];
- const Y=v=>pt+(mx-v)/(mx-mn)*(H-pt-pb);const gw=(W-pl-pr)/n,bw=Math.min(o.bw||28,(gw-10)/k-2);
+ const Y=v=>pt+(mx-v)/(mx-mn)*(H-pt-pb);const gw=(W-pl-pr)/n,bw=Math.min(o.bw||40,(gw-16)/k-3);
  let s=frame(W,H,pl,pt,pr,pb,tk,Y);
  labs.forEach((L,i)=>{const gx=pl+i*gw+(gw-(bw*k+2*(k-1)))/2;ser.forEach((se,j)=>{const v=se.v[i];const y0=Y(0),y1=Y(v);const last=i===n-1;
-   const op=se.fade&&!last?.45:1;s+=`<rect x="${gx+j*(bw+2)}" y="${Math.min(y0,y1)}" width="${bw}" height="${Math.max(1,Math.abs(y1-y0))}" rx="3" style="fill:var(${se.c});opacity:${op}" data-tip="${L} · ${se.name} ${o.fmt?o.fmt(v):com(v)}"/>`;
-   if(o.labelLast&&last&&j===0)s+=`<text class="b" x="${gx+j*(bw+2)+bw/2}" y="${v>=0?y1-6:y1+14}" text-anchor="middle">${o.fmt?o.fmt(v):com(v)}</text>`;});
+   const op=se.fade&&!last?.45:1;s+=`<rect x="${gx+j*(bw+3)}" y="${Math.min(y0,y1)}" width="${bw}" height="${Math.max(1,Math.abs(y1-y0))}" rx="5" style="fill:var(${se.c});opacity:${op}" data-tip="${L} · ${se.name} ${o.fmt?o.fmt(v):com(v)}"/>`;
+   if((o.labelLast&&last&&j===0)||(k===1&&!o.noLab))s+=`<text class="${last?'b':'m'}" x="${gx+j*(bw+2)+bw/2}" y="${v>=0?y1-6:y1+14}" text-anchor="middle">${o.fmt?o.fmt(v):com(v)}</text>`;});
   s+=`<text x="${pl+i*gw+gw/2}" y="${H-8}" text-anchor="middle">${L}</text>`;});
  s+=`<line class="axis" x1="${pl}" x2="${W-pr}" y1="${Y(0)}" y2="${Y(0)}" style="stroke:var(--line-2)"/>`;
  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.aria||'')}">${s}</svg>`;}
@@ -919,7 +1300,7 @@ function lines(o){const W=o.W||560,H=o.H||220,pl=44,pr=o.pr??96,pt=18,pb=26,labs
  let s=frame(W,H,pl,pt,pr,pb,tk,Y).replace(/>(-?[\d.,만]+)</g,(m,a)=>'>'+(o.axfmt?o.axfmt(a):a)+'<');
  if(o.ref!==undefined)s+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(o.ref)}" y2="${Y(o.ref)}" style="stroke:var(--t-cap);stroke-dasharray:4 3"/><text x="${W-pr+6}" y="${Y(o.ref)+4}">${o.refLabel||o.ref}</text>`;
  const ends=[];
- ser.forEach(se=>{const pts=se.v.map((v,i)=>[X(i),Y(v)]);s+=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" style="fill:none;stroke:var(${se.c});stroke-width:2;stroke-linejoin:round"/>`;
+ ser.forEach(se=>{const pts=se.v.map((v,i)=>[X(i),Y(v)]);if(se.bold)s+=`<polygon points="${X(0)},${Y(mn)} ${pts.map(p=>p.join(',')).join(' ')} ${X(n-1)},${Y(mn)}" style="fill:var(${se.c});opacity:.08"/>`;s+=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" style="fill:none;stroke:var(${se.c});stroke-width:${se.bold?3:2.2};stroke-linejoin:round;stroke-linecap:round"/>`;
   pts.forEach((p,i)=>{s+=`<circle cx="${p[0]}" cy="${p[1]}" r="${i===n-1?4.5:3}" style="fill:var(${se.c});stroke:var(--surface);stroke-width:1.5" data-tip="${labs[i]} · ${se.name?se.name+' ':''}${o.fmt?o.fmt(se.v[i]):com(se.v[i])}"/>`;});
   ends.push({y:pts[n-1][1],t:`${se.name?se.name+' ':''}${o.fmt?o.fmt(se.v[n-1]):com(se.v[n-1])}`,bold:se.bold});});
  ends.sort((a,b)=>a.y-b.y);for(let i=1;i<ends.length;i++)if(ends[i].y-ends[i-1].y<14)ends[i].y=ends[i-1].y+14;
@@ -931,7 +1312,7 @@ function waterfall(o){const W=o.W||720,H=o.H||250,pl=48,pr=8,pt=24,pb=34,st=o.st
  const mx=niceMax(Math.max(...bars.map(b=>Math.max(b.a,b.b)))*1.08),tk=ticks(0,mx),top=tk[tk.length-1];const Y=v=>pt+(top-v)/top*(H-pt-pb);const gw=(W-pl-pr)/n,bw=Math.min(54,gw-18);
  let s=frame(W,H,pl,pt,pr,pb,tk,Y);
  bars.forEach((b,i)=>{const x=pl+i*gw+(gw-bw)/2,y=Math.min(Y(b.a),Y(b.b)),h=Math.max(1,Math.abs(Y(b.a)-Y(b.b)));const c=b.t?'--s1':b.v<0?'--s2':'--s3';
-  s+=`<rect x="${x}" y="${y}" width="${bw}" height="${h}" rx="3" style="fill:var(${c})" data-tip="${b.l} ${b.t?com(b.v):(b.v>0?'+':'')+com(b.v)}억원"/>`;
+  s+=`<rect x="${x}" y="${y}" width="${bw}" height="${h}" rx="5" style="fill:var(${c})" data-tip="${b.l} ${b.t?com(b.v):(b.v>0?'+':'')+com(b.v)}억원"/>`;
   s+=`<text class="${b.t?'b':'m'}" x="${x+bw/2}" y="${y-6}" text-anchor="middle">${b.t?com(b.v):(b.v>0?'+':'')+com(b.v)}</text>`;
   s+=`<text x="${x+bw/2}" y="${H-14}" text-anchor="middle">${b.l}</text>`;
   if(i<n-1){const yc=Y(b.t?b.v:b.b);s+=`<line x1="${x+bw}" x2="${x+gw}" y1="${yc}" y2="${yc}" style="stroke:var(--t-ph);stroke-dasharray:2 2"/>`;}});
@@ -1105,11 +1486,12 @@ function vI10(){const fl=['전체','SKT','KT','LG유플러스','3사'],list=NEWS
 
 /* ================= I20 대화 화면 (챗봇 세션 전체 화면). 사실 = 회색 칸, AI 해석 = 보라 테두리 ================= */
 function vI20(){const s=curS();
- return shell(`<header class="hdr"><h1>${esc(s.t)}</h1></header>
+ return shell(`<header class="hdr"><h1>${esc(s.t)}</h1><div class="r"><button class="btn line sm cmini" data-act="cmini">${I.shrink}작은 창으로</button></div></header>
  <div class="fwrap"><div class="dash" id="dash"><div class="conv">${s.log.map(msg).join('')}</div></div></div>`);}
 
 /* ================= router ================= */
-const VIEWS={login:vLogin,b10:vB10,b20:vB20,b40:vB40,b50:vB50,b60:vB60,b61:vB61,b70:vB70,i10:vI10,i20:vI20};
+function vA10(){return shell(`<div class="fwrap"><div class="dash" id="dash"><div class="dhead"><h2>DART 대시보드</h2></div>${tAsset()}</div></div>`);}
+const VIEWS={a10:vA10,login:vLogin,b10:vB10,b20:vB20,b40:vB40,b50:vB50,b60:vB60,b61:vB61,b70:vB70,i10:vI10,i20:vI20};
 let authed=false;
 function render(keep){const sc=keep?[...document.querySelectorAll('.scroll,.docarea,.rlist,.dash')].map(e=>e.scrollTop):null;
  root.innerHTML=VIEWS[S.route]();
@@ -1163,24 +1545,37 @@ document.addEventListener('click',e=>{
   case 'exAll':S.ex.sel=S.ex.sel.length===7?[]:['a1','a2','a3','q1','q2','q3','q4'];render(true);break;
   case 'exItem':{const i=S.ex.sel.indexOf(k);if(i<0)S.ex.sel.push(k);else S.ex.sel.splice(i,1);render(true);break;}
   case 'exFmt':S.ex.fmt=v;render(true);break;
-  case 'doExport':S.modal=null;render(true);toast(`항목 ${S.ex.sel.length}개를 ${S.ex.fmt}로 내보냈어요 (데모에서는 파일을 받지 않아요)`);break;
+  case 'doExport':S.modal=null;render(true);toast(`항목 ${S.ex.sel.length}개를 ${S.ex.fmt}로 내보냈어요`);break;
   case 'exp':S.exp=S.exp===+a.dataset.i?null:+a.dataset.i;render(true);break;
-  case 'verdict':if(+a.dataset.i===3)S.q4=v;else toast('데모에서는 Q4 판정만 바꿀 수 있어요');render(true);break;
+  case 'verdict':if(+a.dataset.i===3)S.q4=v;else toast('이 판정은 지금 바꿀 수 없어요');render(true);break;
   case 'addRow':S.addRow=!S.addRow;render(true);if(S.addRow)$('#nr1')?.focus();break;
   case 'saveRow':{const b=$('#nr1').value.trim(),i=$('#nr2').value.trim();if(!i){toast('쟁점을 적어 주세요');return;}S.extraRows.unshift([b||'증권사 미입력',i]);S.addRow=false;render(true);toast('쟁점을 추가했어요');break;}
   case 'editCrit':S.editCrit=true;render(true);$('#crit')?.focus();break;
   case 'saveCrit':S.crit=$('#crit').value;S.editCrit=false;render(true);toast('판정 기준을 저장했어요');break;
   case 'confirm':toast('판정을 확정했어요');S.exp=null;render(true);break;
   case 'ftab':S.ftab=v;render();$('#dash').scrollTop=0;break;
-  case 'ask':S.cmode='ins';S.cq=`${a.dataset.t}을(를) 어떻게 봐야 하나요?`;render(true);{const q=$('#cq');q.focus();q.setSelectionRange(q.value.length,q.value.length);}break;
+  case 'ask':setMode('ins');S.cside=true;S.cq=`${a.dataset.t}을(를) 어떻게 봐야 하나요?`;render(true);{const q=$('#cq');q.focus();q.setSelectionRange(q.value.length,q.value.length);}break;
   case 'theme':{const n=isDark()?'light':'dark';document.documentElement.dataset.theme=n;try{localStorage.setItem('telescope-theme',n);}catch(err){}render(true);break;}
   case 'goTab':S.ftab=v;go('b70');setTimeout(()=>{const d=$('#dash');if(d)d.scrollTop=0;},60);break;
-  case 'toIns':S.cmode='ins';send(v);break;
-  case 'iask':S.cmode='ins';S.cq=v;render(true);{const q=$('#cq');q.focus();q.setSelectionRange(q.value.length,q.value.length);}break;
-  case 'cmode':S.cmode=v;S.cq=$('#cq')?.value||S.cq;render(true);$('#cq')?.focus();break;
+  case 'toIns':setMode('ins');send(v);break;
+  case 'iask':setMode('ins');S.cside=true;S.cq=v;render(true);{const q=$('#cq');q.focus();q.setSelectionRange(q.value.length,q.value.length);}break;
+  case 'cmode':setMode(v);S.cq=$('#cq')?.value||S.cq;render(true);$('#cq')?.focus();break;
   case 'cclose':S.cside=false;render(true);break;
-  case 'sess':S.cur=k;go('i20');break;
+  case 'sess':S.cur=k;S.cmode=sMode(curS());go('i20');break;
   case 'nf':S.nf=v;render(true);break;
+  case 'cfull':S.prevRoute=S.route;S.cside=false;go('i20');break;
+  case 'cmini':S.cside=true;go(S.prevRoute&&S.prevRoute!=='i20'?S.prevRoute:'b10');break;
+  case 'fab':S.cside=!S.cside;render(true);if(S.cside)$('#cq')?.focus();break;
+  case 'cnew':{const id='s'+Date.now();S.sess.unshift({id,t:'새 대화',log:[],mode:S.cmode});S.cur=id;S.cq='';render(true);$('#cq')?.focus();break;}
+  case 'av':S.av=v;render(true);break;
+  case 'al':S.al=v;render(true);break;
+  case 'aq':S.aq=+v;if(S.acell)S.acell=S.acell.split('|')[0]+'|'+v;render(true);break;
+  case 'acell':S.acell=v||null;if(v)S.aq=+v.split('|')[1];render(true);break;
+  case 'aco':S.aco=v;render(true);break;
+  case 'arou':S.arou=!S.arou;if(S.arou&&S.acell&&S.acell.startsWith('rou'))S.acell=null;render(true);break;
+  case 'anot':toast(`${v}는 아직 지원하지 않아요. 별도·분기만 볼 수 있어요`);break;
+  case 'afb':toast(v==='맞음'?'이 근거의 가중을 올려 둘게요':'이 근거는 빼고 다시 계산할게요');break;
+  case 'aask':setMode('ins');S.cside=true;S.cq=`${v} 자산 변동을 어떻게 봐야 하나요?`;render(true);{const q=$('#cq');if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}}break;
   case 'sugg':send(v);break;
  }});
 document.addEventListener('keydown',e=>{
