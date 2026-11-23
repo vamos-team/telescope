@@ -185,7 +185,6 @@ QUEUED ──▶ RUNNING ──▶ SUCCEEDED
 | 조회 권한의 최종 정책 (본인 작업만?) | 로그인한 사용자 전체 | 대상 도메인 구현 시 |
 | 갱신 배치 도입 여부와 트리거 주체 | 조회할 때만 갱신 | datasync 스케줄러 결정과 함께 |
 | 오래된 `QUEUED`/`RUNNING` 작업의 타임아웃 정책 | 없음 | 정리 배치 결정 시 |
-| ai 작업 상태 저장 위치 (루트 CLAUDE.md 7번) | backend의 `Job`만 다룸 | ai 담당자와 합의 |
 | ai 호출 계약 (`PythonAiClient`는 가칭 초안) | Stub 기준 | 실제 ai 서비스 연동 시 |
 | 시간대 | 시스템 기본값 | 시간대 정책 결정 시 (api-spec 미정 항목) |
 | 폴링 간격 권장값 | 정해지지 않음 | api-spec |
