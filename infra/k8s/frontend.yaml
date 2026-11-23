@@ -8,7 +8,6 @@ spec:
   template:
     metadata: { labels: { app: frontend } }
     spec:
-      imagePullSecrets: [{ name: harbor-cred }]
       containers:
         - name: frontend
           image: skala-registry.skala-ai.com/p3-1/frontend 

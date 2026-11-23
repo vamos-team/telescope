@@ -7,5 +7,9 @@ resources:
   - frontend.yaml
   - ingress.yaml
 images:
-  - { name: skala-registry.skala-ai.com/p3-1/frontend, newTag: "3ceb954" }
-  - { name: skala-registry.skala-ai.com/p3-1/backend,  newTag: "3ceb954" }
+  - name: skala-registry.skala-ai.com/p3-1/backend
+    newName: 881490135253.dkr.ecr.ap-northeast-2.amazonaws.com/teams/p3-1/app
+    newTag: backend-placeholder
+  - name: skala-registry.skala-ai.com/p3-1/frontend
+    newName: 881490135253.dkr.ecr.ap-northeast-2.amazonaws.com/teams/p3-1/app
+    newTag: frontend-placeholder

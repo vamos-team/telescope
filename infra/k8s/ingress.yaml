@@ -1,6 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
-metadata: { name: web }
+metadata:
+  name: web
 spec:
   ingressClassName: public-nginx
   tls: [{ hosts: [p3-1.skala-ai.com], secretName: team-tls }]
