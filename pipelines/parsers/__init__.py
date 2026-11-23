@@ -11,17 +11,19 @@
 (suggest_unit_hints: 같은 문서의 비슷한 표에서 bge 임베딩으로 단위를 제안 → parse(unit_hints=...)).
 """
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 from .hints import clear_hints, set_hints, suggest_unit_hints
 from .loaders import load
 from .tables import analyze
+from .vision import VisionHandler, VisionRequest, VisionResult, VisionTask
 
-PARSER_VERSION = "ingest-1.1"
-__all__ = ["parse", "load", "analyze", "set_hints", "clear_hints", "suggest_unit_hints", "PARSER_VERSION"]
+PARSER_VERSION = "ingest-1.2"   # 1.2: PDF를 Docling으로 읽고 쪽·그림 라우팅, VLM 처리기 인터페이스
+__all__ = ["parse", "load", "analyze", "set_hints", "clear_hints", "suggest_unit_hints", "PARSER_VERSION",
+           "VisionHandler", "VisionRequest", "VisionResult", "VisionTask"]
 
 
-def parse(path, vision: Optional[Callable[[bytes, int], dict]] = None,
+def parse(path, vision: Optional[VisionHandler] = None,
           unit_hints: Optional[dict] = None) -> dict:
     """파일 하나 → {"file_type", "title", "page_count", "warnings", "blocks", "tables"}.
 
@@ -29,8 +31,9 @@ def parse(path, vision: Optional[Callable[[bytes, int], dict]] = None,
     (unit_source="hint", 셀 note="unit_from_hint"). 코드가 찾은 단위는 덮어쓰지 않는다.
     표 번호는 힌트 없이 parse()한 결과의 table_no와 같다. 힌트를 만드는 방법: hints.suggest_unit_hints
 
-    vision(png_bytes, page_no) → {"paragraphs": [...], "tables": [[[칸,…],…],…]} 을 주면
-    글자 없는 이미지 쪽(PDF)만 그 함수로 읽고, 그 값에는 origin="vision_llm"이 붙는다.
+    vision(VisionRequest) → VisionResult 처리기를 주면, PDF에서 코드가 고른 영역만 그 함수로 읽는다
+    (글자 없는 쪽, 글자 없는 차트·표 이미지, 사진·도식). 그 값에는 origin="vision_llm"이 붙는다.
+    처리기가 없으면 그 영역 블록에 flags=["needs_vision"]만 남는다. 라우팅 규칙은 vision.py.
     """
     path = Path(path)
     doc = load(path, vision=vision)
@@ -64,7 +67,7 @@ def parse(path, vision: Optional[Callable[[bytes, int], dict]] = None,
             })
         blocks.append({"kind": b.kind, "level": b.level, "section_path": b.section_path,
                        "text": b.text, "page": b.page, "sheet": b.sheet, "table_no": tno,
-                       "flags": b.flags, "origin": b.origin})
+                       "flags": b.flags, "origin": b.origin, "bbox": b.bbox})
     return {"file": str(path), "file_type": doc.file_type, "title": doc.title,
             "page_count": doc.page_count, "warnings": doc.warnings,
             "blocks": blocks, "tables": tables}

@@ -30,8 +30,9 @@ class Block:
     sheet: Optional[str] = None
     grid: Optional[list[list[RawCell]]] = None   # table 전용
     context: list[str] = field(default_factory=list)  # 표 직전 문단(캡션·단위·당기/전기)
-    flags: list[str] = field(default_factory=list)    # 'needs_ocr' 등
+    flags: list[str] = field(default_factory=list)    # 'needs_vision', 'chart', 'total_mismatch' 등
     origin: str = "disclosed_code"                    # disclosed_code | vision_llm
+    bbox: Optional[tuple[float, float, float, float]] = None  # PDF 쪽 안 위치(pt, 왼쪽 위 기준: 왼·위·오른·아래)
 
 
 @dataclass

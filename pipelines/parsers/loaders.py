@@ -11,11 +11,11 @@ import io
 import json
 import re
 from pathlib import Path
-from statistics import median
 from typing import Callable, Optional
 
 from .model import Block, Document, RawCell
 from .numbers import clean, display_scale, is_numeric
+from .vision import VisionHandler
 
 # ─── 제목 판별 (형식 공통) ───────────────────────────────────
 
@@ -243,98 +243,10 @@ def load_html(raw: bytes, file_type: str = "html") -> Document:
 
 # ─── PDF ────────────────────────────────────────────────────
 
-def load_pdf(raw: bytes, vision: Optional[Callable[[bytes, int], dict]] = None) -> Document:
-    """쪽마다 경로를 정한다: 글자가 있으면 코드로(표는 표로), 글자 없는 이미지 쪽만 Vision.
-
-    vision(png_bytes, page_no) → {"paragraphs": [...], "tables": [[[칸,…],…],…]}.
-    Vision 결과는 origin='vision_llm'으로 표시되어 코드가 읽은 값과 섞이지 않는다.
-    """
-    import pdfplumber
-
-    b = _Builder("pdf")
-    with pdfplumber.open(io.BytesIO(raw)) as pdf:
-        b.doc.page_count = len(pdf.pages)
-        sizes = []
-        for p in pdf.pages[:20]:
-            sizes += [round(ch["size"], 1) for ch in p.chars[:3000]]
-        body_size = median(sizes) if sizes else 10.0
-
-        for pno, page in enumerate(pdf.pages, start=1):
-            b.reset_scope(page=pno)
-            if len(page.chars) < 15:
-                flags = ["needs_ocr"] if page.images else ["empty_page"]
-                if page.images and vision is not None:
-                    try:
-                        import pymupdf
-                        png = pymupdf.open(stream=raw, filetype="pdf")[pno - 1].get_pixmap(dpi=150).tobytes("png")
-                        res = vision(png, pno) or {}
-                        b.heading(f"[Vision] {pno}쪽", 2)
-                        for para in res.get("paragraphs") or []:
-                            b.paragraph(str(para), False, origin="vision_llm")
-                        for tb in res.get("tables") or []:
-                            b.table([[RawCell(clean(x)) for x in row] for row in tb],
-                                    flags=["vision"], origin="vision_llm")
-                        flags = ["vision_done"]
-                    except Exception as e:
-                        b.doc.warnings.append(f"{pno}쪽 Vision 실패: {type(e).__name__}: {e}")
-                b.doc.blocks.append(Block("paragraph", len(b.doc.blocks), b.path, "",
-                                          page=pno, flags=flags))
-                if "needs_ocr" in flags:
-                    b.doc.warnings.append(f"{pno}쪽: 글자 없는 이미지 쪽 — 내용 미적재 (Vision 필요)")
-                continue
-            tables = page.find_tables()
-            if not tables:
-                lines_txt = (page.extract_text() or "").splitlines()
-                numeric_lines = sum(1 for ln in lines_txt if len(re.findall(r"\d[\d,.]*", ln)) >= 2)
-                if numeric_lines >= 6:
-                    tables = page.find_tables({"vertical_strategy": "text",
-                                               "horizontal_strategy": "text"})
-            bboxes = [t.bbox for t in tables]
-
-            def outside(obj) -> bool:
-                cx, cy = (obj["x0"] + obj["x1"]) / 2, (obj["top"] + obj["bottom"]) / 2
-                return not any(x0 <= cx <= x1 and t0 <= cy <= t1 for x0, t0, x1, t1 in bboxes)
-
-            words = [w for w in page.extract_words(extra_attrs=["size", "fontname"],
-                                                   keep_blank_chars=False, use_text_flow=True)
-                     if outside(w)]
-            # 줄 단위로 묶기
-            lines: list[dict] = []
-            for w in sorted(words, key=lambda w: (round(w["top"]), w["x0"])):
-                if lines and abs(lines[-1]["top"] - w["top"]) <= 2.5:
-                    lines[-1]["words"].append(w)
-                else:
-                    lines.append({"top": w["top"], "words": [w]})
-            items: list[tuple[float, str, object]] = []
-            for ln in lines:
-                txt = " ".join(w["text"] for w in ln["words"])
-                size = max(w["size"] for w in ln["words"])
-                bold = any("bold" in (w.get("fontname") or "").lower() for w in ln["words"])
-                items.append((ln["top"], "line", (txt, size, bold)))
-            for t in tables:
-                items.append((t.bbox[1], "table", t))
-            for _, kind, obj in sorted(items, key=lambda x: x[0]):
-                if kind == "line":
-                    txt, size, bold = obj
-                    if size >= body_size * 1.35 and len(txt) <= 80:
-                        b.heading(txt, 1 if size >= body_size * 1.8 else 2)
-                    elif (size >= body_size * 1.12 or bold) and len(txt) <= 60 and not is_numeric(txt):
-                        b.heading(txt, 3)
-                    else:
-                        b.paragraph(txt)
-                else:
-                    data = obj.extract() or []
-                    grid = []
-                    for ri, row in enumerate(data):
-                        out, last = [], ""
-                        for cell in row:
-                            if cell is None and ri == 0:
-                                cell = last        # 병합 머리글: 왼쪽 값 이어받기
-                            last = cell or ""
-                            out.append(RawCell(clean(cell or "")))
-                        grid.append(out)
-                    b.table(grid)
-    return b.doc
+def load_pdf(raw: bytes, vision: Optional[VisionHandler] = None) -> Document:
+    """PDF는 Docling으로 읽는다. 쪽·그림 라우팅과 VLM 처리기는 pdf.py, vision.py를 본다."""
+    from .pdf import load_pdf as _load_pdf_docling
+    return _load_pdf_docling(raw, vision=vision)
 
 
 # ─── Excel / CSV ────────────────────────────────────────────
@@ -580,7 +492,7 @@ def sniff(path: Path, raw: bytes) -> Optional[str]:
 
 
 def load(path: Path, raw: Optional[bytes] = None,
-         vision: Optional[Callable[[bytes, int], dict]] = None) -> Document:
+         vision: Optional[VisionHandler] = None) -> Document:
     raw = raw if raw is not None else path.read_bytes()
     ft = sniff(path, raw)
     if ft is None or ft not in LOADERS:
