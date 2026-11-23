@@ -3,82 +3,98 @@ name: CD
 on:
   push:
     branches: [main]
-    paths-ignore: ["infra/k8s/**"]
 
 env:
-  REGISTRY: skala-registry.skala-ai.com
-  PROJECT: p3-1
-  APP: p3-1-web
+  AWS_REGION: ap-northeast-2
+  ROLE_ARN: arn:aws:iam::881490135253:role/gha-p3-1
+  CLUSTER: skala-2026
+  NAMESPACE: p3-1
+  ECR_REPOSITORY: teams/p3-1/app
+
+permissions:
+  id-token: write
+  contents: read
 
 concurrency:
   group: cd-main
   cancel-in-progress: false
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions: { contents: write }
+  deploy:
+    runs-on: [self-hosted, skala-runner]
+    if: github.repository == 'vamos-team/telescope'
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
-      - name: 태그 = 커밋 해시 7자리
-        run: echo "TAG=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: "21", cache: gradle }
+        with: { distribution: temurin, java-version: "21" }
       - name: Backend Test
         working-directory: backend
         run: chmod +x gradlew && ./gradlew test --no-daemon
 
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.HARBOR_USERNAME }}
-          password: ${{ secrets.HARBOR_PASSWORD }}
-      - name: Backend Image Build & Push
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend
-          platforms: linux/amd64
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.PROJECT }}/backend:${{ env.TAG }}
-          cache-from: type=gha,scope=backend
-          cache-to: type=gha,mode=max,scope=backend
-      - name: Frontend Image Build & Push
-        uses: docker/build-push-action@v6
-        with:
-          context: ./frontend
-          platforms: linux/amd64
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.PROJECT }}/frontend:${{ env.TAG }}
-          cache-from: type=gha,scope=frontend
-          cache-to: type=gha,mode=max,scope=frontend
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
 
-      - name: 이미지 태그 갱신 (infra/k8s/kustomization.yaml)
+      - name: Build & push (backend, frontend)
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
-          curl -sL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.3/kustomize_v5.4.3_linux_amd64.tar.gz | tar xz -C "$RUNNER_TEMP" kustomize
-          KUSTOMIZE="$RUNNER_TEMP/kustomize"
-          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git config user.name ci && git config user.email ci@users.noreply.github.com
-          for i in 1 2 3 4 5; do
-            git fetch -q --depth=1 "$REMOTE" main
-            git checkout -q -B deploy FETCH_HEAD
-            for s in frontend backend; do
-              (cd infra/k8s && "$KUSTOMIZE" edit set image "$REGISTRY/$PROJECT/$s=$REGISTRY/$PROJECT/$s:$TAG")
-            done
-            if git diff --quiet; then echo "이미 $TAG 로 설정돼 있음"; exit 0; fi
-            git commit -qam "deploy: ${TAG}"
-            if git push -q "$REMOTE" HEAD:main; then exit 0; fi
-            echo "push 거절됨, 최신 main 으로 다시 시도 ($i/5)"; sleep 5
+          for svc in backend frontend; do
+            TAG="${svc}-${GITHUB_SHA}"
+            if aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$TAG" >/dev/null 2>&1; then
+              echo "$TAG 는 이미 ECR 에 있음, 빌드/푸시 건너뜀"
+            else
+              docker buildx build --platform linux/amd64 -t "$REGISTRY/$ECR_REPOSITORY:$TAG" --push "./$svc"
+            fi
           done
-          exit 1
+          echo "REGISTRY=$REGISTRY" >> "$GITHUB_ENV"
 
-      - name: Argo CD sync
+      - name: kustomize 설치
         run: |
-          curl -sSL -o argocd https://skala-argocd.skala-ai.com/download/argocd-linux-amd64 && chmod +x argocd
-          ./argocd app sync "$APP" --server skala-argocd.skala-ai.com --grpc-web --auth-token "${{ secrets.ARGOCD_CI_TOKEN }}" --timeout 300
-          ./argocd app wait "$APP" --server skala-argocd.skala-ai.com --grpc-web --auth-token "${{ secrets.ARGOCD_CI_TOKEN }}" --health --timeout 300
+          OS=$(uname -s | tr '[:upper:]' '[:lower:]'); ARCH=$(uname -m); [ "$ARCH" = x86_64 ] && ARCH=amd64; [ "$ARCH" = aarch64 ] && ARCH=arm64
+          curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.3/kustomize_v5.4.3_${OS}_${ARCH}.tar.gz" | tar xz -C "$RUNNER_TEMP" kustomize
+
+      - name: 클러스터 연결
+        run: aws eks update-kubeconfig --name "$CLUSTER" --region "$AWS_REGION"
+
+      - name: 이미지 태그 지정
+        working-directory: infra/k8s
+        run: |
+          "$RUNNER_TEMP/kustomize" edit set image \
+            "skala-registry.skala-ai.com/p3-1/backend=$REGISTRY/$ECR_REPOSITORY:backend-${GITHUB_SHA}" \
+            "skala-registry.skala-ai.com/p3-1/frontend=$REGISTRY/$ECR_REPOSITORY:frontend-${GITHUB_SHA}"
+
+      # Ingress 의 허용 IP 는 저장소에 두지 않고 시크릿 ALLOWED_IPS에서 받아 배포 때만 넣는다.
+      - name: 허용 IP 주입
+        working-directory: infra/k8s
+        env:
+          ALLOWED_IPS: ${{ secrets.ALLOWED_IPS }}
+        run: |
+          ALLOWED_IPS=$(printf '%s' "$ALLOWED_IPS" | tr -d '\r\n')   # 끝의 줄바꿈만 제거
+          test -n "$ALLOWED_IPS" || { echo "시크릿 ALLOWED_IPS 가 비어 있음"; exit 1; }
+          # 값은 로그에 찍지 않고 형식만 확인한다: x.x.x.x/32 를 쉼표로만 이은 한 줄 (공백, 줄바꿈 없음)
+          printf '%s' "$ALLOWED_IPS" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}/32(,([0-9]{1,3}\.){3}[0-9]{1,3}/32)*$' \
+            || { echo "시크릿 ALLOWED_IPS 형식이 올바르지 않음 (예: 1.2.3.4/32,5.6.7.8/32)"; exit 1; }
+          cat > ingress-allowed-ips.yaml <<EOF
+          apiVersion: networking.k8s.io/v1
+          kind: Ingress
+          metadata:
+            name: web
+            annotations:
+              nginx.ingress.kubernetes.io/whitelist-source-range: "$ALLOWED_IPS"
+          EOF
+          printf 'patches:\n  - path: ingress-allowed-ips.yaml\n' >> kustomization.yaml
+          kubectl kustomize . | grep -q 'whitelist-source-range' || { echo "허용 IP 가 렌더링 결과에 없음"; exit 1; }
+
+      - name: 배포
+        working-directory: infra/k8s
+        run: |
+          kubectl -n "$NAMESPACE" apply -k .
+          kubectl -n "$NAMESPACE" rollout status deployment/backend --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deployment/frontend --timeout=300s
