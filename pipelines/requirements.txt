@@ -4,6 +4,7 @@ docling==2.145.0         # PDF (로컬 모델: 레이아웃·표 구조·그림 
 PyMuPDF==1.27.2.2        # PDF의 글자 없는 쪽을 VLM 처리기에 넘길 때만, 테스트 PDF 생성
 openpyxl==3.1.5          # Excel
 python-pptx==1.0.2       # PowerPoint
+openai==3.46.0           # VLM 처리기(pipelines/vision). 키(OPENAI_API_KEY)가 없으면 쓰지 않는다
 
 selenium==4.52.0         # 수집: JS 렌더링 페이지 (Chrome 필요, 드라이버는 Selenium Manager가 받는다)
 
