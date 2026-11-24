@@ -48,6 +48,7 @@ MODEL_ENV = "PARSER_EMBED_MODEL"   # 임베딩 모델은 .env의 설정값으로
 ALPHA = 0.1                     # 글자 유사도 비중. 튜닝에 안 쓴 회사로 나눠 세 번 골라 세 번 모두 0.1
 _NO = re.compile(r"^\s*(\d{1,2}(-\d)?\s*[.)]|[-·]\s)\s*")
 _models: dict = {}
+_vecs: dict[str, dict[str, np.ndarray]] = {}
 
 
 def _setting(name: str) -> str:
@@ -88,7 +89,12 @@ def _embed(texts: list[str], model: str):
     m = _models[model]
     # 모델이 정해 둔 입력 앞머리(예: arctic "query: ")가 있으면 쓴다 — 모델을 바꿔도 맞게 돌도록
     kw = {"prompt_name": "query"} if (getattr(m, "prompts", None) or {}).get("query") else {}
-    return m.encode(texts, batch_size=32, normalize_embeddings=True, show_progress_bar=False, **kw)
+    # 같은 후보 목록(XBRL 계정·항목 이름표)을 표마다 다시 넣으므로 문장별로 한 번만 계산한다
+    cache = _vecs.setdefault(model, {})
+    new = list(dict.fromkeys(t for t in texts if t not in cache))
+    if new:
+        cache.update(zip(new, m.encode(new, batch_size=32, normalize_embeddings=True, show_progress_bar=False, **kw)))
+    return np.array([cache[t] for t in texts])
 
 
 def label_text(item: dict) -> str:
@@ -127,17 +133,39 @@ def _char_sim(a: list[str], b: list[str]) -> np.ndarray:
         return Counter(t[i:i + n] for n in (2, 3) for i in range(len(t) - n + 1))
 
     docs = [grams(t) for t in a + b]
-    vocab = {g: k for k, g in enumerate({g for d in docs for g in d})}
     df = Counter(g for d in docs for g in d)
-    idf = np.zeros(len(vocab))
-    for g, k in vocab.items():
-        idf[k] = math.log((1 + len(docs)) / (1 + df[g])) + 1
-    m = np.zeros((len(docs), len(vocab)))
-    for r, d in enumerate(docs):
-        for g, c in d.items():
-            m[r, vocab[g]] = c * idf[vocab[g]]
-    m /= np.maximum(np.linalg.norm(m, axis=1, keepdims=True), 1e-12)
-    return m[: len(a)] @ m[len(a):].T
+    idf = {g: math.log((1 + len(docs)) / (1 + k)) + 1 for g, k in df.items()}
+    vecs = []
+    for d in docs:
+        v = {g: c * idf[g] for g, c in d.items()}
+        norm = max(math.sqrt(sum(x * x for x in v.values())), 1e-12)
+        vecs.append({g: x / norm for g, x in v.items()})
+    # 후보가 수천 개여도 빠르도록 조각 → 후보 색인으로 겹치는 조각만 곱한다
+    index: dict[str, list[tuple[int, float]]] = {}
+    for j, v in enumerate(vecs[len(a):]):
+        for g, x in v.items():
+            index.setdefault(g, []).append((j, x))
+    out = np.zeros((len(a), len(b)))
+    for i, v in enumerate(vecs[: len(a)]):
+        for g, x in v.items():
+            for j, y in index.get(g, ()):
+                out[i, j] += x * y
+    return out
+
+
+def similarity(items: list[dict], slots: list[dict]) -> np.ndarray:
+    """항목 × 후보 점수 행렬: ALPHA × 글자 유사도 + (1 − ALPHA) × 임베딩 코사인. 값 형식이 안 맞는 칸은 -inf.
+    임베딩 모델은 설정값 PARSER_EMBED_MODEL로 정한다."""
+    model = _setting(MODEL_ENV)
+    if not model:
+        raise RuntimeError(f"임베딩 모델이 설정되지 않았습니다 — 환경변수 또는 .env의 {MODEL_ENV}에 "
+                           "모델 이름(저장소, 저장소/하위폴더, 로컬 경로)을 넣으세요. 예시는 .env.example")
+    x = _embed([item_text(i) for i in items], model)
+    y = _embed([item_text(s) for s in slots], model)
+    names = [_NO.sub("", i["name"]).strip() if i.get("name") else label_text(i) for i in items + slots]
+    sim = ALPHA * _char_sim(names[: len(items)], names[len(items):]) + (1 - ALPHA) * (x @ y.T)
+    sv = [_vtype(s) for s in slots]
+    return np.array([np.where([_same_kind(_vtype(i), v) for v in sv], row, -np.inf) for i, row in zip(items, sim)])
 
 
 def align(items: list[dict], slots: list[dict], one_to_one: bool = False) -> list[dict]:
@@ -154,16 +182,7 @@ def align(items: list[dict], slots: list[dict], one_to_one: bool = False) -> lis
         return []
     if not slots:
         return [dict(none) for _ in items]
-    model = _setting(MODEL_ENV)
-    if not model:
-        raise RuntimeError(f"임베딩 모델이 설정되지 않았습니다 — 환경변수 또는 .env의 {MODEL_ENV}에 "
-                           "모델 이름(저장소, 저장소/하위폴더, 로컬 경로)을 넣으세요. 예시는 .env.example")
-    x = _embed([item_text(i) for i in items], model)
-    y = _embed([item_text(s) for s in slots], model)
-    names = [_NO.sub("", i["name"]).strip() if i.get("name") else label_text(i) for i in items + slots]
-    sim = ALPHA * _char_sim(names[: len(items)], names[len(items):]) + (1 - ALPHA) * (x @ y.T)
-    sv = [_vtype(s) for s in slots]
-    sim = np.array([np.where([_same_kind(_vtype(i), v) for v in sv], row, -np.inf) for i, row in zip(items, sim)])
+    sim = similarity(items, slots)
     out = [dict(none) for _ in items]
     if one_to_one:
         order = [(i, j) for i, j in zip(*np.unravel_index(np.argsort(-sim, axis=None), sim.shape)) if sim[i, j] > -np.inf]

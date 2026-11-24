@@ -92,7 +92,7 @@ def build(zip_dir: str | Path) -> dict:
                     for k, role in ks:
                         if k != b and _std(k) and not k.endswith("Abstract"):
                             e["items"][k] += 1
-                            e["neg"][k] += role == "negatedLabel"
+                            e["neg"][k] += role.startswith("negated")      # negatedTerseLabel 등 포함
                     for ax in axes:
                         for m in below(ax):
                             if m.endswith("Member") and _std(m):

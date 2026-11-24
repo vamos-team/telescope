@@ -181,6 +181,17 @@ def unspace(text: str) -> str:
     return t
 
 
+def _rel_periods(t: str) -> list[tuple[int, str]]:
+    """상대 기간 낱말의 (위치, 라벨) 목록. 뒤에 한글이 이어지면 다른 단어('전기통신설비', '당기손익') — 초/말만 허용."""
+    return [(m.start(), lab) for kw, lab in _REL_PERIOD
+            for m in re.finditer(rf"(?<![가-힣]){kw}(?=$|[^가-힣]|초|말)", t)]
+
+
+def periods_in(text: str) -> set[str]:
+    """글에 나오는 상대 기간 라벨 전부('당기 및 전기 중' → {'current', 'prior'})."""
+    return {lab for _, lab in _rel_periods(unspace(text))}
+
+
 def detect_period(text: str) -> str:
     """머리글·문맥 텍스트에서 기간 라벨. 상대(당기/전기)가 절대보다 우선.
 
@@ -189,14 +200,9 @@ def detect_period(text: str) -> str:
     t = unspace(text)
     if not t:
         return ""
-    best = None
-    for kw, lab in _REL_PERIOD:
-        # 뒤에 한글이 이어지면 다른 단어('전기통신설비', '당기손익') — 초/말만 허용
-        for m in re.finditer(rf"(?<![가-힣]){kw}(?=$|[^가-힣]|초|말)", t):
-            if best is None or m.start() > best[0]:
-                best = (m.start(), lab)
-    if best:
-        return best[1]
+    rel = _rel_periods(t)
+    if rel:
+        return max(rel)[1]
     for pat, fn in _PERIOD_PATTERNS:
         m = pat.search(t)
         if m:
