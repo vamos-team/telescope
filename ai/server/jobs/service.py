@@ -7,7 +7,7 @@ from typing import Any
 from jobs.models import Job, JobType
 from jobs.pipeline import JobContext
 from jobs.repository import JobRepository
-from jobs.worker import JobWorker, QueuedJob
+from jobs.worker import SHUTDOWN_ERROR_MESSAGE, JobWorker, QueuedJob, WorkerUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +36,15 @@ class JobService:
                 else None
             ),
         )
+        if not self._worker.is_accepting:
+            raise WorkerUnavailableError
         self._repository.create(job_id, job_type)
-        self._worker.submit(QueuedJob(job_type=job_type, context=context, payload=payload))
+        try:
+            self._worker.submit(QueuedJob(job_type=job_type, context=context, payload=payload))
+        except WorkerUnavailableError:
+            # 행을 만든 직후 종료가 시작된 경우. QUEUED로 남기지 않는다
+            self._repository.mark_failed(job_id, SHUTDOWN_ERROR_MESSAGE)
+            raise
         return job_id
 
     def get_job(self, job_id: str) -> Job | None:

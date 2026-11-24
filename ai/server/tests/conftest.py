@@ -20,13 +20,26 @@ ANALYSIS_BODY = {
 }
 
 
-def make_settings(db_path: str, max_concurrent_jobs: int = 2) -> Settings:
-    return Settings(
-        _env_file=None,
-        internal_api_key=API_KEY,
-        db_path=db_path,
-        max_concurrent_jobs=max_concurrent_jobs,
-    )
+def make_settings(db_path: str, max_concurrent_jobs: int = 2, **overrides) -> Settings:
+    values = {
+        "internal_api_key": API_KEY,
+        "db_path": db_path,
+        "max_concurrent_jobs": max_concurrent_jobs,
+        "shutdown_timeout_seconds": 5.0,
+        "store_retry_attempts": 2,
+        "store_retry_delay_seconds": 0.01,
+        "pending_retry_interval_seconds": 0.05,
+        **overrides,
+    }
+    return Settings(_env_file=None, **values)
+
+
+def wait_until(condition: Callable[[], bool], timeout: float = 5.0) -> None:
+    deadline = time.monotonic() + timeout
+    while not condition():
+        if time.monotonic() > deadline:
+            raise AssertionError("timeout waiting for condition")
+        time.sleep(0.01)
 
 
 def registry_with(fn: PipelineFn) -> PipelineRegistry:

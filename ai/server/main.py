@@ -13,7 +13,7 @@ from jobs.registry import PipelineRegistry, build_fake_registry
 from jobs.repository import JobRepository
 from jobs.router import router as jobs_router
 from jobs.service import JobService
-from jobs.worker import JobWorker
+from jobs.worker import JobWorker, WorkerUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +32,16 @@ def create_app(settings: Settings | None = None, registry: PipelineRegistry | No
             repository,
             registry or build_fake_registry(resolved.fake_pipeline_mode, resolved.fake_pipeline_delay_seconds),
             resolved.max_concurrent_jobs,
+            shutdown_timeout=resolved.shutdown_timeout_seconds,
+            store_retry_attempts=resolved.store_retry_attempts,
+            store_retry_delay=resolved.store_retry_delay_seconds,
+            pending_retry_interval=resolved.pending_retry_interval_seconds,
         )
         service = JobService(repository, worker)
         service.fail_interrupted_jobs()
 
         app.state.settings = resolved
+        app.state.worker = worker
         app.state.job_service = service
         worker.start()
         try:
@@ -54,6 +59,13 @@ def create_app(settings: Settings | None = None, registry: PipelineRegistry | No
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content=jsonable_encoder({"detail": errors}),
+        )
+
+    @app.exception_handler(WorkerUnavailableError)
+    async def worker_unavailable_handler(request: Request, exc: WorkerUnavailableError) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"detail": "서버가 작업을 받을 수 없는 상태입니다."},
         )
 
     @app.exception_handler(Exception)
