@@ -89,6 +89,27 @@ class VisionRunnerTest(unittest.TestCase):
         r.close()
         self.assertTrue(any("반환 형식" in w for w in r.warnings))
 
+    def test_call_limit(self):
+        calls = []
+
+        def handler(req):
+            calls.append(req.image_png)
+            return VisionResult(description="설명")
+
+        r = VisionRunner(handler, max_calls=2)
+        results = [r.run(_req(png=bytes([i]))) for i in range(4)]
+        self.assertIsNotNone(r.run(_req(png=bytes([0]))))   # 캐시는 상한에 세지 않는다
+        r.close()
+        self.assertEqual(len(calls), 2)
+        self.assertEqual([x is not None for x in results], [True, True, False, False])
+        self.assertTrue(any("호출 상한(2번)" in w and "2개" in w for w in r.warnings))
+
+    def test_no_call_limit_by_default(self):
+        r = VisionRunner(lambda req: VisionResult(description="설명"))
+        self.assertTrue(all(r.run(_req(png=bytes([i]))) for i in range(40)))
+        r.close()
+        self.assertEqual(r.warnings, [])
+
 
 if __name__ == "__main__":
     unittest.main()

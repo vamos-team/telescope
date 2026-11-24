@@ -50,6 +50,9 @@ VisionHandler = Callable[[VisionRequest], Optional[VisionResult]]
 
 # ─── 라우팅 규칙 ─────────────────────────────────────────────
 
+# 문서 하나에서 VLM 처리기를 부르는 최대 횟수(비용 상한). 같은 이미지 재사용(캐시)은 세지 않는다
+VISION_MAX_CALLS = 30
+
 # 쪽의 텍스트 층 글자 수가 이보다 적으면 "글자 없는 쪽"으로 본다 (기존 pdfplumber 기준과 같음)
 MIN_PAGE_CHARS = 15
 
@@ -102,9 +105,13 @@ class VisionRunner:
       처리기 쪽에도 자체 시간 제한을 두어야 한다.
     """
 
-    def __init__(self, handler: Optional[VisionHandler], timeout: float = 600.0):
+    def __init__(self, handler: Optional[VisionHandler], timeout: float = 600.0,
+                 max_calls: Optional[int] = None):
         self.handler = handler
         self.timeout = timeout
+        self.max_calls = max_calls      # None이면 상한 없음
+        self.calls = 0
+        self.skipped = 0                # 상한을 넘어 부르지 않은 요청 수
         self.warnings: list[str] = []
         self._cache: dict[str, Optional[VisionResult]] = {}
         self._pool = ThreadPoolExecutor(max_workers=1) if handler else None
@@ -119,6 +126,10 @@ class VisionRunner:
         key = req.task.value + ":" + hashlib.sha256(req.image_png).hexdigest()
         if key in self._cache:
             return self._cache[key]
+        if self.max_calls is not None and self.calls >= self.max_calls:
+            self.skipped += 1
+            return None
+        self.calls += 1
         where = f"{req.page}쪽 {req.task.value}"
         res: Optional[VisionResult] = None
         try:
@@ -132,6 +143,10 @@ class VisionRunner:
         return res
 
     def close(self) -> None:
+        if self.skipped:
+            self.warnings.append(f"VLM 호출 상한({self.max_calls}번) 초과: {self.skipped}개 영역은 "
+                                 "처리하지 않음 (needs_vision)")
+            self.skipped = 0
         if self._pool is not None:
             self._pool.shutdown(wait=False, cancel_futures=True)
 
