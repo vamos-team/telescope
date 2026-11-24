@@ -5,7 +5,7 @@ from datetime import date
 
 import pytest
 
-from conftest import ANALYSIS_BODY, HEADERS, wait_for
+from conftest import ANALYSIS_BODY, HEADERS, wait_for, wait_until
 from jobs.models import JobType
 from jobs.pipeline import PipelineError
 from jobs.repository import JobRepository
@@ -99,20 +99,27 @@ def test_long_error_message_is_truncated(make_client):
 def test_concurrency_is_limited(make_client):
     lock = threading.Lock()
     state = {"current": 0, "max": 0}
+    release = threading.Event()
 
     def tracked(ctx, payload):
         with lock:
             state["current"] += 1
             state["max"] = max(state["max"], state["current"])
-        time.sleep(0.2)
+        release.wait(5)
         with lock:
             state["current"] -= 1
         return {}
 
     client = make_client(tracked, max_concurrent_jobs=2)
     job_ids = [
-        client.post(f"{JOBS}/analysis", json=ANALYSIS_BODY, headers=HEADERS).json()["jobId"] for _ in range(5)
+        client.post(f"{JOBS}/analysis", json=ANALYSIS_BODY, headers=HEADERS).json()["jobId"] for _ in range(3)
     ]
+    # 워커 2개가 모두 막혀 있으면 세 번째는 시작될 수 없다
+    wait_until(lambda: state["current"] == 2)
+    statuses = sorted(client.get(f"{JOBS}/{j}", headers=HEADERS).json()["status"] for j in job_ids)
+    assert statuses == ["QUEUED", "RUNNING", "RUNNING"]
+
+    release.set()
     for job_id in job_ids:
         wait_for(client, job_id, {"SUCCEEDED"})
     assert state["max"] == 2
