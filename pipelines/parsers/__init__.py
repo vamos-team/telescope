@@ -18,7 +18,7 @@ from .loaders import load
 from .tables import analyze
 from .vision import VisionHandler, VisionRequest, VisionResult, VisionTask
 
-PARSER_VERSION = "ingest-1.2"   # 1.2: PDF를 Docling으로 읽고 쪽·그림 라우팅, VLM 처리기 인터페이스
+PARSER_VERSION = "ingest-1.3"   # 1.3: tables에 원문 격자(rows) 추가. 1.2: PDF를 Docling으로 읽고 쪽·그림 라우팅
 __all__ = ["parse", "load", "analyze", "set_hints", "clear_hints", "suggest_unit_hints", "PARSER_VERSION",
            "VisionHandler", "VisionRequest", "VisionResult", "VisionTask"]
 
@@ -55,6 +55,7 @@ def parse(path, vision: Optional[VisionHandler] = None,
                 "period_source": ta.period_source, "header_rows": ta.header_rows,
                 "label_cols": ta.label_cols, "header_paths": ta.header_paths,
                 "warnings": ta.warnings, "origin": b.origin,
+                "rows": [[c.text for c in row] for row in b.grid],   # 원문 격자(머리글·행 이름 포함). 마크다운 변환용
                 "cells": [{
                     "r": c.r, "c": c.c, "row_path": c.row_path, "row_label": c.row_label,
                     "col_path": c.col_path, "text": c.text, "value": c.value,
