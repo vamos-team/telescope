@@ -22,17 +22,21 @@ MVP 제외: 콜백(작업 상태는 폴링으로 조회), 사내 데이터 연�
 | docs | `docs/` | 설계 문서 |
 | frontend | `frontend/` | Vue 3 + TypeScript |
 | backend | `backend/` | Spring Boot API 서버. 세부 규칙은 `backend/CLAUDE.md` |
-| ai | `pipelines/`, `mcp-server/`, `ai/`(확인 필요) | 수집, 파싱, 적재, 조회 도구, 분석·예측 서비스 |
+| ai | `pipelines/`, `mcp-server/`, `ai/` | 수집, 파싱, 적재, 조회 도구, 분석·예측 서비스 |
 | infra | `infra/`, `.github/workflows/`, `docker-compose.yml` | CI/CD, 실행 환경 |
 
 - `pipelines/collectors`: 외부 원본 수집만 (파싱·가공 금지)
 - `pipelines/parsers`: 원본 → 구조화 (네트워크·DB 접근 금지)
 - `pipelines/loaders`: DART 재무 수치 → DuckDB 적재 배치
 - `mcp-server`: 읽기 전용 조회 도구
+- `ai/server`: FastAPI 껍데기(HTTP 서버, 작업 상태 관리). 코드 위치는 `ai/` 아래지만 **담당은
+  backend**다(회의 결정: HTTP 껍데기·job 관리는 backend, 작업별 구체적 API·파이프라인은 ai).
+  `ai/server`를 제외한 `ai/`의 나머지(분석·예측 로직, 파이프라인 연결)는 ai 담당이다.
 - `data/`: DB·캐시. git에는 `.gitkeep`만 올라간다. 팀원마다 로컬 내용이 다르다.
 
 **담당 영역 규칙**
-- **사용자가 지정한 영역의 폴더 안에서만 작업한다.**
+- **사용자가 지정한 영역의 폴더 안에서만 작업한다.** 담당은 기본적으로 폴더 단위이지만, 이
+  문서가 하위 폴더별로 담당을 따로 적어둔 경우(`ai/server` 등)는 그 하위 폴더 단위를 따른다.
 - 다른 영역의 파일을 바꿔야 하면 수정하지 말고 멈춘다. 무엇을 왜 바꿔야 하는지 알리고 담당자와 논의한 뒤 진행한다.
 - 루트 파일(`README.md`, `CLAUDE.md`, `.env.example`, `.gitignore`)은 사용자가 지시했을 때만 수정한다.
 
@@ -107,7 +111,6 @@ MVP 제외: 콜백(작업 상태는 폴링으로 조회), 사내 데이터 연�
 
 ## 7. 아직 정해지지 않은 것 (임의로 정하지 말 것)
 
-- ai 서비스의 작업 상태 저장 위치
 - 예산 보고서의 파일 형식
 - 채팅 응답 방식 (일반 JSON vs SSE)
 - 신규 자료 자동 반영·알림 기능의 포함 여부
