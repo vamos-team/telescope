@@ -9,13 +9,15 @@ from __future__ import annotations
 
 import io
 import math
+import re
 from typing import Optional
 
 from .model import Block, Document, RawCell
 from .numbers import clean, parse_number
 from .tables import is_total_label
-from .vision import (PageRoute, PictureRoute, VisionHandler, VisionRequest, VisionResult,
-                     VisionRunner, VisionTask, route_page, route_picture)
+from .vision import (DECOR_CLASSES, MIN_PAGE_CHARS, MIN_PAGE_EDGES, VISION_MAX_CALLS, PageRoute,
+                     PictureRoute, VisionHandler, VisionRequest, VisionResult, VisionRunner, VisionTask,
+                     route_page, route_picture)
 
 _CONVERTER = None
 
@@ -48,6 +50,33 @@ def _render_page(raw: bytes, pno: int, dpi: int = 150) -> bytes:
         return pdf[pno - 1].get_pixmap(dpi=dpi).tobytes("png")
 
 
+def _edge_ratio(raw: bytes, pno: int, masks: list[tuple[float, float, float, float]],
+                dpi: int = 50, threshold: int = 48) -> float:
+    """쪽 이미지에서 masks(왼쪽 위 원점, pt)를 흰색으로 가린 뒤, 이웃 픽셀과 밝기 차가 큰 픽셀의 비율.
+
+    글자·표·선은 윤곽이 많고, 배경색과 그러데이션은 윤곽이 거의 없다.
+    """
+    import pymupdf
+    with pymupdf.open(stream=raw, filetype="pdf") as pdf:
+        pix = pdf[pno - 1].get_pixmap(dpi=dpi, colorspace=pymupdf.csGRAY)
+    k = dpi / 72
+    for x0, y0, x1, y1 in masks:
+        ir = pymupdf.IRect(int(x0 * k) - 2, int(y0 * k) - 2, int(x1 * k) + 3, int(y1 * k) + 3) & pix.irect
+        if not ir.is_empty:
+            pix.set_rect(ir, (255,))
+    w, h, px = pix.width, pix.height, pix.samples
+    if w < 2 or h < 2:
+        return 0.0
+    n = 0
+    for y in range(h - 1):
+        row, nxt = px[y * w:(y + 1) * w], px[(y + 1) * w:(y + 2) * w]
+        for x in range(w - 1):
+            v = row[x]
+            if abs(v - row[x + 1]) > threshold or abs(v - nxt[x]) > threshold:
+                n += 1
+    return n / ((w - 1) * (h - 1))
+
+
 def _png(img) -> bytes:
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -55,8 +84,12 @@ def _png(img) -> bytes:
 
 
 def load_pdf(raw: bytes, vision: Optional[VisionHandler] = None,
-             vision_timeout: float = 600.0) -> Document:
-    """PDF 바이트 → Document. vision이 없으면 VLM이 필요한 곳에 needs_vision 표시만 남긴다."""
+             vision_timeout: float = 600.0,
+             vision_max_calls: Optional[int] = VISION_MAX_CALLS) -> Document:
+    """PDF 바이트 → Document. vision이 없으면 VLM이 필요한 곳에 needs_vision 표시만 남긴다.
+
+    vision_max_calls: 문서 하나에서 처리기를 부르는 최대 횟수(비용 상한). 넘는 영역은 needs_vision.
+    """
     from docling.datamodel.base_models import DocumentStream
     from docling_core.types.doc import (PictureItem, SectionHeaderItem, TableItem, TextItem,
                                         TitleItem)
@@ -65,7 +98,7 @@ def load_pdf(raw: bytes, vision: Optional[VisionHandler] = None,
     ddoc = _converter().convert(DocumentStream(name="input.pdf", stream=io.BytesIO(raw))).document
     b = _Builder("pdf")
     b.doc.page_count = len(ddoc.pages) or None
-    runner = VisionRunner(vision, timeout=vision_timeout)
+    runner = VisionRunner(vision, timeout=vision_timeout, max_calls=vision_max_calls)
     state = {"needs_vision": 0, "page": 0}
 
     def page_of(item) -> Optional[int]:
@@ -98,8 +131,8 @@ def load_pdf(raw: bytes, vision: Optional[VisionHandler] = None,
         if res.description:
             b.paragraph(res.description, False, origin="vision_llm")
         for tb in res.tables:
-            b.table([[RawCell(clean(x)) for x in row] for row in tb], flags=["vision"],
-                    origin="vision_llm")
+            b.table([[RawCell(clean(x)) for x in row] for row in tb],
+                    flags=["vision"] + vision_table_flags(tb), origin="vision_llm")
         mark(start, ["vision"] + flags, bbox)
 
     def ask(task: VisionTask, image_png: Optional[bytes], pno: int, bbox, cls: str = ""):
@@ -116,18 +149,35 @@ def load_pdf(raw: bytes, vision: Optional[VisionHandler] = None,
     # 1) 쪽마다 텍스트 층 글자 수와 그림 종류 (그림 안 글자 포함) → 쪽 경로
     chars: dict[int, int] = {}
     pics: dict[int, list[str]] = {}
+    masks: dict[int, list] = {}          # 이미 설명된 영역: 글자 있는 텍스트 항목, 로고·아이콘
+    unread_table: set[int] = set()       # 칸 글자가 하나도 없는 표 (스캔한 표)
     for item, _ in ddoc.iterate_items(traverse_pictures=True):
         pno = page_of(item)
         if pno is None:
             continue
         if isinstance(item, TextItem):
-            chars[pno] = chars.get(pno, 0) + len(clean(item.text))
+            n = len(clean(item.text))
+            chars[pno] = chars.get(pno, 0) + n
+            if n and bbox_of(item):
+                masks.setdefault(pno, []).append(bbox_of(item))
         elif isinstance(item, TableItem):
-            chars[pno] = chars.get(pno, 0) + sum(len(clean(c.text)) for c in item.data.table_cells)
+            n = sum(len(clean(c.text)) for c in item.data.table_cells)
+            chars[pno] = chars.get(pno, 0) + n
+            if not n:
+                unread_table.add(pno)
         elif isinstance(item, PictureItem):
-            pics.setdefault(pno, []).append(class_of(item))
+            cls = class_of(item)
+            pics.setdefault(pno, []).append(cls)
+            if cls in DECOR_CLASSES and bbox_of(item):
+                masks.setdefault(pno, []).append(bbox_of(item))
     n_pages = b.doc.page_count or 0
-    page_route = {p: route_page(chars.get(p, 0), pics.get(p, [])) for p in range(1, n_pages + 1)}
+
+    def unread(p: int) -> bool:
+        if chars.get(p, 0) >= MIN_PAGE_CHARS:
+            return False   # 글자 있는 쪽은 Docling 경로라 볼 필요 없음
+        return p in unread_table or _edge_ratio(raw, p, masks.get(p, [])) >= MIN_PAGE_EDGES
+
+    page_route = {p: route_page(chars.get(p, 0), pics.get(p, []), unread(p)) for p in range(1, n_pages + 1)}
     text_pages = {p for p, r in page_route.items() if r == PageRoute.TEXT}
 
     def image_page(pno: int) -> None:
@@ -176,6 +226,10 @@ def load_pdf(raw: bytes, vision: Optional[VisionHandler] = None,
         img = item.get_image(ddoc) if runner.enabled else None
         png = _png(img) if img is not None else None
         if route == PictureRoute.CHART_VISION:
+            # 영역 안 글자(단위·범례)는 코드가 읽은 문단으로 남기고, 값은 VLM [차트→표]
+            for t in texts:
+                b.paragraph(t, False)
+            mark(start, ["picture_text"] + tag, bbox)
             res = ask(VisionTask.TO_TABLE, png, pno, bbox, cls)
             if res is None:
                 placeholder(["needs_vision", "chart"] + tag, bbox)
@@ -222,7 +276,10 @@ def load_pdf(raw: bytes, vision: Optional[VisionHandler] = None,
     if state["needs_vision"]:
         b.doc.warnings.append(f"VLM이 필요한 영역 {state['needs_vision']}개 — 처리기 미연결 또는 실패 (needs_vision)")
     for flag, what in (("repeated_header", "머리글 행이 표 중간에 다시 나오는 표"),
-                       ("total_mismatch", "합계 검산이 맞지 않는 표")):
+                       ("total_mismatch", "합계 검산이 맞지 않는 표"),
+                       ("growth_mismatch", "증감률이 값과 맞지 않는 VLM 표"),
+                       ("vision_ragged", "행마다 칸 수가 다른 VLM 표"),
+                       ("vision_bad_number", "숫자로 읽히지 않는 칸이 있는 VLM 표")):
         n = sum(1 for blk in b.doc.blocks if flag in blk.flags)
         if n:
             b.doc.warnings.append(f"{what} {n}개 — 표가 합쳐졌거나 값이 밀렸을 수 있음 ({flag})")
@@ -316,3 +373,169 @@ def total_mismatch(grid: list[list[RawCell]]) -> bool:
                 return True
         seg_start = r + 1
     return False
+
+
+# ─── VLM 표 검증 (VLM이 만든 표에만 쓴다) ─────────────────────
+
+_PERIOD_Q = re.compile(r"^(?:([1-4])\s*Q\s*'?(\d{2}|\d{4})|'?(\d{2}|\d{4})\s*\.?\s*([1-4])\s*Q)$", re.I)
+_PERIOD_Y = re.compile(r"^(\d{4})\s*년?$")
+_NUMBERISH = re.compile(r"^[\d\s,.%+\-−–△▽()（）]*\d[\d\s,.%+\-−–△▽()（）]*$")
+
+
+def _period(text: str) -> Optional[tuple[int, int]]:
+    """'2Q25' → (2025, 2), '25.2Q' → (2025, 2), '2025' → (2025, 0). 기간이 아니면 None."""
+    t = clean(text).replace(" ", "")
+    m = _PERIOD_Q.match(t)
+    if m:
+        q, y = (m.group(1), m.group(2)) if m.group(1) else (m.group(4), m.group(3))
+        y = int(y)
+        return (y + 2000 if y < 100 else y, int(q))
+    m = _PERIOD_Y.match(t)
+    return (int(m.group(1)), 0) if m else None
+
+
+def _signed(text: str) -> tuple[Optional[float], str, int]:
+    """parse_number + 앞의 '+'와 뒤의 추정·잠정 꼬리표('(e)', '(P)') 허용. (값, 단위, 소수 자릿수)."""
+    t = re.sub(r"\((?:e|p|f)\)$", "", clean(text).replace(" ", ""), flags=re.I)
+    if t.startswith("+"):
+        t = t[1:]
+    v, unit = parse_number(t)
+    return v, unit, _decimals(t) if v is not None else 0
+
+
+def _growth_kind(header: str) -> str:
+    h = clean(header).lower()
+    if "qoq" in h or "전분기" in h:
+        return "QoQ"
+    if "yoy" in h or "전년" in h:
+        return "YoY"
+    return ""
+
+
+def _series_of(header: str) -> str:
+    h = re.sub(r"(?i)qoq|yoy|전분기\s*대비|전년\s*동기\s*대비|전분기|전년|증감률|증감|성장률", "", clean(header))
+    return re.sub(r"[\s()\[\]·:/-]+", "", h)
+
+
+def _period_rows(grid: list[list[str]]) -> Optional[tuple[int, dict[tuple[str, tuple[int, int]], list[int]]]]:
+    """기간이 들어 있는 열과 {(묶음, 기간): [행 번호]}.
+
+    기간 열이 첫 열이 아니면 첫 열 글자를 묶음(계열·차트 이름)으로 본다. 같은 묶음 안에서
+    같은 기간이 여러 행에 나올 수 있다(값은 그중 칸이 채워진 행에서 찾는다).
+    """
+    width = max(len(r) for r in grid)
+    for c in range(width):
+        index: dict[tuple[str, tuple[int, int]], list[int]] = {}
+        for r, row in enumerate(grid[1:], start=1):
+            p = _period(row[c]) if c < len(row) else None
+            if p is None:
+                continue
+            group = row[0] if c != 0 and row else ""
+            index.setdefault((group, p), []).append(r)
+        if len({p for _, p in index}) >= 2:
+            return c, index
+    return None
+
+
+def _cell(grid: list[list[str]], r: int, c: int) -> str:
+    return grid[r][c] if c < len(grid[r]) else ""
+
+
+def _value(grid: list[list[str]], rows: list[int], c: int, prefer: Optional[int] = None):
+    """rows 중 c열이 채워진 행의 값. prefer 행이 채워져 있으면 그 값. 여러 값이 다르면 None."""
+    if prefer is not None and _cell(grid, prefer, c):
+        v = _signed(_cell(grid, prefer, c))
+        return v if v[0] is not None and not v[1] else None
+    vals = {_cell(grid, r, c) for r in rows if _cell(grid, r, c)}
+    if len(vals) != 1:
+        return None
+    v = _signed(vals.pop())
+    return v if v[0] is not None and not v[1] else None
+
+
+def growth_mismatch(grid: list[list[str]]) -> bool:
+    """증감률(QoQ, YoY) 칸이 값 칸으로 다시 계산한 증감률과 맞지 않으면 True (숫자와 칸의 짝 오류).
+
+    - 기간은 행(첫 행이 머리글) 또는 열(머리글 행)에 있다. 열에 있으면 뒤집어서 본다.
+    - 증감률 열의 계열: 머리글에서 'YoY' 등을 뺀 이름과 같은 값 열. 이름이 없으면 값 열이 하나일 때 그 열,
+      여럿이면 바로 왼쪽의 값 열.
+    - 표시된 값은 반올림된 값이다. 값마다 마지막 자리 반 단위, 증감률도 반 단위를 허용하고
+      그 범위 안에서 맞출 수 있으면 통과로 본다. 비교할 기준 기간 값이 없으면 보지 않는다.
+    """
+    grid = [[clean(x) for x in row] for row in grid if row]
+    if len(grid) < 3:
+        return False
+    found = _period_rows(grid)
+    if found is None and sum(1 for x in grid[0] if _period(x)) >= 2:
+        width = max(len(r) for r in grid)
+        grid = [[row[c] if c < len(row) else "" for row in grid] for c in range(width)]
+        found = _period_rows(grid)
+    if found is None:
+        return False
+    pcol, index = found
+    head = grid[0]
+    width = max(len(r) for r in grid)
+    kinds = {c: _growth_kind(head[c]) for c in range(min(width, len(head)))}
+    skip = {pcol} | ({0} if pcol != 0 else set())
+    values = [c for c in range(width) if c not in skip and not kinds.get(c)]
+    for gc, kind in kinds.items():
+        if not kind or not values:
+            continue
+        name = _series_of(head[gc])
+        vc = next((c for c in values if name and _series_of(head[c]) == name), None)
+        if vc is None and name:
+            vc = next((c for c in values if c < len(head) and name in _series_of(head[c])), None)
+        if vc is None and not name:
+            left = [c for c in values if c < gc]
+            vc = values[0] if len(values) == 1 else (left[-1] if left else None)
+        if vc is None:
+            continue
+        for (group, (y, q)), rows in index.items():
+            if kind == "QoQ":
+                if q == 0:
+                    continue
+                base = (y, q - 1) if q > 1 else (y - 1, 4)
+            else:
+                base = (y - 1, q)
+            if (group, base) not in index:
+                continue
+            for r in rows:
+                g, gu, gd = _signed(_cell(grid, r, gc))
+                if g is None or gu != "%":
+                    continue
+                cur = _value(grid, rows, vc, prefer=r)
+                old = _value(grid, index[(group, base)], vc)
+                if cur is None or old is None:
+                    continue
+                (v1, _, d1), (v0, _, d0) = cur, old
+                h1, h0, hg = 0.5 * 10 ** -d1, 0.5 * 10 ** -d0, 0.5 * 10 ** -gd
+                if v0 - h0 <= 0:
+                    continue
+                lo = ((v1 - h1) / (v0 + h0) - 1) * 100
+                hi = ((v1 + h1) / (v0 - h0) - 1) * 100
+                if g + hg < lo - 1e-9 or g - hg > hi + 1e-9:
+                    return True
+    return False
+
+
+def vision_table_flags(grid: list[list[str]]) -> list[str]:
+    """VLM이 만든 표의 구조 점검. 문제가 있으면 표시를 돌려준다(표는 버리지 않는다)."""
+    rows = [row for row in grid if row]
+    if not rows:
+        return []
+    flags = []
+    if len({len(r) for r in rows}) > 1:
+        flags.append("vision_ragged")      # 행마다 칸 수가 다름
+    for row in rows[1:]:
+        for x in row[1:]:
+            # 숫자·기호로만 된 칸(각주 표시 * 제외)이 숫자로 읽히지 않으면 표시. 단위·설명 글자가 있는 칸은 보지 않는다
+            t = re.sub(r"\*+$", "", clean(x))
+            if t and _NUMBERISH.match(t) and _period(t) is None and _signed(t)[0] is None:
+                flags.append("vision_bad_number")
+                break
+        else:
+            continue
+        break
+    if growth_mismatch(rows):
+        flags.append("growth_mismatch")
+    return flags

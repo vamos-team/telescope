@@ -78,14 +78,20 @@ PDF 안에서는 코드가 경로를 정한다. Docling OCR은 끄고, 글자는
 | 단위 | 조건 | 경로 | 블록 표시(`flags`) |
 |---|---|---|---|
 | 쪽 | 텍스트 층 글자 15자 이상 | Docling | — |
+| 쪽 | 글자 없음 + 읽지 못한 내용 보임 (스캔한 글자·표) | VLM [쪽 옮기기] | `image_page` |
 | 쪽 | 글자 없음 + 내용 그림 있음 | VLM [쪽 옮기기] | `image_page` |
 | 쪽 | 글자 없음 + 로고·아이콘뿐 | 없음 | `decor_page` |
-| 쪽 | 글자도 그림도 없음 | 없음 | `empty_page` |
-| 그림 | 차트·표 + 영역 안 글자 있음 | 텍스트 층 글자를 차트 블록 하나로 | `chart` |
-| 그림 | 차트·표 + 영역 안 글자 없음 | VLM [이미지→표] | `chart` |
+| 쪽 | 글자도 그림도 없음 (색 배경 간지 포함) | 없음 | `empty_page` |
+| 그림 | 차트·표 + 영역 안에 값 숫자 있음 | 텍스트 층 글자를 차트 블록 하나로 | `chart` |
+| 그림 | 차트·표 + 영역 안에 값 숫자 없음 (단위·범례·기간 글자만 있거나 글자 없음) | 글자는 문단으로, VLM [차트→표] | `picture_text`, `chart` |
 | 그림 | 로고·아이콘 | 이미지는 버리고 글자만 문단으로 | `picture_text` |
 | 그림 | 사진·도식 등 | 글자는 문단으로, VLM [설명 생성] | `picture_text`, `picture` |
 
+- "읽지 못한 내용 보임": Docling은 OCR 없이 읽지 못한 글자 영역을 결과에서 뺀다. 그래서 글자가 15자 미만인 쪽은
+  쪽 이미지에서 텍스트 층 글자와 로고·아이콘 영역을 가린 뒤 윤곽(이웃 픽셀 밝기 차) 비율을 잰다.
+  0.5% 이상이거나 칸 글자가 없는 표가 있으면 읽지 못한 내용으로 본다(`vision.MIN_PAGE_EDGES`).
+  측정값: 간지·로고 쪽 0.0~0.2%, 스캔한 내용 쪽 3.3~17.8%.
+- "값 숫자": 기간(`2Q25`, `1H26`), 연도(`2025`, `2025년`), 월(`3월`)을 뺀 숫자 (`vision.has_value_numbers`).
 - 그림 블록에는 그림 종류도 남는다. 예: `picture:bar_chart`
 - VLM 처리기가 없거나 실패하면 그 자리에 `needs_vision` 표시만 남기고 계속 진행한다. 문서 `warnings`에 개수가 남는다.
 - Docling이 표를 잘못 읽어도 VLM으로 자동 전환하지 않는다.
@@ -98,23 +104,44 @@ PDF 안에서는 코드가 경로를 정한다. Docling OCR은 끄고, 글자는
 | `repeated_header` | 첫 행(머리글)이 표 중간에 다시 나온다. 두 표가 하나로 합쳐졌을 수 있다 |
 | `total_mismatch` | 합계·소계 행이 위 항목들의 합과 맞지 않는다. 값이 밀렸을 수 있다 |
 
+VLM이 만든 표(`origin="vision_llm"`)에는 아래 표시가 더 붙을 수 있다. 표는 버리지 않는다.
+
+| 표시 | 뜻 |
+|---|---|
+| `growth_mismatch` | 증감률(QoQ, YoY) 칸이 값 칸으로 다시 계산한 증감률과 맞지 않는다. 숫자가 다른 칸에 들어갔을 수 있다. 표시값의 반올림 범위는 허용한다 |
+| `vision_ragged` | 행마다 칸 수가 다르다 |
+| `vision_bad_number` | 숫자·기호로만 된 칸이 숫자로 읽히지 않는다 (예: `1,23.4.5`) |
+
 ## VLM 처리기 연결
 
+parsers는 네트워크에 접근하지 않는다. 처리기는 밖에서 만들어 넘긴다. OpenAI 처리기는 `pipelines/vision`에 있다.
+
 ```python
-from universal_parser import parse, VisionRequest, VisionResult, VisionTask
+from parsers import parse
+from vision import from_env
+
+res = parse("upload.pdf", vision=from_env())   # OPENAI_API_KEY가 없으면 None → needs_vision 표시만
+```
+
+다른 처리기를 쓰려면 `VisionRequest`를 받아 `VisionResult`를 돌려주는 함수를 넘긴다.
+
+```python
+from parsers import parse, VisionRequest, VisionResult, VisionTask
 
 def my_vlm(req: VisionRequest) -> VisionResult:
     # req.task: VisionTask.PAGE | TO_TABLE | DESCRIBE
     # req.image_png: PNG 바이트, req.page: 쪽, req.bbox: 쪽 안 위치, req.picture_class: 그림 종류
-    ...   # 로컬 모델을 부른다. 외부 API로 보내지 않는다
     return VisionResult(paragraphs=[...], tables=[[["구분", "2Q26"], ["매출", "1,234"]]], description="")
 
 res = parse("upload.pdf", vision=my_vlm)
 ```
 
 - 같은 문서 안에서 같은 이미지·작업은 한 번만 처리한다.
+- 문서 하나에서 처리기는 최대 30번 부른다(`vision.VISION_MAX_CALLS`, `pdf.load_pdf(vision_max_calls=...)`).
+  넘는 영역은 `needs_vision`으로 남고 `warnings`에 개수가 남는다. 같은 이미지 재사용은 세지 않는다.
 - 이미지 하나당 시간 제한은 기본 600초다(`pdf.load_pdf(vision_timeout=...)`). 넘기면 `warnings`에 남는다.
-- 처리기 결과의 블록과 셀에는 `origin="vision_llm"`, 블록 `flags`에 `vision`이 붙는다.
+- 처리기가 예외를 던지면 그 영역은 `needs_vision`으로 남고 `warnings`에 이유가 남는다.
+- 처리기 결과의 블록과 셀에는 `origin="vision_llm"`, 블록 `flags`에 `vision`이 붙는다. 이 값은 근거 수치로 쓰지 않는다.
 
 ## 테스트
 
@@ -125,3 +152,5 @@ python -m unittest discover -s parsers/tests -t .
 
 - 테스트 PDF는 PyMuPDF로 만든다. 저장소에 PDF 파일을 두지 않는다.
 - 실제 IR PDF 확인은 파일이 있을 때만 돈다: `PARSER_TEST_PDF_DIR=<폴더>` (파일 이름은 `tests/test_ir_pdfs.py`를 본다).
+- OpenAI 처리기 테스트: `python -m unittest discover -s vision/tests -t .` (가짜 클라이언트, 네트워크 없음)
+- 실제 API 호출 테스트는 비용이 들어서 켤 때만 돈다: `OPENAI_API_KEY=... VISION_LIVE_TEST=1`. 테스트가 그린 가짜 차트만 보낸다.

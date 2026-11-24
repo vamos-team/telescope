@@ -17,6 +17,7 @@ VLM은 이 규칙이 고른 영역만 받는다. VLM에게 경로 선택을 맡�
 from __future__ import annotations
 
 import hashlib
+import re
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as _FutureTimeout
 from dataclasses import dataclass, field
@@ -50,6 +51,13 @@ VisionHandler = Callable[[VisionRequest], Optional[VisionResult]]
 
 # ─── 라우팅 규칙 ─────────────────────────────────────────────
 
+# 글자가 적은 쪽에서, 텍스트 층 글자와 로고·아이콘을 가린 뒤 남은 윤곽(이웃 픽셀 밝기 차) 비율이
+# 이 값 이상이면 읽지 못한 내용이 있다고 본다. 측정: 간지·로고 쪽 0.0~0.2%, 스캔한 내용 쪽 3.3~17.8%
+MIN_PAGE_EDGES = 0.005
+
+# 문서 하나에서 VLM 처리기를 부르는 최대 횟수(비용 상한). 같은 이미지 재사용(캐시)은 세지 않는다
+VISION_MAX_CALLS = 30
+
 # 쪽의 텍스트 층 글자 수가 이보다 적으면 "글자 없는 쪽"으로 본다 (기존 pdfplumber 기준과 같음)
 MIN_PAGE_CHARS = 15
 
@@ -72,9 +80,16 @@ class PageRoute(str, Enum):
     EMPTY = "empty"      # 글자도 그림도 없음
 
 
-def route_page(text_chars: int, picture_classes: list[str]) -> PageRoute:
+def route_page(text_chars: int, picture_classes: list[str], unread_content: bool = False) -> PageRoute:
+    """unread_content: 텍스트 층으로 설명되지 않는 내용이 쪽에 보인다(스캔한 글자·표 등).
+
+    Docling은 OCR 없이 읽지 못한 글자 영역을 결과에서 뺀다. 그래서 스캔 쪽은 그림이 없으면
+    빈 쪽처럼 보인다. pdf.py가 쪽 이미지의 윤곽 밀도로 이 경우를 따로 알려 준다.
+    """
     if text_chars >= MIN_PAGE_CHARS:
         return PageRoute.TEXT
+    if unread_content:
+        return PageRoute.VISION
     if not picture_classes:
         return PageRoute.EMPTY
     if all(c in DECOR_CLASSES for c in picture_classes):
@@ -82,12 +97,23 @@ def route_page(text_chars: int, picture_classes: list[str]) -> PageRoute:
     return PageRoute.VISION
 
 
+# 차트 값이 아닌 숫자: 기간(2Q25, 25.2Q, 1H26), 연도(2025, 2025년), 월(3월)
+_NOT_VALUE = re.compile(
+    r"(?i)(?<![\d.,])(?:[1-4]\s*Q\s*'?\d{2,4}|'?\d{2,4}\s*\.?\s*[1-4]\s*Q|[12]\s*H\s*'?\d{2,4}"
+    r"|(?:19|20)\d{2}\s*년?|\d{1,2}\s*월)(?![\d.,%])")
+
+
+def has_value_numbers(texts: list[str]) -> bool:
+    """차트 영역 글자에 값으로 볼 숫자가 있으면 True. 단위·범례·기간 글자만 있으면 False."""
+    return any(re.search(r"\d", _NOT_VALUE.sub(" ", t or "")) for t in texts)
+
+
 def route_picture(picture_class: str, inner_texts: list[str]) -> PictureRoute:
-    has_text = any(t.strip() for t in inner_texts)
     if picture_class in DECOR_CLASSES:
         return PictureRoute.DECOR
     if picture_class in CHART_CLASSES:
-        return PictureRoute.CHART_TEXT if has_text else PictureRoute.CHART_VISION
+        # 값 숫자가 텍스트 층에 있어야 코드로 읽는다. 단위('단위 : 원')나 범례만 있으면 VLM으로 보낸다
+        return PictureRoute.CHART_TEXT if has_value_numbers(inner_texts) else PictureRoute.CHART_VISION
     return PictureRoute.DESCRIBE
 
 
@@ -102,9 +128,13 @@ class VisionRunner:
       처리기 쪽에도 자체 시간 제한을 두어야 한다.
     """
 
-    def __init__(self, handler: Optional[VisionHandler], timeout: float = 600.0):
+    def __init__(self, handler: Optional[VisionHandler], timeout: float = 600.0,
+                 max_calls: Optional[int] = None):
         self.handler = handler
         self.timeout = timeout
+        self.max_calls = max_calls      # None이면 상한 없음
+        self.calls = 0
+        self.skipped = 0                # 상한을 넘어 부르지 않은 요청 수
         self.warnings: list[str] = []
         self._cache: dict[str, Optional[VisionResult]] = {}
         self._pool = ThreadPoolExecutor(max_workers=1) if handler else None
@@ -119,6 +149,10 @@ class VisionRunner:
         key = req.task.value + ":" + hashlib.sha256(req.image_png).hexdigest()
         if key in self._cache:
             return self._cache[key]
+        if self.max_calls is not None and self.calls >= self.max_calls:
+            self.skipped += 1
+            return None
+        self.calls += 1
         where = f"{req.page}쪽 {req.task.value}"
         res: Optional[VisionResult] = None
         try:
@@ -132,6 +166,10 @@ class VisionRunner:
         return res
 
     def close(self) -> None:
+        if self.skipped:
+            self.warnings.append(f"VLM 호출 상한({self.max_calls}번) 초과: {self.skipped}개 영역은 "
+                                 "처리하지 않음 (needs_vision)")
+            self.skipped = 0
         if self._pool is not None:
             self._pool.shutdown(wait=False, cancel_futures=True)
 
