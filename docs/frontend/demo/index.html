@@ -925,7 +925,7 @@ function stella(mode,expr,size){const ins=mode==='ins',tiny=size<=24,id='stl'+(s
  if(expr==='none'){mouth='M95 124 Q100 120.5 105 124';mag=true;drop=true;}
  if(expr==='think'){open=false;closed='M75 110 Q80 114.5 85 110 M115 110 Q120 114.5 125 110';mouth='M97 122 Q100 124 103 122';}
  if(expr==='done'){open=false;closed='M75 112 Q80 106 85 112 M115 112 Q120 106 125 112';mouth='M93 120 Q100 128 107 120';}
- const body=ins?'#FFE58F':'#E3E3E3';let g='';
+ const body=ins?'#FFE58F':'#C4B5FD';let g='';
  if(ins&&!tiny)g+=`<defs><radialGradient id="${id}"><stop offset="0" stop-color="#FFE79A" stop-opacity=".95"/><stop offset="1" stop-color="#FFE79A" stop-opacity="0"/></radialGradient></defs><circle cx="100" cy="106" r="104" fill="url(#${id})"/>`;
  g+=`<polygon points="${STL_STAR}" fill="${L}" stroke="${L}" stroke-width="35" stroke-linejoin="round"/><polygon points="${STL_STAR}" fill="${body}" stroke="${body}" stroke-width="30" stroke-linejoin="round"/>`;
  if(!tiny){
@@ -1058,7 +1058,7 @@ const SDOT='<span class="sdot" aria-hidden="true"></span>';
 function sidebar(){const r=S.route,st=stepOf(r);
  return `<aside class="side ${S.sideOpen?'open':''}" aria-label="메뉴">
   <button class="logo" data-go="b10" aria-label="Telescope 홈, 분석하기로 이동">Telescope</button>
-  <nav class="nav"><button data-go="b10" ${['b10','b70'].includes(r)?'aria-current="page"':''}>${I.doc}분석하기</button><button data-go="i10" ${r==='i10'?'aria-current="page"':''}>${I.spark}인사이트</button><button data-go="a10" ${r==='a10'?'aria-current="page"':''}>${I.grid}DART 대시보드</button></nav>
+  <nav class="nav"><button data-go="b10" ${['b10','i10'].includes(r)?'aria-current="page"':''}>${I.doc}분석하기</button><button data-go="a10" ${['a10','b70'].includes(r)?'aria-current="page"':''}>${I.grid}DART 대시보드</button></nav>
   <div class="grp"><p>분석 세션</p><button data-go="b40" ${st!==undefined?'aria-current="page"':''}><span class="st">SKT 2025 4Q 사업보고서</span>${st!==undefined?SDOT:''}</button><button data-act="ktSession">KT 2025 4Q 사업보고서</button></div>
   <div class="grp"><p>대화 세션</p>${S.sess.map(s=>{const on=S.cur===s.id&&(r==='i20'||(S.cside&&!NOCHAT.includes(r)));return `<button data-act="sess" data-k="${s.id}" title="${esc(s.t)}" ${on?'aria-current="page"':''}><span class="st">${esc(s.t)}</span>${on?SDOT:''}</button>`;}).join('')}</div>
   ${themeBtn()}
@@ -1378,7 +1378,7 @@ function tPL(){const c=SC(),q=S.period==='q',qd=S.scope==='skb'?D.qtr.cons:D.qtr
   ${card('c12','손익계산서 (2021–2025)','SKB 포함',ftable(YR,[['매출',k.rev,1],['이동전화수익',k.mob],['영업비용',k.opex,1],['감가상각비',k.dep],['종업원급여',k.pay],['지급수수료',k.fee],['영업이익',k.op,1],['금융수익',k.finI],['금융비용',k.finC],['법인세비용',k.tax],['당기순이익',k.ni,1]],'억원'),q?'분기 보기는 매출, 영업이익, 영업이익률에 적용돼요. 표는 연간이에요.':'')}
  </div>`;}
 function tBS(){const c=SC(),k=D.cons,dr=c.L.map((x,i)=>x/c.E[i]*100);
- const W=720,H=250,pl=48,pr=60,pt=16,pb=26,mx=niceMax(Math.max(...c.L.map((l,i)=>l+c.E[i]))*1.05),X=i=>pl+i*(W-pl-pr)/4,Y=v=>pt+(mx-v)/mx*(H-pt-pb),tk=ticks(0,mx);
+ const W=720,H=250,pl=48,pr=60,pt=18,pb=26,tk=ticks(0,niceMax(Math.max(...c.L.map((l,i)=>l+c.E[i]))*1.05)),mx=tk[tk.length-1],X=i=>pl+i*(W-pl-pr)/4,Y=v=>pt+(mx-v)/mx*(H-pt-pb);
  let ar=frame(W,H,pl,pt,pr,pb,tk,Y);const top=c.L.map((l,i)=>[X(i),Y(l+c.E[i])]),mid=c.L.map((l,i)=>[X(i),Y(l)]);
  ar+=`<polygon points="${[...mid,[X(4),Y(0)],[X(0),Y(0)]].map(p=>p.join(',')).join(' ')}" style="fill:var(--s2);opacity:.85"/><polygon points="${[...top,...mid.slice().reverse()].map(p=>p.join(',')).join(' ')}" style="fill:var(--s1);opacity:.85"/>`;
  YR.forEach((y,i)=>{ar+=`<line x1="${X(i)}" x2="${X(i)}" y1="${top[i][1]}" y2="${Y(0)}" style="stroke:var(--surface);stroke-width:1;opacity:.6"/><circle cx="${X(i)}" cy="${top[i][1]}" r="3" style="fill:var(--s1)" data-tip="${y} · 자산 ${com(c.L[i]+c.E[i])}, 부채 ${com(c.L[i])}, 자본 ${com(c.E[i])}"/><text x="${X(i)}" y="${H-8}" text-anchor="middle">${y}</text>`;});
@@ -1419,24 +1419,25 @@ function tPeer(){const P={SKT:{...D.cons,cx:D.capex.sum},KT:{...D.peer.KT,cx:D.c
   ${card('c6','CapEx 3사 비교 (2021–2025)','SKT+SKB 합산',legend(nm.map(k=>[k,col[k]]))+lines({labels:YR,series:nm.map(k=>({name:k==='LG유플러스'?'LGU+':k,v:P[k].cx,c:col[k],bold:k==='SKT'})),aria:'CapEx 3사'}))}
   ${card('c12','주요 지표 3사 비교 (2025)','각 사 자회사 포함',`<div class="tbl"><table class="ftbl"><thead><tr><th></th><th class="n">매출</th><th class="n">영업이익</th><th class="n">영업이익률</th><th class="n">부채비율</th><th class="n">CapEx</th></tr></thead><tbody>${nm.map(k=>`<tr class="${k==='SKT'?'b':''}"><td>${k}</td><td class="n">${com(P[k].rev[4])}</td><td class="n">${com(P[k].op[4])}</td><td class="n">${(P[k].op[4]/P[k].rev[4]*100).toFixed(1)}%</td><td class="n">${(P[k].L[4]/P[k].E[4]*100).toFixed(1)}%</td><td class="n">${com(P[k].cx[4])}</td></tr>`).join('')}</tbody></table></div>`,'CapEx: SKT+SKB 합산 / 그 외: 각 사 자회사 포함')}
  </div>`;}
-const FTABS=[['over','한눈에',tOverview],['pl','손익',tPL],['bs','재무상태',tBS],['cf','현금흐름',tCF],['capex','설비투자',tCapex],['peer','동종사 비교',tPeer]];
-/* ================= v04 분석하기 보기 전환 (예산서 검토 | 회사 재무) ================= */
-function modeSeg(cur){return `<div class="seg" role="tablist" aria-label="분석하기 보기"><button role="tab" aria-selected="${cur==='b10'}" data-go="b10">자료 검토</button><button role="tab" aria-selected="${cur==='b70'}" data-go="b70">회사 재무</button></div>`;}
+const FTABS=[['over','한눈에',tOverview],['pl','손익',tPL],['bs','재무상태',tBS],['asset','자산 계정',tAsset],['cf','현금흐름',tCF],['capex','설비투자',tCapex],['peer','동종사 비교',tPeer]];
+/* ================= 분석하기 보기 전환 (자료 검토 | 인사이트) ================= */
+function modeSeg(cur){return `<div class="seg" role="tablist" aria-label="분석하기 보기"><button role="tab" aria-selected="${cur==='b10'}" data-go="b10">자료 검토</button><button role="tab" aria-selected="${cur==='i10'}" data-go="i10">인사이트</button></div>`;}
 
 /* ================= B70 회사 재무 (사실만). v05: 기준·기간 토글 없음, 차트마다 기준 태그 ================= */
-function vB70(){const t=FTABS.find(x=>x[0]===S.ftab);
- return shell(`<div class="topbar">${modeSeg('b70')}</div><div class="fwrap"><div class="dash" id="dash">
+function finDash(){const t=FTABS.find(x=>x[0]===S.ftab)||FTABS[0];
+ return `<div class="fwrap"><div class="dash" id="dash">
   <div class="dhead"><h2>SK텔레콤</h2><span class="sub num">017670 · 2021–2025 · DART 공시, 단위 억원</span>
    <div class="tabs" role="tablist" aria-label="보기" style="margin-left:auto">${FTABS.map(([k,l])=>`<button role="tab" aria-selected="${S.ftab===k}" data-act="ftab" data-v="${k}">${l}</button>`).join('')}</div></div>
   ${t[2]()}
- </div></div>`);}
+ </div></div>`;}
+/* 회사 재무는 DART 대시보드(A10)로 옮김. 예전 #b70 주소는 A10으로 보냄 */
 
 /* ================= B80 공시 검색 결과 (예전 I20의 사실 부분) ================= */
 const RES=[
  {l:'CapEx 2025 (SKT 단독)',v:'1조 2,440억원',tag:'공시',doc:'SKT 2025 사업보고서',loc:'II. 사업의 내용 › 3-라. 설비투자 현황, 61쪽',d:'공시 2026-03-17',ex:'당사는 2025년 별도 기준 <mark>1조 2,440억원</mark>의 설비투자를 집행하였습니다.'},
  {l:'CapEx 2023, 2024 (SKT 단독)',v:'1조 7,430억원, 1조 5,440억원',tag:'공시',doc:'SKT 2025 사업보고서',loc:'II. 사업의 내용 › 3-라. 설비투자 현황 표, 61쪽',d:'공시 2026-03-17',ex:'네트워크 투자 (단위: 억원) 2023 <mark>17,430</mark> · 2024 <mark>15,440</mark> · 2025 12,440'},
  {l:'2년 누적 증감 (2023→2025)',v:'−28.6%',tag:'계산',doc:'계산식',loc:'(12,440 − 17,430) ÷ 17,430 · 위 두 결과의 공시값으로 계산'},
- {l:'CapEx 5년 표 (SKT 단독, SKB, 3사)',v:'2021–2025',tag:'공시',doc:'DART 사업보고서 2021~2025',loc:'회사 재무 › 설비투자 탭',tab:'capex'}];
+ {l:'CapEx 5년 표 (SKT 단독, SKB, 3사)',v:'2021–2025',tag:'공시',doc:'DART 사업보고서 2021~2025',loc:'DART 대시보드 › 설비투자 탭',tab:'capex'}];
 function rcard(r){return `<div class="rcard"><div class="rv"><span class="l">${r.l}</span><b>${r.v}</b>${r.tag==='AI 판단'?tgAI:tg(r.tag)}</div>
  <div class="loc">${r.doc}${r.loc?` · ${r.loc}`:''}${r.d?` · ${r.d}`:''}</div>${r.ex?`<div class="ex">${r.ex}</div>`:''}
  ${r.tab?`<div><button class="btn line sm" data-act="goTab" data-v="${r.tab}">설비투자 탭에서 보기</button></div>`:''}</div>`;}
@@ -1469,11 +1470,11 @@ function insCards(){const c=D.cons,K=D.peer.KT,L=D.peer['LG유플러스'],cx=D.c
   {t:'SKT 주당 배당금이 절반 넘게 줄었어요',fact:`<div class="tbl facts"><table class="ftbl"><thead><tr><th></th><th class="n">2024</th><th class="n">2025</th><th class="n">증감</th></tr></thead><tbody><tr class="b"><td>주당 배당금</td><td class="n">${com(D.div.dps[3])}원</td><td class="n">${com(D.div.dps[4])}원</td><td class="n">${f(pct(D.div.dps[4],D.div.dps[3]))}</td></tr><tr><td>배당성향</td><td class="n">${D.div.payout[3]}%</td><td class="n">${D.div.payout[4]}%</td><td class="n">${sgn(D.div.payout[4]-D.div.payout[3],1,'%p')}</td></tr></tbody></table></div>`,ft:'SKT 단독 · dart.duckdb 배당 데이터',tab:'cf',
    ai:'순이익이 줄어 배당금은 줄었지만 배당성향은 오히려 높아졌어요. 컨콜에서 올해 최우선 과제를 실적 정상화로 꼽은 만큼, 배당 회복 시점과 재원이 다음 리포트의 쟁점이 될 수 있어요.',n:[9,10],q:'SKT 배당은 언제 회복될 수 있을까요?'}];
  return `<div class="icards">${C.map(x=>`<section class="icard"><h3>${x.t}</h3>
-  <div><div class="lab2">사실 ${tg('공시')}${tg('계산')}</div>${x.fact}<div class="cap">${x.ft} · <button class="link" data-act="goTab" data-v="${x.tab}">회사 재무에서 보기</button></div></div>
+  <div><div class="lab2">사실 ${tg('공시')}${tg('계산')}</div>${x.fact}<div class="cap">${x.ft} · <button class="link" data-act="goTab" data-v="${x.tab}">DART 대시보드에서 보기</button></div></div>
   <div class="aip"><div class="ai-lab">${I.spark}AI 해석</div><p>${x.ai}</p><div class="nrefs">${x.n.map(nref).join('')}</div></div>
   <button class="ask2" data-act="iask" data-v="${esc(x.q)}">이어서 묻기 · ${esc(x.q)}</button></section>`).join('')}</div>`;}
 function vI10(){const fl=['전체','SKT','KT','LG유플러스','3사'],list=NEWS.filter(n=>S.nf==='전체'||n[1]===S.nf);
- return shell(`<div class="fwrap"><div class="dash" id="dash">
+ return shell(`<div class="topbar">${modeSeg('i10')}</div><div class="fwrap"><div class="dash" id="dash">
   <div class="dhead"><h2>인사이트</h2><div class="seg" role="radiogroup" aria-label="뉴스 회사" style="margin-left:auto">${fl.map(x=>`<button aria-pressed="${S.nf===x}" data-act="nf" data-v="${x}">${x==='3사'?'3사 공통':x}</button>`).join('')}</div></div>
   <div class="sech"><h3>3사 비교 인사이트</h3><span class="tag ai">AI 해석</span></div>
   ${insCards()}
@@ -1490,8 +1491,9 @@ function vI20(){const s=curS();
  <div class="fwrap"><div class="dash" id="dash"><div class="conv">${s.log.map(msg).join('')}</div></div></div>`);}
 
 /* ================= router ================= */
-function vA10(){return shell(`<div class="fwrap"><div class="dash" id="dash"><div class="dhead"><h2>DART 대시보드</h2></div>${tAsset()}</div></div>`);}
-const VIEWS={a10:vA10,login:vLogin,b10:vB10,b20:vB20,b40:vB40,b50:vB50,b60:vB60,b61:vB61,b70:vB70,i10:vI10,i20:vI20};
+/* DART 대시보드 메뉴 = 회사 재무 화면 전체. 자산 계정(표·자산 맵·히트맵)은 그 안의 탭 하나 */
+function vA10(){return shell(finDash());}
+const VIEWS={a10:vA10,login:vLogin,b10:vB10,b20:vB20,b40:vB40,b50:vB50,b60:vB60,b61:vB61,b70:vA10,i10:vI10,i20:vI20};
 let authed=false;
 function render(keep){const sc=keep?[...document.querySelectorAll('.scroll,.docarea,.rlist,.dash')].map(e=>e.scrollTop):null;
  root.innerHTML=VIEWS[S.route]();
@@ -1556,7 +1558,7 @@ document.addEventListener('click',e=>{
   case 'ftab':S.ftab=v;render();$('#dash').scrollTop=0;break;
   case 'ask':setMode('ins');S.cside=true;S.cq=`${a.dataset.t}을(를) 어떻게 봐야 하나요?`;render(true);{const q=$('#cq');q.focus();q.setSelectionRange(q.value.length,q.value.length);}break;
   case 'theme':{const n=isDark()?'light':'dark';document.documentElement.dataset.theme=n;try{localStorage.setItem('telescope-theme',n);}catch(err){}render(true);break;}
-  case 'goTab':S.ftab=v;go('b70');setTimeout(()=>{const d=$('#dash');if(d)d.scrollTop=0;},60);break;
+  case 'goTab':S.ftab=v;go('a10');setTimeout(()=>{const d=$('#dash');if(d)d.scrollTop=0;},60);break;
   case 'toIns':setMode('ins');send(v);break;
   case 'iask':setMode('ins');S.cside=true;S.cq=v;render(true);{const q=$('#cq');q.focus();q.setSelectionRange(q.value.length,q.value.length);}break;
   case 'cmode':setMode(v);S.cq=$('#cq')?.value||S.cq;render(true);$('#cq')?.focus();break;
