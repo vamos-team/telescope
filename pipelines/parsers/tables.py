@@ -68,6 +68,9 @@ class TableAnalysis:
     period_source: str = ""       # header | context | none
 
 
+_DASH = re.compile(r"[-–—]")
+
+
 def _cell_numeric(rc: RawCell) -> bool:
     if rc.number is not None:
         return True
@@ -138,7 +141,8 @@ def analyze(grid: list[list[RawCell]], context: list[str] | None = None) -> Tabl
                 label_cols += 1
                 continue
             break
-        num_ratio = sum(_cell_numeric(c) for c in filled) / len(filled)
+        # 재무 표의 '-'는 0이다: 라벨 열 판정에서는 숫자 칸으로 센다('-'가 많은 금액 열을 라벨로 보지 않게)
+        num_ratio = sum(_cell_numeric(c) or _DASH.fullmatch(clean(c.text)) is not None for c in filled) / len(filled)
         if num_ratio < 0.34:
             label_cols = j + 1
         else:
