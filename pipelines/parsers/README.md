@@ -10,6 +10,7 @@
 | `loaders.py` | 형식 판별과 형식별 읽기 → 공통 구조(제목·문단·표), 섹션 경로, 쪽·시트, 원본 좌표 |
 | `pdf.py` | PDF 읽기(Docling), 쪽·그림 라우팅, 표 구조 검증(머리글 반복, 합계 검산) |
 | `vision.py` | 라우팅 규칙, VLM 처리기 인터페이스 |
+| `markdown.py` | 파서 결과 → LLM용 마크다운, 장·절 단위 나누기 |
 | `tables.py` | 표 → 셀 목록(행 경로·열 경로), 머리글·라벨 열 판별, 단위·기간·비율·표시 배율 |
 | `numbers.py` | 숫자·단위·기간 판별, 한국어 금액 정규화 |
 | `model.py` | 데이터 구조 |
@@ -41,6 +42,46 @@ for t in res["tables"]:
 ```
 
 지원 형식: HTML, DART XML, PDF, Excel(.xlsx/.xlsm), CSV, PowerPoint(.pptx), TXT/MD, JSON.
+
+`cells`에는 숫자 칸만 들어간다. 표의 원문 격자(머리글·행 이름 포함)는 `t["rows"]`(글자 2차원 목록)에 있다.
+
+## LLM용 마크다운
+
+```python
+from parsers import parse, to_markdown, split_markdown
+
+res = parse("report.pdf")
+md = to_markdown(res)                          # 문서 전체
+chunks = split_markdown(res, max_chars=4000)   # [{"index", "text", "chars", "section_paths", "page_start", "page_end", "sheets"}]
+```
+
+마크다운은 LLM이 문서의 맥락(아젠다, 설명)을 읽는 용도다. 숫자 계산은 `tables`의 칸 데이터나 재무 DB로 하고, 마크다운 속 숫자를 그대로 계산에 쓰지 않는다.
+
+| 원본 | 마크다운 |
+|---|---|
+| 쪽(PDF·PPTX), 시트(Excel) | 바뀔 때 한 줄: `[p.13]`, `[시트: 손익계산서]` |
+| 제목 | `#` 수준 유지 (문서 제목이 `#`이라 한 단계 내림) |
+| 표 | 마크다운 표. 위에 `단위: … · 기간: …`(코드가 읽은 값, 변환 없음). 여러 줄 머리글은 열마다 ` / `로 합침 |
+| 표의 제목·주석·단위 행 (행 전체에 같은 글자) | 표 위 줄로 뺌 |
+| 병합 칸 복제 | 옆 칸과 같은 행 이름·머리글은 비움. 숫자는 같아도 그대로 |
+| 모든 행이 빈 열 | 뺌 |
+| VLM이 읽은 내용 (`origin="vision_llm"`) | `> [VLM 판독, 확인 필요] …` |
+| 구조 오류 표시 (`repeated_header` 등) | 표 위 `> ⚠ 구조 확인 필요: …` |
+| `needs_vision` | `> [읽지 못한 쪽/차트/그림: 이미지에만 있는 내용, VLM 처리 안 됨]` |
+| 차트 안 글자 (`chart`) | `[차트 안 글자, 순서가 섞일 수 있음] …` |
+| 그림 안 글자 (`picture_text`) | 그림마다 한 줄: `[그림 안 글자] a / b` |
+| `empty_page`, `decor_page` | 뺌 |
+| 문서 `warnings` | 끝에 `## 파싱 경고` 목록 |
+
+나누기(`split_markdown`):
+
+- 장·절(`section_path` 앞 두 단계)이 바뀌면 새 조각을 시작한다. 지금 조각이 `max_chars`의 1/4보다 짧으면 다음 절과 합친다.
+- 조각 길이는 `max_chars`(기본 4,000자) 이하다. 블록 경계에서 나눈다. 긴 문단은 문장 경계에서 나눈다.
+- 긴 표는 행 단위로 나누고, 조각마다 표 위 줄과 머리글을 반복한다(`(표 계속 2/3)`).
+- 머리글 줄이 `max_chars`의 절반보다 긴 표는 열 묶음으로도 나눈다. 행 이름 열은 묶음마다 반복한다.
+  머리글 줄이 1,000자를 넘는 표는 모든 값 열에 공통인 위쪽 머리글을 `열 머리글 공통: …` 한 줄로 뺀다.
+- 조각 첫 줄: `[문서: 파일 이름 · 위치: 장 > 절 · p.3–5]`.
+- 측정(DART 사업·반기·분기보고서 XML 5개, Excel 3개, IR PDF 3개): 4,000자 초과 조각 0개, 조각 사이에서 빠진 표 숫자 0개.
 
 ## 셀에 담기는 것
 
@@ -152,5 +193,6 @@ python -m unittest discover -s parsers/tests -t .
 
 - 테스트 PDF는 PyMuPDF로 만든다. 저장소에 PDF 파일을 두지 않는다.
 - 실제 IR PDF 확인은 파일이 있을 때만 돈다: `PARSER_TEST_PDF_DIR=<폴더>` (파일 이름은 `tests/test_ir_pdfs.py`를 본다).
+- 큰 DART 문서 나누기 확인은 파일이 있을 때만 돈다: `PARSER_TEST_DART_XML=<사업보고서 XML 경로>`.
 - OpenAI 처리기 테스트: `python -m unittest discover -s vision/tests -t .` (가짜 클라이언트, 네트워크 없음)
 - 실제 API 호출 테스트는 비용이 들어서 켤 때만 돈다: `OPENAI_API_KEY=... VISION_LIVE_TEST=1`. 테스트가 그린 가짜 차트만 보낸다.
