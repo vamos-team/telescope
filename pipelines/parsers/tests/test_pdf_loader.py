@@ -101,6 +101,44 @@ class PdfLoaderTest(unittest.TestCase):
         self.assertNotIn(1, [p for _, p in seen])
 
 
+def make_scanned_pdf() -> tuple[bytes, bytes]:
+    """(원본, 스캔본). 스캔본은 원본 1쪽(글자·표)을 이미지로만 담고, 2쪽은 색 배경 간지(짧은 글자)."""
+    src = make_pdf()
+    with pymupdf.open(stream=src, filetype="pdf") as d, pymupdf.open() as out:
+        p = out.new_page()
+        p.insert_image(p.rect, pixmap=d[0].get_pixmap(dpi=150))
+        p2 = out.new_page()
+        p2.draw_rect(p2.rect, color=None, fill=(0.4, 0.4, 0.8))
+        p2.insert_text((300, 400), "Appendix", fontsize=20, color=(1, 1, 1))
+        return src, out.tobytes()
+
+
+class ScannedPageTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.src, cls.scan = make_scanned_pdf()
+        cls.doc = load(Path("scan.pdf"), raw=cls.scan)
+
+    def flags(self, page):
+        return [f for b in self.doc.blocks if b.page == page for f in b.flags]
+
+    def test_scanned_page_goes_to_vlm(self):
+        self.assertIn("image_page", self.flags(1))
+        self.assertIn("needs_vision", self.flags(1))
+
+    def test_divider_page_is_not_sent(self):
+        self.assertNotIn("image_page", self.flags(2))
+        self.assertIn("empty_page", self.flags(2))
+
+    def test_edge_ratio(self):
+        from parsers.pdf import _edge_ratio
+        from parsers.vision import MIN_PAGE_EDGES
+        self.assertGreater(_edge_ratio(self.scan, 1, []), MIN_PAGE_EDGES)
+        self.assertLess(_edge_ratio(self.scan, 2, [(290, 375, 400, 410)]), MIN_PAGE_EDGES)   # 글자 영역 가림
+        self.assertLess(_edge_ratio(self.src, 3, []), MIN_PAGE_EDGES)                          # 빈 쪽
+        self.assertLess(_edge_ratio(self.scan, 1, [(0, 0, 1000, 1000)]), MIN_PAGE_EDGES)      # 전체 가림
+
+
 class NonPdfRoutingTest(unittest.TestCase):
     def test_html_does_not_load_docling(self):
         """PDF가 아닌 형식은 기존 로더를 쓰고 Docling을 불러오지 않는다."""

@@ -3,7 +3,7 @@ import time
 import unittest
 
 from parsers.vision import (MIN_PAGE_CHARS, PageRoute, PictureRoute, VisionRequest, VisionResult,
-                            VisionRunner, VisionTask, route_page, route_picture)
+                            VisionRunner, VisionTask, has_value_numbers, route_page, route_picture)
 
 
 class RoutePageTest(unittest.TestCase):
@@ -19,6 +19,14 @@ class RoutePageTest(unittest.TestCase):
     def test_image_page_goes_to_vlm(self):
         self.assertEqual(route_page(0, ["logo", "bar_chart"]), PageRoute.VISION)
 
+    def test_scanned_text_page_goes_to_vlm(self):
+        # 스캔한 글자·표만 있는 쪽: Docling은 항목을 남기지 않지만 쪽 이미지에 내용이 보인다
+        self.assertEqual(route_page(0, [], unread_content=True), PageRoute.VISION)
+        self.assertEqual(route_page(0, ["logo"], unread_content=True), PageRoute.VISION)
+
+    def test_text_page_ignores_unread_flag(self):
+        self.assertEqual(route_page(MIN_PAGE_CHARS, [], unread_content=True), PageRoute.TEXT)
+
 
 class RoutePictureTest(unittest.TestCase):
     def test_chart_with_text_layer(self):
@@ -32,6 +40,25 @@ class RoutePictureTest(unittest.TestCase):
 
     def test_logo_keeps_text_only(self):
         self.assertEqual(route_picture("logo", ["SK telecom"]), PictureRoute.DECOR)
+
+    def test_chart_with_unit_or_legend_only_goes_to_vlm(self):
+        # #65 측정: LG U+ 16쪽('단위 : 원'), KT 20쪽(범례 글자)만 텍스트 층에 있고 값은 이미지
+        self.assertEqual(route_picture("bar_chart", ["단위 : 원"]), PictureRoute.CHART_VISION)
+        self.assertEqual(route_picture("bar_chart", ["■ 주요 그룹사 CAPEX 금융, 미디어"]),
+                         PictureRoute.CHART_VISION)
+
+    def test_chart_with_periods_only_goes_to_vlm(self):
+        self.assertEqual(route_picture("bar_chart", ["2Q25 3Q25 4Q25 1Q26 2Q26"]), PictureRoute.CHART_VISION)
+        self.assertEqual(route_picture("bar_chart", ["2023 2024 2025 1H26", "25.2Q", "2026년 3월"]),
+                         PictureRoute.CHART_VISION)
+
+    def test_value_numbers(self):
+        for texts in (["718 2023 2024"], ["QoQ-1 .1%"], ["35,236"], ["21.98"], ["2,025"]):
+            with self.subTest(texts=texts):
+                self.assertTrue(has_value_numbers(texts))
+        for texts in ([], [""], ["단위 : 원"], ["2Q25", "1H26", "2025년", "12월"]):
+            with self.subTest(texts=texts):
+                self.assertFalse(has_value_numbers(texts))
 
     def test_photo_and_unknown_are_described(self):
         self.assertEqual(route_picture("photograph", []), PictureRoute.DESCRIBE)

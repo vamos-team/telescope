@@ -15,8 +15,9 @@ from typing import Optional
 from .model import Block, Document, RawCell
 from .numbers import clean, parse_number
 from .tables import is_total_label
-from .vision import (VISION_MAX_CALLS, PageRoute, PictureRoute, VisionHandler, VisionRequest,
-                     VisionResult, VisionRunner, VisionTask, route_page, route_picture)
+from .vision import (DECOR_CLASSES, MIN_PAGE_CHARS, MIN_PAGE_EDGES, VISION_MAX_CALLS, PageRoute,
+                     PictureRoute, VisionHandler, VisionRequest, VisionResult, VisionRunner, VisionTask,
+                     route_page, route_picture)
 
 _CONVERTER = None
 
@@ -47,6 +48,33 @@ def _render_page(raw: bytes, pno: int, dpi: int = 150) -> bytes:
     import pymupdf
     with pymupdf.open(stream=raw, filetype="pdf") as pdf:
         return pdf[pno - 1].get_pixmap(dpi=dpi).tobytes("png")
+
+
+def _edge_ratio(raw: bytes, pno: int, masks: list[tuple[float, float, float, float]],
+                dpi: int = 50, threshold: int = 48) -> float:
+    """쪽 이미지에서 masks(왼쪽 위 원점, pt)를 흰색으로 가린 뒤, 이웃 픽셀과 밝기 차가 큰 픽셀의 비율.
+
+    글자·표·선은 윤곽이 많고, 배경색과 그러데이션은 윤곽이 거의 없다.
+    """
+    import pymupdf
+    with pymupdf.open(stream=raw, filetype="pdf") as pdf:
+        pix = pdf[pno - 1].get_pixmap(dpi=dpi, colorspace=pymupdf.csGRAY)
+    k = dpi / 72
+    for x0, y0, x1, y1 in masks:
+        ir = pymupdf.IRect(int(x0 * k) - 2, int(y0 * k) - 2, int(x1 * k) + 3, int(y1 * k) + 3) & pix.irect
+        if not ir.is_empty:
+            pix.set_rect(ir, (255,))
+    w, h, px = pix.width, pix.height, pix.samples
+    if w < 2 or h < 2:
+        return 0.0
+    n = 0
+    for y in range(h - 1):
+        row, nxt = px[y * w:(y + 1) * w], px[(y + 1) * w:(y + 2) * w]
+        for x in range(w - 1):
+            v = row[x]
+            if abs(v - row[x + 1]) > threshold or abs(v - nxt[x]) > threshold:
+                n += 1
+    return n / ((w - 1) * (h - 1))
 
 
 def _png(img) -> bytes:
@@ -121,18 +149,35 @@ def load_pdf(raw: bytes, vision: Optional[VisionHandler] = None,
     # 1) 쪽마다 텍스트 층 글자 수와 그림 종류 (그림 안 글자 포함) → 쪽 경로
     chars: dict[int, int] = {}
     pics: dict[int, list[str]] = {}
+    masks: dict[int, list] = {}          # 이미 설명된 영역: 글자 있는 텍스트 항목, 로고·아이콘
+    unread_table: set[int] = set()       # 칸 글자가 하나도 없는 표 (스캔한 표)
     for item, _ in ddoc.iterate_items(traverse_pictures=True):
         pno = page_of(item)
         if pno is None:
             continue
         if isinstance(item, TextItem):
-            chars[pno] = chars.get(pno, 0) + len(clean(item.text))
+            n = len(clean(item.text))
+            chars[pno] = chars.get(pno, 0) + n
+            if n and bbox_of(item):
+                masks.setdefault(pno, []).append(bbox_of(item))
         elif isinstance(item, TableItem):
-            chars[pno] = chars.get(pno, 0) + sum(len(clean(c.text)) for c in item.data.table_cells)
+            n = sum(len(clean(c.text)) for c in item.data.table_cells)
+            chars[pno] = chars.get(pno, 0) + n
+            if not n:
+                unread_table.add(pno)
         elif isinstance(item, PictureItem):
-            pics.setdefault(pno, []).append(class_of(item))
+            cls = class_of(item)
+            pics.setdefault(pno, []).append(cls)
+            if cls in DECOR_CLASSES and bbox_of(item):
+                masks.setdefault(pno, []).append(bbox_of(item))
     n_pages = b.doc.page_count or 0
-    page_route = {p: route_page(chars.get(p, 0), pics.get(p, [])) for p in range(1, n_pages + 1)}
+
+    def unread(p: int) -> bool:
+        if chars.get(p, 0) >= MIN_PAGE_CHARS:
+            return False   # 글자 있는 쪽은 Docling 경로라 볼 필요 없음
+        return p in unread_table or _edge_ratio(raw, p, masks.get(p, [])) >= MIN_PAGE_EDGES
+
+    page_route = {p: route_page(chars.get(p, 0), pics.get(p, []), unread(p)) for p in range(1, n_pages + 1)}
     text_pages = {p for p, r in page_route.items() if r == PageRoute.TEXT}
 
     def image_page(pno: int) -> None:
@@ -181,6 +226,10 @@ def load_pdf(raw: bytes, vision: Optional[VisionHandler] = None,
         img = item.get_image(ddoc) if runner.enabled else None
         png = _png(img) if img is not None else None
         if route == PictureRoute.CHART_VISION:
+            # 영역 안 글자(단위·범례)는 코드가 읽은 문단으로 남기고, 값은 VLM [차트→표]
+            for t in texts:
+                b.paragraph(t, False)
+            mark(start, ["picture_text"] + tag, bbox)
             res = ask(VisionTask.TO_TABLE, png, pno, bbox, cls)
             if res is None:
                 placeholder(["needs_vision", "chart"] + tag, bbox)
