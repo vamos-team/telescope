@@ -39,7 +39,8 @@
    같은 공시의 XBRL과 그 전에 제출된 정기보고서 XBRL을 넘기면 된다(파일은 부르는 쪽이 고른다).
 8. XBRL로 확인되지 않은 표(XBRL이 없으면 전부): 장 제목·표 위 문구로 연결/별도·기간, 열 사이 합계 관계로
    소계·합계 열을 정한다(label_source="document").
-9. 같은 공시 XBRL이 있으면 XBRL 사실(extract_xbrl: 표시 구조로 바로 꺼낸 증감·잔액)을 먼저 쓰고, 표 사실은 XBRL이 덮지 못한 자산·기간 줄만 남긴다(_merge_xbrl).
+9. 같은 공시 XBRL이 있으면 XBRL 사실(extract_xbrl: 표시 구조로 바로 꺼낸 증감·잔액)을 먼저 쓰고, 표 사실은 XBRL이 덮지 못한
+   자산·기간 줄만 남긴다(_merge_xbrl). 회사가 XBRL에 태깅하지 않은 증감 행은 같은 표 줄에서 채운다(_fill_untagged).
 """
 from __future__ import annotations
 
@@ -164,16 +165,16 @@ def _match_item(parts: list[str]) -> Optional[str]:
     return None
 
 
-def _member_text(parts: list[str]) -> tuple[Optional[str], str]:
-    """반대 축 경로 → (자산 이름 글, 방식). 가장 깊은 의미 있는 라벨이 정한다. 계정 이름 머리글('유형자산')은
-    건너뛴다. ['유형자산','토지','장부금액 합계'] → '토지', ['유형자산 합계'] → None(total), 없으면 None(implicit_total)."""
+def _member_text(parts: list[str], account: tuple[str, str]) -> tuple[Optional[str], str]:
+    """반대 축 경로 → (자산 이름 글, 방식). 가장 깊은 의미 있는 라벨이 정한다. 그 표의 계정 이름 머리글('유형자산')만
+    건너뛴다(자본 표의 '자본금'·'이익잉여금'은 자산 종류). ['유형자산','토지','장부금액 합계'] → '토지', ['유형자산 합계'] → None(total), 없으면 None(implicit_total)."""
     meaningful = [p for p in parts
                   if _norm(p) and not any(m.search(_norm(p)) for m in MEASURE_DROP)
                   and not _MEASURE_WORDS.search(_norm(p))
                   and not (len(_norm(p)) <= 8 and detect_period(_norm(p)))]     # '당기말'·'2024년' 같은 기간 머리글
     for p in reversed(meaningful):
         n = _norm(p)
-        if n in _account_labels():
+        if re.sub(r"\s+", "", n) == re.sub(r"\s+", "", _norm(account[1])):
             continue
         if is_total_label(n):
             return None, "total"
@@ -207,20 +208,16 @@ def _bigrams(t: str) -> set[str]:
 
 
 def _table_member_names(account: tuple[str, str], path_lists) -> dict[str, tuple[str, str]]:
-    return _member_names(account, [_member_text(ps)[0] for ps in path_lists])
+    return _member_names(account, [_member_text(ps, account)[0] for ps in path_lists])
 
 
-def _member_of(parts: list[str], names: dict) -> tuple[tuple[str, str], str]:
+def _member_of(parts: list[str], names: dict, account: tuple[str, str]) -> tuple[tuple[str, str], str]:
     """반대 축 경로 → ((member, member_concept), method). member '' = 집계."""
-    x, how = _member_text(parts)
+    x, how = _member_text(parts, account)
     if x is None:
         return ("", ""), how
     lab, con = names.get(x, (x, ""))
     return (lab, con), ("xbrl" if con else "raw")
-
-
-def _account_labels() -> set[str]:
-    return {_norm(e["label"]) for e in xbrl_vocab.load()["accounts"].values()}
 
 
 def _account_slots() -> list[dict]:
@@ -291,10 +288,10 @@ def _measure_of(parts: list[str]) -> Optional[str]:
     return None
 
 
-def _member_two(other_parts: list[str], measure_parts: list[str], names: dict) -> tuple[tuple[str, str], str]:
+def _member_two(other_parts: list[str], measure_parts: list[str], names: dict, account) -> tuple[tuple[str, str], str]:
     """잔액표의 자산 종류: 측정 구분의 반대 축을 먼저, 없으면 측정 축 머리글에서."""
-    m1, k1 = _member_of(other_parts, names)
-    m2, k2 = _member_of(measure_parts, names)
+    m1, k1 = _member_of(other_parts, names, account)
+    m2, k2 = _member_of(measure_parts, names, account)
     for m, k, want in ((m1, k1, "xbrl"), (m2, k2, "xbrl"), (m1, k1, "raw"), (m2, k2, "raw")):
         if k == want:
             return m, k
@@ -346,7 +343,7 @@ def _balance_openclose(t, fy, account: tuple[str, str], hits: dict, item_axis: s
         ms = _measure_of(other)
         if not ms:
             continue
-        member, mmethod = _member_of(other, names)
+        member, mmethod = _member_of(other, names, account)
         end = _END.get((_period_of("", t.period_hint, fy), "open" if item == "기초" else "close"))
         if end:
             groups[(member, mmethod, end)].setdefault(ms, (c, " > ".join(other)))
@@ -373,7 +370,7 @@ def _balance_table(t, fy) -> list[dict]:
         if not ms:
             continue
         other, mpath = (c.row_path, c.col_path) if axis == "col" else (c.col_path, c.row_path)
-        member, mmethod = _member_two(other, mpath, names)
+        member, mmethod = _member_two(other, mpath, names, account)
         end = {"current": "current_end", "prior": "prior_end", "prior2": "prior2_end"}.get(
             _period_of(c.period, t.period_hint, fy))
         if end:
@@ -411,8 +408,9 @@ def extract(result: dict, fiscal_year: Optional[int] = None, xbrl: Optional[list
 def _merge_xbrl(facts: list[dict], result: dict, xbrl: list, period_end: str) -> list[dict]:
     """같은 공시 XBRL의 사실(extract_xbrl)을 먼저 쓰고, 표 사실은 XBRL이 덮지 못한 표만 남긴다.
     같은 공시 = XBRL 보고 기간 말이 문서 표지의 기간 말과 같은 zip(이전 정기보고서 zip은 이름표 확인에만 쓴다).
-    표 안의 한 자산·기간 줄마다 기초·기말(잔액이면 구성요소) 값이 전부 XBRL 사실 값과 같으면 XBRL이 덮은 것으로
-    보고 뺀다. 하나라도 XBRL에 없으면 그 줄은 남긴다(XBRL에 주석이 없거나 회사가 태깅하지 않은 줄)."""
+    표 안의 한 자산·기간 줄마다, 증감이면 기초·기말이 한 XBRL 증감 묶음의 기초·기말과 같을 때, 잔액이면 구성요소
+    값이 전부 XBRL 잔액 사실에 있을 때 XBRL이 덮은 것으로 보고 뺀다. 아니면 남긴다(XBRL에 주석이 없거나 회사가
+    태깅하지 않은 줄)."""
     xs = []
     for p in xbrl:
         try:
@@ -422,28 +420,91 @@ def _merge_xbrl(facts: list[dict], result: dict, xbrl: list, period_end: str) ->
             continue
     if not xs:
         return facts
-    keys = sorted(abs(f["value"]) for f in xs if f["value"] is not None
-                  and (f["kind"] == "balance" or f["item"] in ("기초", "기말")))
+    keys = sorted(abs(f["value"]) for f in xs if f["value"] is not None and f["kind"] == "balance")
+    # 증감 묶음은 기초·기말을 한 벌로 본다: 값이 각각 다른 묶음에 있는 것(당기 묶음의 기초 = 전기 표의 기말)은 덮은 게 아니다
+    pairs = defaultdict(dict)
+    for f in xs:
+        if f["kind"] == "movement" and f["item"] in ("기초", "기말") and f["value"] is not None:
+            pairs[(f["section"], f["account_concept"], f["member_concept"], f["scope"], f["period"])][f["item"]] = abs(f["value"])
+    pairs = [(p["기초"], p["기말"]) for p in pairs.values() if len(p) == 2]
     _, mult = _cells_and_mult(result)
 
-    def in_xbrl(v: float, tno) -> bool:
+    def tol_of(tno) -> float:
         m = mult.get(tno, 1.0)
-        tol = 0.5 * m if m > 1 else 0.5
+        return 0.5 * m if m > 1 else 0.5
+
+    def in_xbrl(v: float, tno) -> bool:
+        tol = tol_of(tno)
         i = bisect.bisect_left(keys, abs(v) - tol)
         return i < len(keys) and keys[i] <= abs(v) + tol
+
+    def pair_in_xbrl(o: float, c: float, tno) -> bool:
+        tol = tol_of(tno)
+        return any(abs(abs(o) - a) <= tol and abs(abs(c) - b) <= tol for a, b in pairs)
 
     # 표 안의 한 자산·기간 줄(증감: 기초~기말 한 벌, 잔액: 한 시점의 구성요소 한 벌)마다 판단한다
     by_line = defaultdict(list)
     for f in facts:
         by_line[(f["table_no"], f["kind"], f["member"], f["period"])].append(f)
-    keep = []
+    keep, covered = [], []
     for (tno, *_), fs in by_line.items():
-        anchors = [f for f in fs if f["value"] is not None and f["value"] != 0
-                   and (f["kind"] == "balance" or f["item"] in ("기초", "기말"))]
-        if anchors and all(in_xbrl(f["value"], tno) for f in anchors):
+        if fs[0]["kind"] == "movement":
+            o = next((f["value"] for f in fs if f["item"] == "기초" and f["value"] is not None), None)
+            c = next((f["value"] for f in fs if f["item"] == "기말" and f["value"] is not None), None)
+            hit = o is not None and c is not None and (o or c) and pair_in_xbrl(o, c, tno)
+        else:
+            anchors = [f for f in fs if f["value"] is not None and f["value"] != 0]
+            hit = bool(anchors) and all(in_xbrl(f["value"], tno) for f in anchors)
+        if hit:
+            covered.append(fs)
             continue
         keep.extend(fs)
-    return xs + keep
+    return xs + _fill_untagged(xs, covered, mult) + keep
+
+
+def _fill_untagged(xs: list[dict], covered: list[list[dict]], mult: dict) -> list[dict]:
+    """XBRL 증감 묶음의 검산이 안 맞을 때(회사가 일부 항목을 태깅하지 않음), 같은 기초·기말 값의 표 줄에서
+    XBRL에 없는 값의 증감 행을 찾아 그 합이 모자란 금액과 같으면 채운다. 개념은 표 파서가 붙인 것(이름표 임베딩).
+    채운 뒤 묶음 전체를 verified로 바꾼다. 합이 안 맞으면 채우지 않는다."""
+    groups = defaultdict(list)
+    for f in xs:
+        if f["kind"] == "movement":
+            groups[(f["section"], f["account_concept"], f["member_concept"], f["scope"], f["period"])].append(f)
+    out = []
+    for fs in covered:
+        mv = [f for f in fs if f["kind"] == "movement"]
+        o = next((f for f in mv if f["item"] == "기초"), None)
+        c = next((f for f in mv if f["item"] == "기말"), None)
+        if not o or not c or o["value"] is None or c["value"] is None:
+            continue
+        tno = o["table_no"]
+        m = mult.get(tno, 1.0)
+        tol = 0.5 * m if m > 1 else 0.5
+        same = lambda a, b: a is not None and b is not None and abs(abs(a) - abs(b)) <= tol
+        for g in groups.values():
+            go = next((f for f in g if f["item"] == "기초"), None)
+            gc = next((f for f in g if f["item"] == "기말"), None)
+            if not go or not gc or go["status"] != "mismatch" or not same(go["value"], o["value"]) \
+                    or not same(gc["value"], c["value"]):
+                continue
+            top = [f for f in g if f["item"] not in ("기초", "기말") and f["status"] != "breakdown"]
+            gap = gc["value"] - go["value"] - sum(f["value"] for f in top)
+            have = [f["value"] for f in g if f["value"]]
+            miss = [f for f in mv if f["item"] not in ("기초", "기말") and f["status"] != "breakdown"
+                    and f["value"] and not any(same(f["value"], h) for h in have)]
+            if not miss or abs(sum(f["value"] for f in miss) - gap) > max(2.0 * m, abs(gap) * 0.001):
+                continue
+            for f in miss:
+                out.append({**f, "scope": go["scope"], "period": go["period"], "account": go["account"],
+                            "account_concept": go["account_concept"], "member": go["member"],
+                            "member_concept": go["member_concept"], "section": go["section"], "status": "verified",
+                            "label_source": "xbrl+document",
+                            "note": "XBRL에 태깅 없음 — 같은 기초·기말의 표 값으로 채움(개념은 이름표 임베딩)"})
+            for f in g:
+                if f["status"] == "mismatch":
+                    f["status"], f["note"] = "verified", "XBRL에 없는 항목을 표 값으로 채워 검산 일치"
+            break
+    return out
 
 
 def _close(a: float, b: float) -> bool:
@@ -657,11 +718,21 @@ def _extract_table(t, fy) -> list[dict]:
     cand, has_net = [], set()
     bal: dict[tuple, dict] = defaultdict(dict)
     names = _table_member_names(account, [[p for p in item_side(c)[2] if p not in common] for c in t.cells])
+    # 한 줄의 기간은 그 줄의 기초·기말 머리글('당기초'·'전기말')이 정한다. 표 위 문장('당기 및 전기 중 … ① 당기')에서
+    # 읽은 기간이 증감 칸에만 붙어 한 줄이 두 기간으로 쪼개지지 않게
+    line_of = (lambda c: c.c) if item_axis == "row" else (lambda c: c.r)
+    line_per = {}
+    for c in t.cells:
+        idx, item_parts, _, _ = item_side(c)
+        if hits.get(idx) in ("기초", "기말") and item_parts:
+            p = detect_period(_norm(item_parts[-1]))
+            if p in ("current", "prior", "prior2"):
+                line_per.setdefault(line_of(c), p)
     for c in t.cells:
         idx, item_parts, _, label = item_side(c)
         mparts = [p for p in item_side(c)[2] if p not in common]
-        member, mmethod = _member_of(mparts, names)
-        period = _period_of(c.period, t.period_hint, fy)
+        member, mmethod = _member_of(mparts, names, account)
+        period = line_per.get(line_of(c)) or _period_of(c.period, t.period_hint, fy)
         col_measure = _measure_of(mparts)
         dropped = any(m.search(_norm(p)) for p in mparts for m in MEASURE_DROP)
         if idx in comp_idx:
@@ -781,9 +852,13 @@ class _XbrlDoc:
             names = z.namelist()
             inst = next(n for n in names if n.endswith(".xbrl"))
             pre = next((n for n in names if n.endswith("_pre.xml")), None)
+            cal = next((n for n in names if n.endswith("_cal.xml")), None)
+            dfn = next((n for n in names if n.endswith("_def.xml")), None)
             lab = next((n for n in names if re.search(r"lab-ko\.xml$|lab_.*-ko_.*\.xml$", n)), None)
             self.labels = self._labels(z.read(lab)) if lab else {}
             self.links = self._presentation(z.read(pre)) if pre else []
+            self.calc = self._calculation(z.read(cal)) if cal else {}
+            self.defaults = self._defaults(z.read(dfn)) if dfn else {}
             self._instance(_xml(z.read(inst)))
 
     @staticmethod
@@ -799,6 +874,27 @@ class _XbrlDoc:
                 if c and text:
                     out[c].setdefault(role, text)
         return out
+
+    @staticmethod
+    def _defaults(raw: bytes) -> dict[str, str]:
+        """정의 구조의 축 기본값(dimension-default): 축 이름 → 합계 구성요소."""
+        out = {}
+        for link in _xml(raw).iter(_LB + "definitionLink"):
+            loc = {x.get(_XL + "label"): x.get(_XL + "href").split("#")[-1] for x in link.iter(_LB + "loc")}
+            for a in link.iter(_LB + "definitionArc"):
+                if (a.get(_XL + "arcrole") or "").endswith("/dimension-default"):
+                    out[_local(loc[a.get(_XL + "from")])] = loc[a.get(_XL + "to")]
+        return out
+
+    @staticmethod
+    def _calculation(raw: bytes) -> dict[str, set[str]]:
+        """계산 구조: 합 개념 → 그 합을 이루는 개념들(모든 계산 묶음을 합친 것)."""
+        out: dict[str, set[str]] = defaultdict(set)
+        for link in _xml(raw).iter(_LB + "calculationLink"):
+            loc = {x.get(_XL + "label"): x.get(_XL + "href").split("#")[-1] for x in link.iter(_LB + "loc")}
+            for a in link.iter(_LB + "calculationArc"):
+                out[loc[a.get(_XL + "from")]].add(loc[a.get(_XL + "to")])
+        return dict(out)
 
     @staticmethod
     def _presentation(raw: bytes) -> list[tuple[str, dict]]:
@@ -842,10 +938,16 @@ class _XbrlDoc:
         ends = [end for fs in self.facts.values() for _, s, end, *_ in fs if s and end]
         self.period_end = max(ends) if ends else None
 
-    def label(self, concept: str) -> str:
+    def label(self, concept: str, role: str = "") -> str:
+        """한글 이름표. role(표시 구조 연결선의 preferredLabel, 예: terseLabel)이 있으면 회사가 그 표에 쓴 이름."""
         d = self.labels.get(concept, {})
-        return re.sub(r"\s*\[(구성요소|member|개요)\]\s*$", "", d.get("label") or next(iter(d.values()), _local(concept)),
-                      flags=re.I)
+        t = d.get(role) or d.get("label") or next(iter(d.values()), _local(concept))
+        return re.sub(r"\s*\[(구성요소|member|개요)\]\s*$", "", t, flags=re.I)
+
+    def names(self, concept: str) -> list[str]:
+        """후보 이름: 그 개념의 한글 이름표 전부(표준 이름표 + 회사가 쓴 이름, 설명문 제외)."""
+        d = self.labels.get(concept, {})
+        return list(dict.fromkeys(self.label(concept, r) for r in d if r != "commentaryGuidance"))
 
 
 @lru_cache(maxsize=64)
@@ -858,7 +960,8 @@ def _xbrl_period_end(path) -> Optional[str]:
     return _xdoc(str(path)).period_end
 
 
-def _x_tables(kids: dict) -> list[dict]:
+def _x_tables(kids: dict, calc: Optional[dict] = None, vocab: Optional[dict] = None,
+              defaults: Optional[dict] = None) -> list[dict]:
     """표시 묶음 → 증감 묶음 목록: {account, items: [(개념, 감소 여부, 내역 행 여부)], axes: {축: 도메인 구성요소}}."""
     def below(n, seen=()):
         for k, _ in kids.get(n, ()):
@@ -869,8 +972,10 @@ def _x_tables(kids: dict) -> list[dict]:
     axes = {}
     for n in kids:
         if n.endswith("Axis"):
-            # 합계 구성요소: 축 바로 밑(도메인)과, 축 아래에서 다른 구성요소를 묶는(자식이 있는) 구성요소
-            axes[_local(n)] = {k for k, _ in kids.get(n, ())} | {k for k in below(n) if kids.get(k)}
+            # 합계 구성요소: 정의 구조의 축 기본값(없으면 축 바로 밑)과, 축 아래에서 다른 구성요소를 묶는(자식이 있는) 구성요소
+            ax = _local(n)
+            base = {defaults[ax]} if defaults and ax in defaults else {k for k, _ in kids.get(n, ())}
+            axes[ax] = base | {k for k in below(n) if kids.get(k)}
     out = []
     for parent, ks in kids.items():
         starts = {k for k, r in ks if r == "periodStartLabel"}
@@ -884,16 +989,33 @@ def _x_tables(kids: dict) -> list[dict]:
                     for k2, r2 in kids.get(k, ()):
                         add(k2, r2)
                     return
-                items.append((k, r.startswith("negated"), False))
+                items.append((k, r.startswith("negated"), False, r))
                 for sub in below(k):
                     if not sub.endswith("Abstract"):
-                        items.append((sub, False, True))
+                        items.append((sub, False, True, ""))
 
             # 표시 순서에서 기초와 기말 사이에 있는 자식만 증감 항목('…임대수익' 같은 다른 공시는 밖에 있다)
             i0 = next(i for i, (k, r) in enumerate(ks) if k == b and r == "periodStartLabel")
             i1 = next(i for i, (k, r) in enumerate(ks) if k == b and r == "periodEndLabel")
             for k, r in ks[min(i0, i1) + 1:max(i0, i1)]:
                 add(k, r)
+            have = {c for c, *_ in items}
+            # 기초~기말 밖에 둔 형제라도 다른 공시들이 이 계정의 증감 항목으로 쓰는 개념(KT가 기말 뒤에 둔
+            # '재고자산과의 대체' 등) = 내역 행. '…임대수익'처럼 증감 항목으로 안 쓰는 개념은 그대로 밖
+            e = (vocab or {}).get(b)
+            for k, r in ks[:min(i0, i1)] + ks[max(i0, i1) + 1:]:
+                if e and k != b and k not in have and e["items"].get(k, [0, 0])[1] >= _RARE * e["n"]:
+                    have.add(k)
+                    items.append((k, False, True, r))
+            # 계산 구조상 증감 항목의 합을 이루는 개념 = 내역 행
+            for c, _, sub, _ in list(items):
+                stack = [] if sub else list((calc or {}).get(c, ()))
+                while stack:
+                    x = stack.pop()
+                    if x not in have:
+                        have.add(x)
+                        items.append((x, False, True, ""))
+                        stack.extend((calc or {}).get(x, ()))
             out.append({"account": b, "items": items, "axes": axes})
     return out
 
@@ -929,14 +1051,30 @@ def _x_member(dims: dict, axes: dict, doc: _XbrlDoc) -> tuple[str, str]:
 
 
 def _x_fact(doc, kind, period, account, member, item, concept, v, unit, decimals, status, note, role, method) -> dict:
+    """annotation: *_names = 후보 이름(XBRL 표준 이름표 + 회사가 쓴 이름), precision = decimals를 읽은 반올림 단위."""
     u = _UNIT_KO.get(unit, unit)
     return {"kind": kind, "scope": "", "label_source": "xbrl", "period": period,
-            "account": doc.label(account), "account_concept": account,
-            "member": member[0], "member_concept": member[1], "item": item, "item_concept": concept,
+            "account": doc.label(account), "account_concept": account, "account_names": doc.names(account),
+            "member": member[0], "member_concept": member[1], "member_names": doc.names(member[1]) if member[1] else [],
+            "item": item, "item_concept": concept, "item_names": doc.names(concept) if concept else [],
             "value": v, "value_eok": v / 1e8 if unit == "KRW" else None, "unit": u, "decimals": decimals,
+            "precision": _precision(decimals, u),
             "status": status, "note": note, "method": method, "label": item,
             "table_no": None, "r": None, "c": None, "src_ref": doc.path, "page": None, "sheet": None,
             "section": role}
+
+
+def _precision(decimals, unit: str) -> str:
+    """decimals → 반올림 단위('-6' + 원 → '백만원', 'INF' → '정확'). 금액 값 자체는 이미 원 단위."""
+    if decimals in (None, "INF"):
+        return "정확" if decimals == "INF" else ""
+    try:
+        d = int(decimals)
+    except ValueError:
+        return ""
+    if unit == "원" and d <= 0:
+        return {0: "원", -3: "천원", -6: "백만원", -8: "억원", -9: "십억원", -12: "조원"}.get(d, f"10^{-d}원")
+    return f"소수 {d}자리" if d > 0 else f"10^{-d}{unit}"
 
 
 def extract_xbrl(path) -> list[dict]:
@@ -946,7 +1084,7 @@ def extract_xbrl(path) -> list[dict]:
         return []
     out, seen = [], set()
     for role, kids in doc.links:
-        for tb in _x_tables(kids):
+        for tb in _x_tables(kids, doc.calc, xbrl_vocab.load()["accounts"], doc.defaults):
             out.extend(_x_movement(doc, role, tb, seen))
             out.extend(_x_balance(doc, role, tb, seen))
     return out
@@ -955,30 +1093,37 @@ def extract_xbrl(path) -> list[dict]:
 def _x_movement(doc: _XbrlDoc, role: str, tb: dict, seen: set) -> list[dict]:
     acc, axes = tb["account"], tb["axes"]
     allowed = set(axes) | {_SCOPE_AX, _MEASURE_AX}
-    # (scope, 자산 종류 축들, 기간 끝) → {시작: {item 개념: 값}}
-    groups = defaultdict(lambda: defaultdict(dict))
+    # (scope, 자산 종류 축들, 기간 끝) → {시작: {item 개념: {측정 축 명시 여부: 값}}}
+    # 같은 개념·기간 값이 측정 축('공시금액')이 붙은 것과 안 붙은 것 둘이면(다른 공시의 값이 섞임) 묶음마다
+    # 기초 + 증감과 기말의 차이가 가장 작은 쪽을 고른다(아래). 회사마다 증감표에 쓴 쪽이 다르다
+    groups = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
     meta = {}
-    for c, neg, sub in tb["items"]:
+    fits = lambda f: (_MEASURE_AX in f[0]) == (_MEASURE_AX in axes)
+    for c, neg, sub, _ in tb["items"]:
         for dims, s, end, v, unit, dec in doc.facts.get(c, ()):
+            explicit = _MEASURE_AX in dims
             dims = _x_net_dims(dims)
             if not s or dims is None or not set(dims) <= allowed:
                 continue
             key = (dims.get(_SCOPE_AX, ""), tuple(sorted((a, m) for a, m in dims.items() if a != _SCOPE_AX)), end)
-            groups[key][s][c] = -v if neg else v
+            groups[key][s][c][explicit] = -v if neg else v
             meta[c] = (unit, dec, sub)
     bal = defaultdict(dict)
-    for dims, s, end, v, unit, dec in doc.facts.get(acc, ()):
+    for dims, s, end, v, unit, dec in sorted(doc.facts.get(acc, ()), key=fits):
         dims = _x_net_dims(dims)
         if s is None and dims is not None and set(dims) <= allowed:
             bal[(dims.get(_SCOPE_AX, ""), tuple(sorted((a, m) for a, m in dims.items() if a != _SCOPE_AX)))][end] = (v, unit, dec)
     out = []
     for (scope, dkey, end), by_start in groups.items():
         start = min(by_start)                    # 같은 끝 날짜에 기간이 여럿이면 누계(가장 이른 시작)
-        vals = by_start[start]
         open_d = (date.fromisoformat(start) - timedelta(days=1)).isoformat()
         b = bal.get((scope, dkey), {})
         if open_d not in b or end not in b:
             continue
+        pref = _MEASURE_AX in axes
+        variants = [{c: d.get(p, d.get(not p)) for c, d in by_start[start].items()} for p in (pref, not pref)]
+        top_of = lambda vals: [c for c, _, sub, _ in tb["items"] if c in vals and not meta[c][2]]
+        vals = min(variants, key=lambda vs: abs(b[open_d][0] + sum(vs[c] for c in top_of(vs)) - b[end][0]))   # 차이가 가장 작은 쪽
         key = (role, acc, scope, dkey, end)
         if key in seen:
             continue
@@ -986,16 +1131,16 @@ def _x_movement(doc: _XbrlDoc, role: str, tb: dict, seen: set) -> list[dict]:
         dims = dict(dkey)
         member = _x_member(dims, axes, doc)
         period = _x_period(end, doc.period_end)
-        top = [c for c, _, sub in tb["items"] if c in vals and not meta[c][2]]
+        top = [c for c, _, sub, _ in tb["items"] if c in vals and not meta[c][2]]
         s = b[open_d][0] + sum(vals[c] for c in top)
         ok = abs(s - b[end][0]) <= max(2.0, abs(b[end][0]) * 0.001)
         st = "verified" if ok else "mismatch"
         note = "" if ok else f"기초+증감={s:,.0f} vs 기말={b[end][0]:,.0f}"
         rows = [("기초", "", b[open_d], st, note)]
-        for c, _, sub in tb["items"]:
+        for c, _, sub, role_c in tb["items"]:
             if c in vals:
                 unit, dec, _ = meta[c]
-                rows.append((doc.label(c), c, (vals[c], unit, dec), "breakdown" if sub else st,
+                rows.append((doc.label(c, role_c), c, (vals[c], unit, dec), "breakdown" if sub else st,
                              "위 항목의 내역 — 합산 시 제외" if sub else note))
         rows.append(("기말", "", b[end], st, note))
         for item, concept, (v, unit, dec), st2, nt in rows:

@@ -1,8 +1,9 @@
 """증감표 후보 목록: DART XBRL 파일의 표시 구조와 한글 이름표에서 모은 계정·항목·자산 종류.
 
-손으로 쓴 단어 목록 대신 쓴다. 증감표 계정 = 표시 구조에서 같은 부모 아래 '기초 ○○'(periodStartLabel)와
-'기말 ○○'(periodEndLabel)이 붙은 개념. 그 부모의 다른 자식 = 증감 항목(negatedLabel이면 감소),
-같은 표시 묶음의 축 구성요소 = 자산 종류·측정 구분. 회사가 만든 개념(entity…)은 넣지 않는다.
+손으로 쓴 단어 목록 대신 쓴다. 증감 묶음은 facts.extract_xbrl과 같은 기준(facts._x_tables)으로 찾는다:
+계정 = 같은 부모 아래 '기초 ○○'(periodStartLabel)와 '기말 ○○'(periodEndLabel)이 붙은 개념,
+증감 항목 = 표시 순서로 기초~기말 사이의 자식(negated… 역할이면 감소), 같은 표시 묶음의 축 구성요소 = 자산 종류·측정 구분.
+회사가 만든 개념(entity…)은 넣지 않는다.
 
     python -m parsers.xbrl_vocab <XBRL zip 폴더> [출력 경로]     # 폴더 아래 *.zip 전부 (하위 폴더 포함)
 
@@ -19,9 +20,6 @@ from pathlib import Path
 
 PATH = Path(__file__).with_name("xbrl_vocab.json")
 
-_L = "{http://www.xbrl.org/2003/linkbase}"
-_X = "{http://www.w3.org/1999/xlink}"
-_SCOPE_AX = "ConsolidatedAndSeparateFinancialStatementsAxis"
 _MEASURE_AX = "CarryingAmountAccumulatedDepreciationAmortisationAndImpairmentAndGrossCarryingAmountAxis"
 
 
@@ -29,27 +27,9 @@ def _std(concept: str) -> bool:
     return not concept.startswith("entity")
 
 
-def _xml(raw: bytes):
-    from lxml import etree
-    return etree.fromstring(raw, etree.XMLParser(recover=True, huge_tree=True))
-
-
-def _labels(raw: bytes) -> dict[str, dict[str, str]]:
-    """개념 → {이름표 역할: 한글}. 역할: label, periodStartLabel, periodEndLabel, totalLabel …"""
-    out: dict[str, dict[str, str]] = defaultdict(dict)
-    for link in _xml(raw).iter(_L + "labelLink"):
-        loc = {x.get(_X + "label"): x.get(_X + "href").split("#")[-1] for x in link.iter(_L + "loc")}
-        lab = {x.get(_X + "label"): ((x.get(_X + "role") or "").split("/")[-1], (x.text or "").strip())
-               for x in link.iter(_L + "label")}
-        for a in link.iter(_L + "labelArc"):
-            c, (role, text) = loc.get(a.get(_X + "from")), lab.get(a.get(_X + "to"), ("", ""))
-            if c and text:
-                out[c].setdefault(role, text)
-    return out
-
-
 def build(zip_dir: str | Path) -> dict:
     """zip 폴더 → 후보 목록. 개념마다 몇 개 공시에서 그 계정의 증감 항목·자산 종류로 쓰였는지 센다."""
+    from .facts import _XbrlDoc, _local, _x_tables, _SCOPE_AX
     acc = defaultdict(lambda: {"n": 0, "items": Counter(), "neg": Counter(), "members": Counter(), "measures": Counter()})
     names: dict[str, dict[str, str]] = defaultdict(dict)
     n_zip = 0
@@ -59,9 +39,12 @@ def build(zip_dir: str | Path) -> dict:
                 files = f.namelist()
                 pre = next((n for n in files if n.endswith("_pre.xml")), None)
                 lab = next((n for n in files if n.endswith("lab-ko.xml")), None)
+                cal = next((n for n in files if n.endswith("_cal.xml")), None)
                 if not pre or not lab:
                     continue
-                tree, labels = _xml(f.read(pre)), _labels(f.read(lab))
+                links = _XbrlDoc._presentation(f.read(pre))
+                labels = _XbrlDoc._labels(f.read(lab))
+                calc = _XbrlDoc._calculation(f.read(cal)) if cal else {}
         except (zipfile.BadZipFile, OSError):
             continue
         n_zip += 1
@@ -69,34 +52,29 @@ def build(zip_dir: str | Path) -> dict:
             if _std(c):
                 for role, text in d.items():
                     names[c].setdefault(role, text)
-        for link in tree.iter(_L + "presentationLink"):
-            loc = {x.get(_X + "label"): x.get(_X + "href").split("#")[-1] for x in link.iter(_L + "loc")}
-            kids = defaultdict(list)
-            for a in link.iter(_L + "presentationArc"):
-                kids[loc[a.get(_X + "from")]].append((loc[a.get(_X + "to")], (a.get("preferredLabel") or "").split("/")[-1]))
-
-            def below(node, seen=()):
-                for k, _ in kids.get(node, ()):
-                    if k not in seen:
-                        yield k
-                        yield from below(k, seen + (k,))
-
-            axes = [n for n in kids if n.endswith("Axis") and not n.endswith(_SCOPE_AX)]
-            for parent, ks in kids.items():
-                starts = {k for k, role in ks if role == "periodStartLabel"}
-                for b in starts & {k for k, role in ks if role == "periodEndLabel"}:
-                    if not _std(b):
-                        continue
-                    e = acc[b]
-                    e["n"] += 1
-                    for k, role in ks:
-                        if k != b and _std(k) and not k.endswith("Abstract"):
-                            e["items"][k] += 1
-                            e["neg"][k] += role.startswith("negated")      # negatedTerseLabel 등 포함
-                    for ax in axes:
-                        for m in below(ax):
+        for _, kids in links:
+            for tb in _x_tables(kids, calc):
+                b = tb["account"]
+                if not _std(b):
+                    continue
+                e = acc[b]
+                e["n"] += 1
+                for c, neg, sub, _ in tb["items"]:
+                    if not sub and _std(c) and not c.endswith("Abstract"):
+                        e["items"][c] += 1
+                        e["neg"][c] += neg
+                for ax in kids:
+                    if ax.endswith("Axis") and _local(ax) != _SCOPE_AX:
+                        stack = [k for k, _ in kids.get(ax, ())]
+                        seen = set()
+                        while stack:
+                            m = stack.pop()
+                            if m in seen:
+                                continue
+                            seen.add(m)
+                            stack.extend(k for k, _ in kids.get(m, ()))
                             if m.endswith("Member") and _std(m):
-                                e["measures" if ax.endswith(_MEASURE_AX) else "members"][m] += 1
+                                e["measures" if _local(ax) == _MEASURE_AX else "members"][m] += 1
 
     def name(c, role="label"):
         return names.get(c, {}).get(role, "")
@@ -107,7 +85,7 @@ def build(zip_dir: str | Path) -> dict:
             continue
         out["accounts"][b] = {
             "n": e["n"], "label": name(b), "start": name(b, "periodStartLabel"), "end": name(b, "periodEndLabel"),
-            # 개념 → [한글 이름표, 쓰인 공시 수, 감소(negatedLabel)로 쓰인 공시 수]
+            # 개념 → [한글 이름표, 쓰인 공시 수, 감소(negated…)로 쓰인 공시 수]
             "items": {c: [name(c), n, e["neg"][c]] for c, n in e["items"].most_common() if n >= 2 and name(c) and c not in acc},
             "members": {c: [name(c), n] for c, n in e["members"].most_common() if n >= 2 and name(c)},
             "measures": {c: [name(c), n] for c, n in e["measures"].most_common() if n >= 2 and name(c)},
