@@ -8,7 +8,6 @@ spec:
   template:
     metadata: { labels: { app: backend } }
     spec:
-      imagePullSecrets: [{ name: harbor-cred }]
       containers:
         - name: backend
           image: skala-registry.skala-ai.com/p3-1/backend
