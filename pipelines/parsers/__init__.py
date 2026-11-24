@@ -15,11 +15,12 @@ from typing import Optional
 
 from .hints import clear_hints, set_hints, suggest_unit_hints
 from .loaders import load
+from .markdown import split_markdown, to_markdown
 from .tables import analyze
 from .vision import VisionHandler, VisionRequest, VisionResult, VisionTask
 
-PARSER_VERSION = "ingest-1.3"   # 1.3: tables에 원문 격자(rows) 추가. 1.2: PDF를 Docling으로 읽고 쪽·그림 라우팅
-__all__ = ["parse", "load", "analyze", "set_hints", "clear_hints", "suggest_unit_hints", "PARSER_VERSION",
+PARSER_VERSION = "ingest-1.3"   # 1.3: tables에 원문 격자(rows) 추가, 마크다운 변환. 1.2: PDF를 Docling으로 읽고 쪽·그림 라우팅
+__all__ = ["parse", "load", "analyze", "to_markdown", "split_markdown", "set_hints", "clear_hints", "suggest_unit_hints", "PARSER_VERSION",
            "VisionHandler", "VisionRequest", "VisionResult", "VisionTask"]
 
 
