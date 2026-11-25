@@ -6,4 +6,6 @@
 - [프런트엔드 API 명세 (초안)](api-spec.md)
 - [프런트엔드 API 다이어그램](api-diagram.md)
 - [v02-canvas 기획서](../planning/기획서.md)
+- [v02-canvas 설계서 (데이터 출처 · AI 백엔드 전략)](../planning/설계서.md)
+- #97 기능 최종 수정 반영: 자료 검색(대시보드 · 검색 · 인사이트), 프롬프트(카드 · 선 · 프롬프트 카드), 생성하기(결과물 → 질문 → 평가). `demo.html`은 아직 다시 빌드하지 않음
 - [v02-canvas 데모 초안](../../frontend/README.md): 코드는 `frontend/`, 빌드된 한 파일은 [`docs/frontend/demo.html`](demo.html)
