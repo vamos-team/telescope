@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 캔버스 홈(C00): 내가 볼 수 있는 캔버스 전부 (Figma 파일 목록처럼). 로그인하면 여기로 옴
 import { computed, ref } from "vue";
-import { useCanvas, memberOf, roleOf, accessText, when, ROLE, type CanvasMeta } from "../stores/canvas";
+import { useCanvas, memberOf, roleOf, when, ROLE, type CanvasMeta } from "../stores/canvas";
 import Logo from "./Logo.vue";
 
 const cv = useCanvas();
@@ -54,7 +54,7 @@ function del(m: CanvasMeta) { if (confirm(`'${m.name}' 캔버스를 지울까요
             </span>
             <b>{{ m.name }}</b>
             <small>{{ m.updatedBy }} · {{ when(m.updated) }} 수정 · 카드 {{ m.count }}</small>
-            <small>{{ ROLE[roleOf(m, cv.user)!] }} · {{ accessText(m) }}</small>
+            <small>{{ ROLE[roleOf(m, cv.user)!] }}</small>
           </button>
           <button v-if="roleOf(m, cv.user) === 'owner'" class="x" :aria-label="m.name + ' 지우기'" title="지우기" @click="del(m)">✕</button>
         </li>

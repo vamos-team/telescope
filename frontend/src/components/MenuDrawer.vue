@@ -2,7 +2,7 @@
 // 로고를 누르면 왼쪽에서 밀려 나오는 사이드 팝업: 지금 캔버스 정보(정보 수정 → 공유 창) + 탭(홈 / 나의 캔버스)
 // 닫기: 바깥 클릭, Esc(App), ✕
 import { ref } from "vue";
-import { useCanvas, roleOf, accessText, when, quarterOf, ROLE } from "../stores/canvas";
+import { useCanvas, roleOf, when, quarterOf, ROLE } from "../stores/canvas";
 import Logo from "./Logo.vue";
 
 const emit = defineEmits<{ close: []; edit: [] }>();
@@ -19,7 +19,7 @@ function home() { emit("close"); cv.goHome(); }
       <section v-if="cv.meta" class="cur">
         <small>지금 캔버스</small>
         <b>{{ cv.canvasName }}</b>
-        <span>{{ quarterOf(cv.meta) }} · {{ ROLE[cv.role!] }} · {{ accessText(cv.meta) }}</span>
+        <span>{{ quarterOf(cv.meta) }} · {{ ROLE[cv.role!] }}</span>
         <button class="line" @click="emit('edit')">정보 수정</button>
       </section>
       <div class="tabs" role="tablist">
