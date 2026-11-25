@@ -2,10 +2,11 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: p3-1
 resources:
-  - mysql.yaml
   - backend.yaml
   - frontend.yaml
   - ingress.yaml
+  - chroma.yaml
+  - pg-proxy.yaml
 images:
   - name: skala-registry.skala-ai.com/p3-1/backend
     newName: 881490135253.dkr.ecr.ap-northeast-2.amazonaws.com/teams/p3-1/app
