@@ -4,7 +4,7 @@ Telescope 캔버스 화면입니다. 부서 사람들이 공시·IR·뉴스·사
 
 - 기술: Vue 3 + TypeScript, Vue Flow(캔버스), Pinia(상태), Vite(개발 서버·빌드), Electron(데스크톱 창)
 - 띄우는 곳: 브라우저(`npm run dev`)와 데스크톱 앱(`npm run electron:dev`)
-- 지금 상태: backend 연결 전입니다. 서버가 할 일은 `src/local/`이 브라우저 안에서 대신하고, 재무 수치·기사·링크는 팀이 만든 목업 자료입니다(4장).
+- 지금 상태: backend 연결 전입니다. 서버가 할 일은 `src/local/`이 브라우저 안에서 대신하고, 재무 수치·기사·링크는 팀이 만든 목업 자료입니다(5장, 원본은 6장).
 
 ## 1. 실행
 
@@ -130,7 +130,23 @@ npm run electron       # 배포용 빌드(dist/) 후 그 결과를 Electron 창�
 
 시각화 카드는 화면에만 있고 프롬프트 추출에는 들어가지 않습니다. 판정 규칙은 브라우저 콘솔에서 `__aiSelfCheck()`로 점검합니다.
 
-## 6. 로컬 자료 (`data/`)
+## 6. 로컬 자료 (저장소 루트 `data/demo/`)
+
+원본 자료는 저장소 루트의 `data/demo/`에 둡니다. 루트 `data/`는 git에 올리지 않는 폴더(`.gitkeep`만 올라감)라서 자료는 팀 안에서 따로 주고받습니다.
+
+- **받을 때**: 공유받은 파일을 `data/demo/`에 그대로 넣습니다. 폴더 구조는 아래 표와 같습니다.
+- **보낼 때**: 고친 `data/demo/` 폴더를 통째로 압축해 공유합니다.
+- **화면만 고칠 때는 필요 없습니다.** 화면은 이 자료를 합친 `frontend/src/local/data.json`(git에 있음)을 씁니다. 그래서 자료가 없어도 `npm run dev`, 빌드, CI·배포가 그대로 돌아갑니다.
+
+```
+telescope/
+├ data/demo/      ← 공유 자료 (git 제외)
+│  ├ manifest.json, *.xml, *.csv, sources.json, analysis.json
+│  └ examples/
+└ frontend/
+   ├ scripts/make_data.py   data/demo → src/local/data.json
+   └ src/local/data.json    화면이 쓰는 합친 파일 (git 포함)
+```
 
 | 파일 | 내용 |
 |---|---|
@@ -143,16 +159,16 @@ npm run electron       # 배포용 빌드(dist/) 후 그 결과를 Electron 창�
 | `analysis.json` | 3사 비교 AI 분석, 결과물 양식(섹션·태그), 질문 뱅크, 평가용 다음 분기(2Q26) 실적과 리포트 쟁점 |
 | `examples/` | 예전 백엔드로 낸 기대 결과 (대조용, 이전 목업 회사명 기준) |
 
-결과물 양식, 질문, 평가 기준은 코드가 아니라 `analysis.json`에서 바꿉니다. 2Q26 자료는 평가 탭에서만 쓰고 초안·질문 생성에는 넣지 않습니다(시점 통제).
+결과물 양식, 질문, 평가 기준은 코드가 아니라 `data/demo/analysis.json`에서 바꿉니다. 2Q26 자료는 평가 탭에서만 쓰고 초안·질문 생성에는 넣지 않습니다(시점 통제).
 
-`data/`를 고쳤을 때는 빌드 전에 `src/local/data.json`을 다시 만듭니다. 화면만 고칠 때는 필요 없습니다(커밋된 `data.json`을 씀).
+`data/demo/`를 고쳤을 때는 `src/local/data.json`을 다시 만들고, 바뀐 `data.json`을 커밋합니다. `npm run dev`가 켜져 있으면 새 `data.json`이 화면에 바로 반영됩니다.
 
 ```bash
 T=<템플릿 위치>/_template/backend
 TEMPLATE_BACKEND=$T $T/.venv/bin/python scripts/make_data.py
 ```
 
-`scripts/make_data.py`는 Python 백엔드 템플릿의 파서(`parse_filing`, `table_from_csv`)와 개념 사전(`concepts.yaml`)을 씁니다. 이 템플릿은 telescope 저장소에 없고 팀 작업 폴더의 `2_frontend/v02-canvas/_template/backend`에 있습니다. 경로가 틀리면 스크립트가 안내 문구를 내고 멈춥니다.
+`scripts/make_data.py`는 Python 백엔드 템플릿의 파서(`parse_filing`, `table_from_csv`)와 개념 사전(`concepts.yaml`)을 씁니다. 이 템플릿은 telescope 저장소에 없고 팀 작업 폴더의 `2_frontend/v02-canvas/_template/backend`에 있습니다. `data/demo/`나 템플릿 경로가 없으면 스크립트가 안내 문구를 내고 멈춥니다.
 
 ## 7. 코드 구성
 
@@ -172,8 +188,7 @@ TEMPLATE_BACKEND=$T $T/.venv/bin/python scripts/make_data.py
 | `src/api.ts` | 타입 정의와 서버 호출 자리 (지금은 `src/local/`로 연결) |
 | `src/local/server.ts` | backend 대신: 검색, 비교, 이벤트 처리, 프롬프트(컨텍스트) 생성 |
 | `src/local/ai.ts` | 초안, 질문, 평가 규칙 |
-| `src/local/data.json` | `data/`를 합친 결과 (빌드에 들어감) |
+| `src/local/data.json` | `data/demo/`를 합친 결과 (git 포함, 빌드에 들어감) |
 | `electron/main.cjs` | Electron 창. `--dev`면 개발 서버, 아니면 `dist/index.html` |
-| `scripts/make_data.py` | `data/` → `src/local/data.json` 생성 |
+| `scripts/make_data.py` | 루트 `data/demo/` → `src/local/data.json` 생성 |
 | `scripts/inline.mjs` | `build:html` 결과를 `docs/frontend/demo.html` 한 파일로 합침 |
-| `data/` | 로컬 자료 (6장) |

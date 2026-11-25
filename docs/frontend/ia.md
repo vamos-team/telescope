@@ -47,12 +47,12 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`) 화면�
 
 | 설정 | 데모 위치 | 화면에 드러나는 곳 |
 |---|---|---|
-| 결과물 양식 (사업기획서 · 투자계획서 · 예산서 섹션, 목표) | `frontend/data/analysis.json` `deliverables` | C20 · C21 `결과물 유형` 선택, C21 섹션 |
-| 질문 기준 (질문 뱅크, 중요도, 준비할 근거) | `frontend/data/analysis.json` `questions` | C22 |
-| 평가 기준 (다음 분기 실적, 리포트 쟁점) | `frontend/data/analysis.json` `next_quarter` | C23 |
-| 개념 태그 이름 | `frontend/data/analysis.json` `tag_names` | C10 문서 카드 개념 태그, 같은 개념 점선 |
-| 3사 비교 분석 카드 | `frontend/data/analysis.json` `insights` | C11 공시 탭 |
-| 대상 회사 · 공시 표 | `frontend/data/manifest.json`, `frontend/data/*.csv · *.xml` | C11 공시 탭, IR·뉴스 회사 필터 |
+| 결과물 양식 (사업기획서 · 투자계획서 · 예산서 섹션, 목표) | `data/demo/analysis.json` `deliverables` | C20 · C21 `결과물 유형` 선택, C21 섹션 |
+| 질문 기준 (질문 뱅크, 중요도, 준비할 근거) | `data/demo/analysis.json` `questions` | C22 |
+| 평가 기준 (다음 분기 실적, 리포트 쟁점) | `data/demo/analysis.json` `next_quarter` | C23 |
+| 개념 태그 이름 | `data/demo/analysis.json` `tag_names` | C10 문서 카드 개념 태그, 같은 개념 점선 |
+| 3사 비교 분석 카드 | `data/demo/analysis.json` `insights` | C11 공시 탭 |
+| 대상 회사 · 공시 표 | `data/demo/manifest.json`, `data/demo/*.csv · *.xml` | C11 공시 탭, IR·뉴스 회사 필터 |
 
 ## 2. 전체 구조
 

@@ -116,7 +116,7 @@ const stats = computed(() => {
               <td>{{ c.actual.toLocaleString("ko-KR") }}</td><td>{{ c.diff > 0 ? "+" : "" }}{{ c.diff.toFixed(1) }}%</td>
               <td :class="c.ok ? 'okc' : 'bad'">{{ c.ok ? "유지" : "재검토" }}</td></tr></tbody></table>
           <p v-else class="empty">초안에 {{ A.focus }} 공시값 가정이 없습니다.</p>
-          <p class="note">판정 기준: 질문과 쟁점의 주제가 같으면 적중. 가정은 실적과 차이 5% 이내면 유지. 기준은 data/analysis.json에서 바꿉니다.</p>
+          <p class="note">판정 기준: 질문과 쟁점의 주제가 같으면 적중. 가정은 실적과 차이 5% 이내면 유지. 기준은 data/demo/analysis.json에서 바꿉니다.</p>
         </template>
       </section>
 

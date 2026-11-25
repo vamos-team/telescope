@@ -1,7 +1,9 @@
-"""로컬 데이터 생성: frontend/data (manifest.json + DART XML + CSV) + 개념 사전 → src/local/data.json.
+"""로컬 데이터 생성: 저장소 루트 data/demo (manifest.json + DART XML + CSV) + 개념 사전 → frontend/src/local/data.json.
+
+data/는 git에 올리지 않는다. data/demo 자료는 팀 안에서 따로 주고받는다 (frontend/README.md 6장).
 
 파싱은 Python 백엔드 템플릿(_template/backend)의 parse_filing / table_from_csv를 그대로 쓴다.
-이 템플릿은 telescope 저장소에 없으므로 경로를 TEMPLATE_BACKEND로 넘긴다 (README 7장).
+이 템플릿은 telescope 저장소에 없으므로 경로를 TEMPLATE_BACKEND로 넘긴다 (frontend/README.md 6장).
 실행: TEMPLATE_BACKEND=<템플릿>/backend <템플릿>/backend/.venv/bin/python make_data.py
 """
 import json
@@ -10,11 +12,13 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent.parent  # frontend
-DATA = HERE / "data"
+DATA = HERE.parent / "data" / "demo"  # 저장소 루트 data/demo
+if not (DATA / "manifest.json").exists():
+    sys.exit(f"자료 폴더를 찾지 못했습니다: {DATA}\n팀에서 공유받은 자료를 저장소 루트 data/demo/에 넣고 다시 실행하세요.")
 BACK = Path(os.environ.get("TEMPLATE_BACKEND", HERE.parents[1] / "_template/backend"))
 if not (BACK / "app/ingest/dart_xml.py").exists():
     sys.exit(f"Python 백엔드 템플릿을 찾지 못했습니다: {BACK}\n"
-             "TEMPLATE_BACKEND에 템플릿의 backend 폴더 경로를 넣어 실행하세요 (README 7장). "
+             "TEMPLATE_BACKEND에 템플릿의 backend 폴더 경로를 넣어 실행하세요 (frontend/README.md 6장). "
              "화면만 고쳤다면 이 단계 없이 npm run dev 또는 npm run build:html만 하면 됩니다.")
 sys.path.insert(0, str(BACK))
 

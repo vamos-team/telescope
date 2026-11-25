@@ -59,7 +59,7 @@ function bm25(q: string[], k1 = 1.2, b = 0.75) {
 }
 
 export function search(q: string, k = 20): SearchResult[] {
-  // 엄격 일치: 질의의 bigram을 모두 가진 계정만 직접 일치로 본다 (data/examples/search_*.json 기준).
+  // 엄격 일치: 질의의 bigram을 모두 가진 계정만 직접 일치로 본다 (data/demo/examples/search_*.json 기준).
   // 일부만 겹치는 계정(예: 감가상각 → 무형자산상각비)은 개념 사전으로만 잡힌다. 백엔드 hybrid.py는 아직 느슨한 일치.
   const qg = bigrams(q), sc = bm25(qg);
   const rankings: [number, string][][] = [

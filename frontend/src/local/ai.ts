@@ -1,5 +1,5 @@
 // 규칙 기반 목업 AI. 실제 서비스에서는 context()의 프롬프트를 LLM에 보내고, 응답의 근거 ID를 서버가 검증한다.
-// 여기서는 같은 입력(캔버스 근거 + data/analysis.json 양식)으로 항상 같은 결과를 만든다.
+// 여기서는 같은 입력(캔버스 근거 + data/demo/analysis.json 양식)으로 항상 같은 결과를 만든다.
 import type { Analysis, Deliverable, Evidence } from "../api";
 
 export interface Line { text: string; cite: string[]; kind: "공시" | "IR" | "뉴스" | "사내" | "AI 해석" | "근거 부족" }

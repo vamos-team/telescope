@@ -353,7 +353,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 ### 7.1 `GET /api/v1/deliverables`
 
-결과물 양식과 개념 이름. 데모는 `data/analysis.json`에서 읽는다.
+결과물 양식과 개념 이름. 데모는 `data/demo/analysis.json`(저장소 루트, git 제외)을 합친 `frontend/src/local/data.json`에서 읽는다.
 
 | 응답 `data` | 설명 | 타입 |
 |---|---|---|
