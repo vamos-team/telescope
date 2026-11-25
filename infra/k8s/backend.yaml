@@ -8,6 +8,7 @@ spec:
   template:
     metadata: { labels: { app: backend } }
     spec:
+      serviceAccountName: s3-access # IRSA: 키 없이 S3 버킷 접근
       containers:
         - name: backend
           image: skala-registry.skala-ai.com/p3-1/backend
@@ -15,12 +16,9 @@ spec:
           env:
             - { name: JAVA_TOOL_OPTIONS, value: "-XX:MaxRAMPercentage=75" }
             - { name: TZ, value: Asia/Seoul }
-            - { name: MYSQL_HOST, value: mysql }
-            - { name: MYSQL_PORT, value: "3306" }
-            - { name: MYSQL_DATABASE, value: telescope }
-            - { name: MYSQL_USER, value: telescope }
-            - name: MYSQL_PASSWORD
-              valueFrom: { secretKeyRef: { name: mysql-credentials, key: MYSQL_PASSWORD } }
+          envFrom:
+            - secretRef: { name: rds-credentials }   
+            - configMapRef: { name: s3-config }      
           resources:
             requests: { cpu: 300m, memory: 768Mi }
             limits:   { cpu: 700m, memory: 1Gi }

@@ -7,7 +7,7 @@ on:
 env:
   AWS_REGION: ap-northeast-2
   ROLE_ARN: arn:aws:iam::881490135253:role/gha-p3-1
-  CLUSTER: skala-2026
+  CLUSTER: skala-pg
   NAMESPACE: p3-1
   ECR_REPOSITORY: teams/p3-1/app
 
@@ -100,3 +100,5 @@ jobs:
           kubectl -n "$NAMESPACE" apply -k .
           kubectl -n "$NAMESPACE" rollout status deployment/backend --timeout=300s
           kubectl -n "$NAMESPACE" rollout status deployment/frontend --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status statefulset/chroma --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deployment/pg-proxy --timeout=120s
