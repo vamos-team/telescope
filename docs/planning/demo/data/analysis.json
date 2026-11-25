@@ -1,0 +1,331 @@
+{
+  "note": "결과물 양식, 질문 뱅크, 다음 분기 평가 자료. 회사·업무에 맞춘 내용은 코드가 아니라 이 파일에서 바꿈",
+  "focus": "SKT",
+  "tag_names": {
+    "capex": "설비투자",
+    "ai_dc": "AI 데이터센터",
+    "network": "망 투자 환경",
+    "dividend": "배당",
+    "rev": "영업수익",
+    "opex": "영업비용",
+    "da": "감가상각비",
+    "opi": "영업이익",
+    "ni": "순이익",
+    "comm": "수수료",
+    "labor": "인건비",
+    "debt": "차입금",
+    "rp_sales": "특수관계자 매출",
+    "rp_purch": "특수관계자 매입",
+    "rp_recv": "특수관계자 채권",
+    "rp_pay": "특수관계자 채무"
+  },
+  "deliverables": [
+    {
+      "id": "invest",
+      "name": "투자계획서",
+      "goal": "2026년 망·AI 데이터센터 설비투자 계획",
+      "sections": [
+        {
+          "title": "1. 투자 배경",
+          "tags": [
+            "network",
+            "ai_dc"
+          ]
+        },
+        {
+          "title": "2. 재무 현황",
+          "tags": [
+            "rev",
+            "opi",
+            "da"
+          ]
+        },
+        {
+          "title": "3. 투자 규모와 구성",
+          "tags": [
+            "capex"
+          ]
+        },
+        {
+          "title": "4. 재무 영향",
+          "tags": [
+            "da",
+            "opi"
+          ]
+        },
+        {
+          "title": "5. 회수 계획",
+          "tags": [
+            "ai_dc"
+          ]
+        },
+        {
+          "title": "6. 리스크",
+          "tags": [
+            "comm",
+            "debt"
+          ]
+        }
+      ],
+      "assume": [
+        "da",
+        "opi"
+      ]
+    },
+    {
+      "id": "business",
+      "name": "사업기획서",
+      "goal": "2026년 하반기 MNO·AI 사업 계획",
+      "sections": [
+        {
+          "title": "1. 시장 환경",
+          "tags": [
+            "network",
+            "comm"
+          ]
+        },
+        {
+          "title": "2. 실적 현황",
+          "tags": [
+            "rev",
+            "opi",
+            "ni"
+          ]
+        },
+        {
+          "title": "3. 성장 사업",
+          "tags": [
+            "ai_dc"
+          ]
+        },
+        {
+          "title": "4. 비용 구조",
+          "tags": [
+            "opex",
+            "comm",
+            "labor"
+          ]
+        },
+        {
+          "title": "5. 주주환원",
+          "tags": [
+            "dividend"
+          ]
+        }
+      ],
+      "assume": [
+        "rev",
+        "opi",
+        "comm"
+      ]
+    },
+    {
+      "id": "budget",
+      "name": "예산서",
+      "goal": "2026년 하반기 비용·투자 예산",
+      "sections": [
+        {
+          "title": "1. 전년 대비 증감",
+          "tags": [
+            "opex",
+            "labor",
+            "comm"
+          ]
+        },
+        {
+          "title": "2. 투자 예산 산출 근거",
+          "tags": [
+            "capex"
+          ]
+        },
+        {
+          "title": "3. 집행 계획",
+          "tags": [
+            "ai_dc"
+          ]
+        },
+        {
+          "title": "4. 손익 영향",
+          "tags": [
+            "da",
+            "opi"
+          ]
+        }
+      ],
+      "assume": [
+        "opex",
+        "labor",
+        "da"
+      ]
+    }
+  ],
+  "questions": [
+    {
+      "topic": "capex_guidance",
+      "tags": [
+        "capex"
+      ],
+      "level": "높음",
+      "q": "연간 CapEx 가이던스를 유지하면서 1분기 집행이 낮은 이유는 무엇이고, 하반기에 몰아서 집행하나요?",
+      "why": "가이던스 대비 집행률은 매 분기 확인되는 쟁점임"
+    },
+    {
+      "topic": "da_trend",
+      "tags": [
+        "da"
+      ],
+      "level": "보통",
+      "q": "감가상각비 감소는 언제까지 이어지고, AI 데이터센터 투자로 언제 다시 늘어나나요?",
+      "why": "감가상각 추이가 영업이익 전망을 좌우함"
+    },
+    {
+      "topic": "ai_dc_return",
+      "tags": [
+        "ai_dc"
+      ],
+      "level": "높음",
+      "q": "AI 데이터센터 투자 회수 기간과 가동률 가정의 근거는 무엇인가요?",
+      "why": "신규 투자의 회수 시점은 투자 심의와 시장 모두 묻는 질문임"
+    },
+    {
+      "topic": "marketing_cost",
+      "tags": [
+        "comm"
+      ],
+      "level": "높음",
+      "q": "판매수수료 증가가 일회성인가요, 2분기에도 이어지나요?",
+      "why": "수수료가 영업비용에서 가장 큰 항목이고 경쟁 환경이 바뀌는 중임"
+    },
+    {
+      "topic": "dividend",
+      "tags": [
+        "dividend"
+      ],
+      "level": "보통",
+      "q": "이익이 줄어도 분기 배당을 유지할 재원은 무엇인가요?",
+      "why": "이익 감소와 배당 유지가 함께 나타남"
+    },
+    {
+      "topic": "debt",
+      "tags": [
+        "debt"
+      ],
+      "level": "보통",
+      "q": "투자 확대에 필요한 차입 계획과 부채비율 영향은 어떤가요?",
+      "why": "설비투자 재원 조달 방식 확인"
+    },
+    {
+      "topic": "revenue_growth",
+      "tags": [
+        "rev"
+      ],
+      "level": "보통",
+      "q": "본업 매출 감소를 AI 매출로 메울 수 있는 시점은 언제인가요?",
+      "why": "매출 구성 변화의 속도 확인"
+    },
+    {
+      "topic": "labor",
+      "tags": [
+        "labor"
+      ],
+      "level": "보통",
+      "q": "인건비 증가율이 매출 증가율보다 높은 이유는 무엇인가요?",
+      "why": "비용 효율성 점검"
+    }
+  ],
+  "next_quarter": {
+    "label": "2Q26",
+    "date": "2026-08-07",
+    "company": "SKT",
+    "actuals": {
+      "rev": 2938.0,
+      "opex": 2601.8,
+      "da": 584.1,
+      "opi": 336.2,
+      "comm": 948.7,
+      "labor": 412.0
+    },
+    "issues": [
+      {
+        "id": "is1",
+        "topic": "marketing_cost",
+        "title": "2분기 판매수수료 증가로 영업이익 감소",
+        "publisher": "증권사 A(목업)",
+        "url": "https://research.example.com/a/skt-2q26"
+      },
+      {
+        "id": "is2",
+        "topic": "ai_dc_return",
+        "title": "AI 데이터센터 가동률과 투자 회수 시점",
+        "publisher": "증권사 B(목업)",
+        "url": "https://research.example.com/b/skt-2q26"
+      },
+      {
+        "id": "is3",
+        "topic": "capex_guidance",
+        "title": "하반기 CapEx 집행 속도와 가이던스 유지 여부",
+        "publisher": "증권사 A(목업)",
+        "url": "https://research.example.com/a/skt-2q26"
+      },
+      {
+        "id": "is4",
+        "topic": "dividend",
+        "title": "이익 감소 속 배당 지속 가능성",
+        "publisher": "증권사 C(목업)",
+        "url": "https://research.example.com/c/skt-2q26"
+      },
+      {
+        "id": "is5",
+        "topic": "security",
+        "title": "보안 투자 확대에 따른 비용 증가",
+        "publisher": "증권사 B(목업)",
+        "url": "https://research.example.com/b/skt-2q26"
+      }
+    ]
+  },
+  "insights": [
+    {
+      "id": "ins-opi",
+      "title": "3사 중 SKT만 1분기 영업이익이 줄었음",
+      "concepts": [
+        "opi",
+        "da",
+        "comm"
+      ],
+      "ai": "SKT는 감가상각비가 줄었지만 지급·판매수수료가 늘어 영업이익이 감소함. LGU+는 감가상각비 감소가 그대로 이익 개선으로 이어짐. 수수료 증가는 2분기 지원금 경쟁으로 이어질 가능성이 있어 비용 가정의 쟁점이 될 수 있음.",
+      "news": [
+        "news-skt-opi",
+        "news-lgu-opi",
+        "news-marketing"
+      ]
+    },
+    {
+      "id": "ins-capex",
+      "title": "3사 모두 감가상각비가 줄고 투자는 AI 데이터센터로 옮겨 감",
+      "concepts": [
+        "da",
+        "capex"
+      ],
+      "ai": "5G 투자 사이클이 끝나 3사 감가상각비가 함께 줄고 있음. LGU+는 5G SA를 소프트웨어로 전환해 CapEx를 낮게 유지함. AI 데이터센터 투자 금액은 공시에 따로 없어, 예산 검토에서 이 금액과 회수 시점을 물을 가능성이 높음.",
+      "news": [
+        "news-telco-capex",
+        "news-lgu-aidc",
+        "news-aidc-power"
+      ]
+    },
+    {
+      "id": "ins-rp",
+      "title": "특수관계자 매입은 SKT가 가장 크고, LGU+는 매출 거래가 늘었음",
+      "concepts": [
+        "rp_sales",
+        "rp_purch",
+        "rp_recv",
+        "rp_pay"
+      ],
+      "ai": "SKT의 특수관계자 매입은 3사 중 가장 크고 1분기에도 늘었음. KT는 매입이 줄었고 LGU+는 매출·매입이 함께 늘었음. 내부거래 비중이 공정위 점검 대상으로 거론되고 있어, 계열사 거래 조건과 비중을 설명할 근거가 필요함.",
+      "news": [
+        "news-rp"
+      ]
+    }
+  ]
+}

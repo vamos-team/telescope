@@ -1,0 +1,793 @@
+{
+  "groups": [
+    {
+      "company": "가상통신A",
+      "basis": "연결"
+    },
+    {
+      "company": "가상통신B",
+      "basis": "연결"
+    }
+  ],
+  "lines": [
+    {
+      "label": "자산총계",
+      "why": "대응 사전",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r13c0",
+            "label": "자산총계",
+            "value_bil": 29021.7
+          }
+        ],
+        [
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r0c1",
+            "label": "자산",
+            "value_bil": 19820.4
+          }
+        ]
+      ],
+      "concept_id": "ta",
+      "note": null,
+      "totals": [
+        29021.7,
+        19820.4
+      ]
+    },
+    {
+      "label": "현금성 자산",
+      "why": "대응 사전",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r1c0",
+            "label": "현금및현금성자산",
+            "value_bil": 2410.5
+          }
+        ],
+        [
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r2c1",
+            "label": "현금및단기금융상품",
+            "value_bil": 1210.5
+          }
+        ]
+      ],
+      "concept_id": "cash",
+      "note": "SKT IR 값은 단기금융상품 포함. KT는 기타금융자산에 별도 분류.",
+      "totals": [
+        2410.5,
+        1210.5
+      ]
+    },
+    {
+      "label": "차입금·사채",
+      "why": "대응 사전",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r17c0",
+            "label": "차입금(유동)",
+            "value_bil": 1502.3
+          },
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r21c0",
+            "label": "차입금(비유동)",
+            "value_bil": 6210.8
+          }
+        ],
+        [
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r11c1",
+            "label": "단기차입금",
+            "value_bil": 90.0
+          },
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r15c1",
+            "label": "사채및장기차입금",
+            "value_bil": 5102.3
+          }
+        ]
+      ],
+      "concept_id": "debt",
+      "note": "SKT IR 표의 유동성 사채가 다른 행에 포함됐는지 원문 확인 필요.",
+      "totals": [
+        7713.1,
+        5192.3
+      ]
+    },
+    {
+      "label": "부채총계",
+      "why": "대응 사전",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r24c0",
+            "label": "부채총계",
+            "value_bil": 15718.7
+          }
+        ],
+        [
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r9c1",
+            "label": "부채",
+            "value_bil": 11402.8
+          }
+        ]
+      ],
+      "concept_id": "tl",
+      "note": null,
+      "totals": [
+        15718.7,
+        11402.8
+      ]
+    },
+    {
+      "label": "자본총계",
+      "why": "대응 사전",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r31c0",
+            "label": "자본총계",
+            "value_bil": 13303.0
+          }
+        ],
+        [
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r18c1",
+            "label": "자본",
+            "value_bil": 8417.6
+          }
+        ]
+      ],
+      "concept_id": "te",
+      "note": null,
+      "totals": [
+        13303.0,
+        8417.6
+      ]
+    },
+    {
+      "label": "유동자산",
+      "why": "동일 계정명",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r0c0",
+            "label": "유동자산",
+            "value_bil": 8411.7
+          }
+        ],
+        [
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r1c1",
+            "label": "유동자산",
+            "value_bil": 4902.3
+          }
+        ]
+      ],
+      "concept_id": null,
+      "note": null,
+      "totals": [
+        8411.7,
+        4902.3
+      ]
+    },
+    {
+      "label": "비유동자산",
+      "why": "동일 계정명",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r6c0",
+            "label": "비유동자산",
+            "value_bil": 20610.0
+          }
+        ],
+        [
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r5c1",
+            "label": "비유동자산",
+            "value_bil": 14918.1
+          }
+        ]
+      ],
+      "concept_id": null,
+      "note": null,
+      "totals": [
+        20610.0,
+        14918.1
+      ]
+    },
+    {
+      "label": "유동부채",
+      "why": "동일 계정명",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r15c0",
+            "label": "유동부채",
+            "value_bil": 7263.1
+          }
+        ],
+        [
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r10c1",
+            "label": "유동부채",
+            "value_bil": 4010.2
+          }
+        ]
+      ],
+      "concept_id": null,
+      "note": null,
+      "totals": [
+        7263.1,
+        4010.2
+      ]
+    },
+    {
+      "label": "비유동부채",
+      "why": "동일 계정명",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r19c0",
+            "label": "비유동부채",
+            "value_bil": 8455.6
+          }
+        ],
+        [
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r14c1",
+            "label": "비유동부채",
+            "value_bil": 7392.6
+          }
+        ]
+      ],
+      "concept_id": null,
+      "note": null,
+      "totals": [
+        8455.6,
+        7392.6
+      ]
+    }
+  ],
+  "unmatched": [
+    {
+      "label": "매출채권및기타채권",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r2c0",
+            "label": "매출채권및기타채권",
+            "value_bil": 2980.1
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "기타금융자산",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r3c0",
+            "label": "기타금융자산",
+            "value_bil": 1120.0
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "재고자산",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r4c0",
+            "label": "재고자산",
+            "value_bil": 690.3
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "기타유동자산",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r5c0",
+            "label": "기타유동자산",
+            "value_bil": 1210.8
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "매출채권및기타채권",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r7c0",
+            "label": "매출채권및기타채권",
+            "value_bil": 820.4
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "유형자산",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r8c0",
+            "label": "유형자산",
+            "value_bil": 13210.7
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "사용권자산",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r9c0",
+            "label": "사용권자산",
+            "value_bil": 1180.2
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "무형자산",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r10c0",
+            "label": "무형자산",
+            "value_bil": 2105.9
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "관계기업투자",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r11c0",
+            "label": "관계기업투자",
+            "value_bil": 1402.3
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "기타비유동자산",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r12c0",
+            "label": "기타비유동자산",
+            "value_bil": 1890.5
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "매입채무및기타채무",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r16c0",
+            "label": "매입채무및기타채무",
+            "value_bil": 4120.6
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "기타유동부채",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r18c0",
+            "label": "기타유동부채",
+            "value_bil": 1640.2
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "매입채무및기타채무",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r20c0",
+            "label": "매입채무및기타채무",
+            "value_bil": 402.1
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "이연법인세부채",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r22c0",
+            "label": "이연법인세부채",
+            "value_bil": 512.3
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "기타비유동부채",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r23c0",
+            "label": "기타비유동부채",
+            "value_bil": 1330.4
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "지배기업의 소유주지분",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r26c0",
+            "label": "지배기업의 소유주지분",
+            "value_bil": 11900.9
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "자본금",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r27c0",
+            "label": "자본금",
+            "value_bil": 1250.0
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "이익잉여금",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r28c0",
+            "label": "이익잉여금",
+            "value_bil": 10340.5
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "기타포괄손익누계액",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r29c0",
+            "label": "기타포괄손익누계액",
+            "value_bil": 310.4
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "비지배지분",
+      "why": "대응 없음",
+      "values": [
+        [
+          {
+            "card_id": "a3",
+            "cell_id": "MOCK_A_2026Q1:0:1#r30c0",
+            "label": "비지배지분",
+            "value_bil": 1402.1
+          }
+        ],
+        null
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "매출채권및기타채권",
+      "why": "대응 없음",
+      "values": [
+        null,
+        [
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r3c1",
+            "label": "매출채권및기타채권",
+            "value_bil": 1640.9
+          }
+        ]
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "기타유동자산",
+      "why": "대응 없음",
+      "values": [
+        null,
+        [
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r4c1",
+            "label": "기타유동자산",
+            "value_bil": 2050.9
+          }
+        ]
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "유무형자산",
+      "why": "대응 없음",
+      "values": [
+        null,
+        [
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r6c1",
+            "label": "유무형자산",
+            "value_bil": 10802.6
+          }
+        ]
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "투자자산",
+      "why": "대응 없음",
+      "values": [
+        null,
+        [
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r7c1",
+            "label": "투자자산",
+            "value_bil": 2905.2
+          }
+        ]
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "기타비유동자산",
+      "why": "대응 없음",
+      "values": [
+        null,
+        [
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r8c1",
+            "label": "기타비유동자산",
+            "value_bil": 1210.3
+          }
+        ]
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "매입채무및기타채무",
+      "why": "대응 없음",
+      "values": [
+        null,
+        [
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r12c1",
+            "label": "매입채무및기타채무",
+            "value_bil": 1102.5
+          }
+        ]
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "기타유동부채",
+      "why": "대응 없음",
+      "values": [
+        null,
+        [
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r13c1",
+            "label": "기타유동부채",
+            "value_bil": 2817.7
+          }
+        ]
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "이연법인세부채",
+      "why": "대응 없음",
+      "values": [
+        null,
+        [
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r16c1",
+            "label": "이연법인세부채",
+            "value_bil": 802.1
+          }
+        ]
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "기타비유동부채",
+      "why": "대응 없음",
+      "values": [
+        null,
+        [
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r17c1",
+            "label": "기타비유동부채",
+            "value_bil": 1488.2
+          }
+        ]
+      ],
+      "concept_id": null,
+      "note": null
+    },
+    {
+      "label": "이익잉여금",
+      "why": "대응 없음",
+      "values": [
+        null,
+        [
+          {
+            "card_id": "b2",
+            "cell_id": "MOCK_B_2026Q1:2:1#r19c1",
+            "label": "이익잉여금",
+            "value_bil": 9910.2
+          }
+        ]
+      ],
+      "concept_id": null,
+      "note": null
+    }
+  ],
+  "warnings": [
+    "비교 시점 — 가상통신A: 제 10 기 1분기말 / 가상통신B: 1Q26말"
+  ]
+}
