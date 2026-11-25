@@ -1,8 +1,8 @@
 # 화면별 Information Architecture (IA)
 
-v02-canvas 데모(`docs/planning/demo`) 화면을 기준으로, 메뉴 → 화면 → 기능(클릭 → 결과)을 정리했다. 화면에서 부르는 API는 [API 명세](api-spec.md)의 절 번호로 적고, 호출 흐름은 [API 다이어그램](api-diagram.md)을 본다.
+v02-canvas 데모(코드 `frontend/`, 빌드 `docs/planning/demo/index.html`) 화면을 기준으로, 메뉴 → 화면 → 기능(클릭 → 결과)을 정리했다. 화면에서 부르는 API는 [API 명세](api-spec.md)의 절 번호로 적고, 호출 흐름은 [API 다이어그램](api-diagram.md)을 본다.
 
-- 기준 코드: `docs/planning/demo/_build/src` (`App.vue`, `components/*.vue`, `components/nodes/*.vue`)
+- 기준 코드: `frontend/src` (`App.vue`, `components/*.vue`, `components/nodes/*.vue`)
 - 기능 ID(F-xx), 등급(must / should / 추가), 데모 시나리오는 [기획서](../planning/기획서.md)를 따른다.
 - 화면 ID는 Figma 프레임 이름, 데모 화면, Vue route name을 잇는 공통 키다(기획서 7장).
 - `데모 전용`으로 표시한 항목은 실제 서비스에서 빠지거나 바뀐다.
@@ -47,12 +47,12 @@ v02-canvas 데모(`docs/planning/demo`) 화면을 기준으로, 메뉴 → 화�
 
 | 설정 | 데모 위치 | 화면에 드러나는 곳 |
 |---|---|---|
-| 결과물 양식 (사업기획서 · 투자계획서 · 예산서 섹션, 목표) | `data/analysis.json` `deliverables` | C20 · C21 `결과물 유형` 선택, C21 섹션 |
-| 질문 기준 (질문 뱅크, 중요도, 준비할 근거) | `data/analysis.json` `questions` | C22 |
-| 평가 기준 (다음 분기 실적, 리포트 쟁점) | `data/analysis.json` `next_quarter` | C23 |
-| 개념 태그 이름 | `data/analysis.json` `tag_names` | C10 문서 카드 개념 태그, 같은 개념 점선 |
-| 3사 비교 분석 카드 | `data/analysis.json` `insights` | C11 공시 탭 |
-| 대상 회사 · 공시 표 | `data/manifest.json`, `data/*.csv · *.xml` | C11 공시 탭, IR·뉴스 회사 필터 |
+| 결과물 양식 (사업기획서 · 투자계획서 · 예산서 섹션, 목표) | `frontend/data/analysis.json` `deliverables` | C20 · C21 `결과물 유형` 선택, C21 섹션 |
+| 질문 기준 (질문 뱅크, 중요도, 준비할 근거) | `frontend/data/analysis.json` `questions` | C22 |
+| 평가 기준 (다음 분기 실적, 리포트 쟁점) | `frontend/data/analysis.json` `next_quarter` | C23 |
+| 개념 태그 이름 | `frontend/data/analysis.json` `tag_names` | C10 문서 카드 개념 태그, 같은 개념 점선 |
+| 3사 비교 분석 카드 | `frontend/data/analysis.json` `insights` | C11 공시 탭 |
+| 대상 회사 · 공시 표 | `frontend/data/manifest.json`, `frontend/data/*.csv · *.xml` | C11 공시 탭, IR·뉴스 회사 필터 |
 
 ## 2. 전체 구조
 

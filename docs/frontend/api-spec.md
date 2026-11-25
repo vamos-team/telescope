@@ -1,8 +1,8 @@
 # 프런트엔드 API 명세 (초안)
 
-v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서버 API로 옮겨 적은 문서다. 데모는 `_build/src/api.ts`의 `api` 객체가 브라우저 안 구현(`local/server.ts`, `local/ai.ts`)을 부른다. 실제 서비스에서는 같은 자리에서 아래 API를 부른다.
+v02-canvas 데모(코드 `frontend/`, 빌드 `docs/planning/demo/index.html`)가 화면에서 부르는 기능을 서버 API로 옮겨 적은 문서다. 데모는 `frontend/src/api.ts`의 `api` 객체가 브라우저 안 구현(`local/server.ts`, `local/ai.ts`)을 부른다. 실제 서비스에서는 같은 자리에서 아래 API를 부른다.
 
-- 근거 코드: `docs/planning/demo/_build/src/api.ts`(타입), `stores/canvas.ts`(캔버스·이벤트), `local/server.ts`(검색·비교·컨텍스트), `local/ai.ts`(초안·질문·평가)
+- 근거 코드: `frontend/src/api.ts`(타입), `stores/canvas.ts`(캔버스·이벤트), `local/server.ts`(검색·비교·컨텍스트), `local/ai.ts`(초안·질문·평가)
 - 경로와 필드는 **제안**이다. backend·ai 담당자와 합의한 뒤 확정한다. `CLAUDE.md` 7장의 미정 항목은 여기서 정하지 않는다.
 
 ## 1. 공통 규칙
