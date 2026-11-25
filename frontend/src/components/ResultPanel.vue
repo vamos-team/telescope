@@ -61,11 +61,8 @@ const stats = computed(() => {
       <section v-if="tab === 'context'">
         <div v-if="ctx" class="act"><button @click="copy('text')">{{ copied === "text" ? "복사함" : "프롬프트 복사" }}</button>
           <button @click="copy('json')">{{ copied === "json" ? "복사함" : "messages JSON" }}</button></div>
-        <p v-if="!cv.cards.length" class="empty">캔버스에 자료를 올리면 LLM에 바로 넣을 수 있는 프롬프트로 정리합니다.</p>
-        <p v-else-if="!ctx" class="empty">카드 내용, 출처, 연결, 수정 이력을 층으로 묶어 프롬프트를 만듭니다.</p>
         <p v-if="stale('ctx')" class="stale">캔버스가 바뀌었습니다. 다시 추출하세요.</p>
         <template v-if="ctx">
-          <p class="note">앞 세 층(L0~L2)은 system, 뒤 두 층은 user 메시지입니다. 앞 층이 그대로면 LLM 서버가 prefix 캐시를 재사용합니다.</p>
           <details v-for="(v, k) in ctx.layers" :key="k" :open="k !== 'L0_system'" class="layer-box">
             <summary><b>{{ k }}</b><small>{{ ctx.hashes[k] }} / {{ chars(v) }}자</small>
               <span v-if="cv.lastChangedLayer === k" class="chg">최근 변경</span></summary>
@@ -76,11 +73,10 @@ const stats = computed(() => {
 
       <section v-else-if="tab === 'draft'">
         <div v-if="dr" class="act"><button @click="copy('md')">{{ copied === "md" ? "복사함" : "Markdown 복사" }}</button></div>
-        <p v-if="!dr" class="empty">캔버스 근거로 {{ del.name }} 초안을 만듭니다. 문장마다 근거 ID가 붙고, 근거가 없는 항목은 따로 표시합니다.</p>
         <p v-if="stale('dr')" class="stale">캔버스가 바뀌었습니다. 다시 생성하세요.</p>
         <template v-if="dr">
           <h3>{{ dr.deliverable.name }}<small>{{ dr.deliverable.goal }}</small></h3>
-          <p class="note">근거 인용 {{ stats.cited }}줄 / 근거 부족 {{ stats.gap }}항목. 근거 ID를 누르면 해당 카드로 이동합니다.</p>
+          <p class="note">근거 인용 {{ stats.cited }}줄 / 근거 부족 {{ stats.gap }}항목</p>
           <div v-for="s in dr.sections" :key="s.title" class="sec"><h4>{{ s.title }}</h4>
             <p v-for="(l, i) in s.lines" :key="i" class="ln" :data-k="l.kind"><span class="vk">{{ l.kind }}</span>
               <span>{{ l.text }} <button v-for="c in l.cite" :key="c" class="cite" @click="emit('cite', c)">{{ c }}</button></span></p></div>
@@ -88,18 +84,14 @@ const stats = computed(() => {
       </section>
 
       <section v-else-if="tab === 'questions'">
-        <p v-if="!qs" class="empty">캔버스 근거를 애널리스트 눈으로 읽고 나올 만한 질문과 준비할 근거를 정리합니다.</p>
         <p v-if="stale('qs')" class="stale">캔버스가 바뀌었습니다. 다시 생성하세요.</p>
-        <p v-if="qs && !qs.length" class="empty">질문을 만들 근거가 없습니다. 공시 표나 IR·뉴스를 더 올려 보세요.</p>
+        <p v-if="qs && !qs.length" class="empty">질문을 만들 근거가 없습니다.</p>
         <ol v-if="qs?.length" class="qs"><li v-for="q in qs" :key="q.topic"><span class="lv" :data-lv="q.level">{{ q.level }}</span>
           <b>{{ q.q }}</b><small>{{ q.why }}</small>
           <span>준비할 근거 <button v-for="c in q.cite" :key="c" class="cite" @click="emit('cite', c)">{{ c }}</button></span></li></ol>
       </section>
 
       <section v-else-if="tab === 'eval'">
-        <p class="note">평가 자료: {{ A.next_quarter.company }} {{ A.next_quarter.label }} 실적과 애널리스트 리포트 쟁점 ({{ A.next_quarter.date }} 이후 공개).
-          생성 단계에서는 쓰지 않고 평가에만 씁니다. 리포트는 쟁점 요약과 출처 링크만 다룹니다.</p>
-        <p v-if="!result" class="empty">먼저 질문을 만들면 다음 분기 쟁점과 견줘 점수를 냅니다. 결과물 초안이 있으면 초안의 가정도 함께 대조합니다.</p>
         <template v-if="result">
           <div class="kpi"><div><small>정밀도</small><b>{{ result.precision }}%</b><i :style="{ width: result.precision + '%' }" /></div>
             <div><small>재현율</small><b>{{ result.recall }}%</b><i :style="{ width: result.recall + '%' }" /></div></div>
@@ -110,13 +102,11 @@ const stats = computed(() => {
           <h4>빗나감 {{ result.off.length }}</h4>
           <p v-for="q in result.off" :key="q.topic" class="ev off">{{ q.q }}<small>{{ A.next_quarter.label }} 리포트에서 다루지 않음</small></p>
           <h4>초안 가정과 {{ A.next_quarter.label }} 실적</h4>
-          <p v-if="!dr" class="empty">결과물 탭에서 초안을 만들면 가정을 대조합니다.</p>
-          <table v-else-if="result.checks.length" class="g"><thead><tr><th>항목</th><th>가정</th><th>실적</th><th>차이</th><th>판정</th></tr></thead>
+          <table v-if="result.checks.length" class="g"><thead><tr><th>항목</th><th>가정</th><th>실적</th><th>차이</th><th>판정</th></tr></thead>
             <tbody><tr v-for="c in result.checks" :key="c.tag"><td>{{ c.name }}</td><td>{{ c.value.toLocaleString("ko-KR") }}</td>
               <td>{{ c.actual.toLocaleString("ko-KR") }}</td><td>{{ c.diff > 0 ? "+" : "" }}{{ c.diff.toFixed(1) }}%</td>
               <td :class="c.ok ? 'okc' : 'bad'">{{ c.ok ? "유지" : "재검토" }}</td></tr></tbody></table>
           <p v-else class="empty">초안에 {{ A.focus }} 공시값 가정이 없습니다.</p>
-          <p class="note">판정 기준: 질문과 쟁점의 주제가 같으면 적중. 가정은 실적과 차이 5% 이내면 유지. 기준은 data/demo/analysis.json에서 바꿉니다.</p>
         </template>
       </section>
 

@@ -39,12 +39,10 @@ const groups = computed(() => {
       <div class="lh"><h2>활동 기록</h2><small>{{ cv.activity.length }}</small></div>
       <p v-if="!cv.activity.length" class="none">아직 기록이 없습니다.</p>
       <ul class="log"><li v-for="(a, i) in cv.activity.slice(0, 80)" :key="i"><b :title="who(a.author)">{{ a.author }}</b> {{ a.text }}<small>{{ a.time }}</small></li></ul>
-      <p class="note">데모는 한 브라우저 안에서 다른 사번으로 다시 로그인해 보여 줍니다. 실제 서비스는 서버 이벤트 로그로 화면을 맞춥니다.</p>
     </section>
 
 
     <section v-else key="layers" class="layers slidein">
-      <p v-if="!cv.cards.length" class="none">캔버스에 올린 자료가 여기에 쌓입니다.</p>
       <div v-for="[g, xs] in groups" :key="g" class="lg">
         <!-- 데이터 유형별로 접고 펴기 -->
         <h3><button class="gt" :aria-expanded="!folded.has(g)" @click="fold(g)">

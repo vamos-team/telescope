@@ -159,7 +159,7 @@ const mac = /Mac|iPhone|iPad/.test(navigator.platform);
               <span class="lk co">비교</span>
               <h4>{{ i.title }}</h4>
               <div>
-                <div class="lab2">사실 <span class="tag">공시</span><span class="tag">계산</span><small>십억원 · 각 사 공시 표에서 계산</small></div>
+                <div class="lab2">사실 <span class="tag">공시</span><span class="tag">계산</span><small>십억원</small></div>
                 <table v-for="f in facts(i).facts" :key="f.concept" class="g facts">
                   <thead><tr><th>{{ f.name }}</th><th class="n">1Q25</th><th class="n">1Q26</th><th class="n">증감</th></tr></thead>
                   <tbody><tr v-for="r in f.rows" :key="r.company" :class="{ b: basis.companies.includes(r.company) }">
@@ -186,7 +186,7 @@ const mac = /Mac|iPhone|iPad/.test(navigator.platform);
                   <button class="line" @click.stop="emit('pick', r.table_id, r.hits.map((h) => h.r))">행 고르기</button>
                   <button @click.stop="emit('addTable', r.table_id, r.hits.map((h) => h.r))">+ 찾은 행 올리기</button></div>
               </article>
-              <p v-if="!dart.length" class="none">일치하는 계정이 없습니다. 다른 표현으로 검색해 보세요.</p>
+              <p v-if="!dart.length" class="none">일치하는 계정이 없습니다.</p>
             </div>
           </template>
         </template>
@@ -244,7 +244,7 @@ const mac = /Mac|iPhone|iPad/.test(navigator.platform);
               <input type="file" multiple accept=".txt,.md,.csv,.json,.pdf,.xlsx,.docx,.hwp" @change="upload" />
               <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 13V3.5M6 7.5l4-4 4 4" /><path d="M3.5 12.5v3a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5v-3" /></svg>
               <span>{{ busy ? "요약하는 중" : over ? "놓으면 올라갑니다" : "클릭하거나 파일을 끌어 놓으세요" }}</span>
-              <small>TXT, MD, CSV (PDF·XLSX·DOCX·HWP는 파서 연결 후)</small>
+              <small>TXT, MD, CSV</small>
               <small v-if="err" class="err">{{ err }}</small>
             </label>
           </div>
@@ -270,7 +270,6 @@ const mac = /Mac|iPhone|iPad/.test(navigator.platform);
       <form class="cin" @submit.prevent="load">
         <input ref="input" v-model="q" type="search" :placeholder="PH[tab]" :aria-label="PH[tab]" autocomplete="off" @focus="browse = true" />
       </form>
-      <small class="keys">{{ mac ? "⌘" : "Ctrl+" }}1~3 탭 전환 · Esc 닫기</small>
     </div>
   </div>
 </template>

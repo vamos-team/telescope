@@ -24,7 +24,7 @@ const fmt = (v: number | null | undefined) => v == null ? "—" : v.toLocaleStri
   <section v-if="res" class="card chart" :class="{ focus: cv.focus === card.id }">
     <Handle type="target" :position="Position.Left" />
     <header class="drag-handle"><span class="co">시각화</span>
-      <div class="t"><b>{{ res.groups.map((g) => g.company).join(" · ") }} 계정 비교</b><small>단위 십억원 · 비교 카드 값을 그대로 씁니다</small></div>
+      <div class="t"><b>{{ res.groups.map((g) => g.company).join(" · ") }} 계정 비교</b><small>단위 십억원</small></div>
       <button class="nodrag" @click="cv.remove(card.id)" aria-label="카드 닫기">✕</button></header>
     <div class="chips nodrag">
       <button v-for="l in lines" :key="l.label" :aria-pressed="!off.has(l.label)" @click="toggle(l.label)">{{ l.label }}</button>
@@ -40,7 +40,6 @@ const fmt = (v: number | null | undefined) => v == null ? "—" : v.toLocaleStri
           <span class="v">{{ fmt(l.totals?.[i]) }}</span>
         </div>
       </div>
-      <p v-if="!shown.length" class="none">보여 줄 계정을 고르세요</p>
     </div>
   </section>
 </template>

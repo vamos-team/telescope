@@ -42,7 +42,7 @@ function del(m: CanvasMeta) { if (confirm(`'${m.name}' 캔버스를 지울까요
         <input v-model="q" type="search" placeholder="캔버스 이름 검색" aria-label="캔버스 이름 검색" />
         <button class="primary" @click="cv.newCanvas()">+ 새 캔버스</button>
       </header>
-      <p v-if="!list.length" class="none">{{ q ? "검색어와 맞는 캔버스가 없습니다." : "볼 수 있는 캔버스가 없습니다. 새 캔버스를 만들거나 공유를 요청하세요." }}</p>
+      <p v-if="!list.length" class="none">{{ q ? "검색어와 맞는 캔버스가 없습니다." : "볼 수 있는 캔버스가 없습니다." }}</p>
       <ul class="tiles">
         <li v-for="m in list" :key="m.id">
           <button class="tile" @click="cv.open(m.id)">

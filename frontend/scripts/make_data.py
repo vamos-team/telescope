@@ -52,7 +52,7 @@ analysis = json.loads((DATA / "analysis.json").read_text(encoding="utf-8"))
 
 # 상단 바 출처 설명, 예시 불러오기 구성 (data/examples의 카드 a1 a2 b1 a3 b2, 비교 x1 x2와 같음)
 # rows/cols가 null이면 전체, compares는 cards 인덱스 묶음, charts는 시각화할 compares 인덱스, docs는 문서 카드, links는 [출발, 도착, 관계] (카드 순서: 표 → 비교 → 문서 → 메모)
-subtitle = "SKT·KT·LGU+ 2026년 1분기 · 숫자는 데모용 목업"
+subtitle = "SKT·KT·LGU+ 2026년 1분기"
 example = {"cards": [{"table_id": "KT_2026Q1:1:1", "rows": None, "cols": [0, 1], "vcol": 0},
                      {"table_id": "KT_2026Q1:2:1", "rows": None, "cols": [0], "vcol": 0},
                      {"table_id": "SKT_2026Q1:1:1", "rows": None, "cols": [0, 1], "vcol": 1},

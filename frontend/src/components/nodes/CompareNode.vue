@@ -34,7 +34,7 @@ function confirm(l: CompareLine, ok: boolean) {
     <Handle type="target" :position="Position.Left" />
     <header class="drag-handle"><span class="co">비교</span>
       <div class="t"><b>계정 대응 비교: {{ res.groups.map((g) => g.company + " " + g.basis).join(" vs ") }}</b>
-        <small>단위 십억원으로 통일 · 원본 카드를 수정하면 다시 계산합니다</small></div>
+        <small>단위 십억원</small></div>
       <button class="nodrag txt" @click="cv.addChart(card.id)" title="비교 결과를 막대그래프 카드로">시각화</button>
       <button class="nodrag" @click="cv.remove(card.id)" aria-label="카드 닫기">✕</button></header>
     <div class="periods nodrag">

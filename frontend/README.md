@@ -1,6 +1,6 @@
 # Telescope 프론트엔드
 
-Telescope 캔버스 화면입니다. 부서 사람들이 공시·IR·뉴스·사내 자료를 캔버스에 모아 정리하고, 그 근거로 프롬프트·결과물 초안·예상 질문을 만들어 다음 분기 실적으로 평가합니다. 흐름은 [기획서](../docs/planning/기획서.md)를, 화면 구조는 [IA](../docs/frontend/ia.md)를, 서버 API는 [API 명세](../docs/frontend/api-spec.md)를 따릅니다.
+Telescope 화면입니다. 부서 사람들이 공시·IR·뉴스·사내 자료를 캔버스에 모아 정리하고, 그 근거로 프롬프트·결과물 초안·예상 질문을 만들어 다음 분기 실적으로 평가합니다. 흐름은 [기획서](../docs/planning/기획서.md)를, 화면 구조는 [IA](../docs/frontend/ia.md)를, 서버 API는 [API 명세](../docs/frontend/api-spec.md)를 따릅니다.
 
 - 기술: Vue 3 + TypeScript, Vue Flow(캔버스), Pinia(상태), Vite(개발 서버·빌드), Electron(데스크톱 창)
 - 띄우는 곳: 브라우저(`npm run dev`)와 데스크톱 앱(`npm run electron:dev`)

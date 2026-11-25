@@ -221,12 +221,6 @@ onUnmounted(() => window.removeEventListener("keydown", key));
         <template #node-doc="p"><DocNode v-bind="p" /></template>
         <template #node-memo="p"><MemoNode v-bind="p" /></template>
         <template #node-chart="p"><ChartNode v-bind="p" /></template>
-        <Panel v-if="cv.readOnly" position="top-center" class="linkbar">보기 권한으로 열었습니다. 카드를 고치려면 소유자에게 편집 권한을 요청하세요.</Panel>
-        <Panel v-else-if="!cv.cards.length" position="top-center" class="start">
-          <b>자료를 캔버스에 올리세요</b>
-          <span>상단 + 자료 추가(⌘K)에서 공시 표, IR·뉴스 인사이트, 사내 자료를 찾아 올리고, 카드 오른쪽 점을 다른 카드로 끌어 관계를 잇습니다. 예시도 거기서 불러옵니다.</span>
-          <button class="line" @click="srcOpen = true">+ 자료 추가</button>
-        </Panel>
         <Panel v-if="cv.error" position="top-center" class="linkbar err-bar" role="alert">
           <span>{{ cv.error }}</span><button @click="cv.error = ''">닫기</button>
         </Panel>
@@ -240,7 +234,6 @@ onUnmounted(() => window.removeEventListener("keydown", key));
         <Panel position="bottom-left" class="legend">
           <button v-for="k in KINDS" :key="k" :aria-pressed="shown.has(k)" :title="shown.has(k) ? k + ' 선 숨기기' : k + ' 선 보이기'" @click="toggleKind(k)">
             <i :class="{ dash: k === AUTO_KIND, src: k === SRC_KIND }" :style="REL_COLOR[k] ? { background: REL_COLOR[k] } : {}" />{{ k === AUTO_KIND ? "같은 개념(자동)" : k }}</button>
-          <small v-if="cv.lastChangedLayer" class="layer">마지막 조작이 바꾼 프롬프트 층: {{ cv.lastChangedLayer }}</small>
         </Panel>
         <!-- 캔버스 도구: 확대·축소 버튼처럼 오른쪽 위에 띄움 -->
         <Panel v-if="!cv.readOnly" position="top-right" class="tools">

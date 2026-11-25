@@ -32,6 +32,5 @@ const KIND = { ir: "IR", news: "뉴스", internal: "사내 자료" };
     <header class="drag-handle"><span class="kind">자료 없음</span>
       <div class="t"><b>자료를 찾을 수 없습니다</b><small>{{ card.docId }}</small></div>
       <button class="nodrag" @click="cv.remove(card.id)" aria-label="카드 닫기">✕</button></header>
-    <p class="sum">이 카드가 가리키는 자료가 지금 데이터에 없습니다. 자료를 다시 올리거나 카드를 지우세요.</p>
   </section>
 </template>

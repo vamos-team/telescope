@@ -47,7 +47,6 @@ small{color:var(--t-cap);font-size:12px}
 .seg{display:inline-flex;padding:3px;border-radius:var(--r-md);background:var(--bg-grey)}
 .bar .seg button{height:30px;padding:0 12px;border-radius:var(--r-sm);background:none;color:var(--t-sub);font-weight:500}
 .bar .seg button[aria-pressed="true"]{background:var(--surface);color:var(--t-strong);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.09)}
-.layer{display:inline-flex;align-items:center;height:28px;padding:0 10px;border-radius:999px;background:var(--surface);border:1px solid var(--line);color:var(--t-sub)}
 .zoom{display:flex;gap:6px}
 .zoom button{height:36px;min-width:36px;padding:0 10px;border-radius:var(--r-md);background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
   color:var(--t);font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
@@ -265,15 +264,12 @@ table.g.facts tr.b td{font-weight:700;color:var(--t-strong);background:var(--pri
 .vue-flow__edge.sel .vue-flow__edge-path{stroke-width:4!important}
 .vue-flow__edge-textbg{fill:var(--surface)}
 .vue-flow__edge-text{fill:var(--t-sub);font-size:11px;font-family:var(--font)}
-.start{display:grid;justify-items:center;gap:6px;margin-top:18vh;padding:24px 28px;max-width:440px;text-align:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow)}
-.start b{font-size:16px;color:var(--t-strong)} .start span{font-size:13px;color:var(--t-sub)}
-.start button,.linkbar button{height:32px;padding:0 12px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--surface);font-weight:700;font-size:13px}
+.linkbar button{height:32px;padding:0 12px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--surface);font-weight:700;font-size:13px}
 .linkbar{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-pop);font-size:13px}
 .legend{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:6px 10px;background:var(--surface);border:1px solid var(--line);border-radius:999px;font-size:12px;color:var(--t-sub)}
 .legend span{display:inline-flex;align-items:center;gap:4px}
 .legend i{display:inline-block;width:14px;height:3px;border-radius:2px}
 .legend i.dash{background:repeating-linear-gradient(90deg,var(--t-ph) 0 4px,transparent 4px 7px)}
-.legend .layer{border:0;height:auto;padding:0}
 
 /* 결과 패널 */
 .rp{width:460px;flex:none;display:flex;flex-direction:column;background:var(--bg);border-left:1px solid var(--line);min-height:0}
@@ -336,7 +332,6 @@ table.g.facts tr.b td{font-weight:700;color:var(--t-strong);background:var(--pri
 .lcard .ppl small{margin-left:8px}
 .lcard button.primary{height:46px;border-radius:var(--r-md);background:var(--primary);color:var(--on-primary);font-weight:700;font-size:15px}
 .lcard button.primary:hover{background:var(--primary-press)}
-.lcard .sso{line-height:1.5}
 
 
 /* 왼쪽 패널: 근거 데이터 / 활동 로그 */

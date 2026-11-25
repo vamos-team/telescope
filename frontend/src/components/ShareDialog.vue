@@ -61,7 +61,6 @@ function setRole(id: string, v: string) {
         <select v-if="s.access !== 'invited'" :value="s.accessRole" :disabled="!can" aria-label="일반 액세스 권한"
           @change="cv.setShare({ accessRole: ($event.target as HTMLSelectElement).value as 'edit' | 'view' })">
           <option value="edit">편집 가능</option><option value="view">보기 가능</option></select>
-        <small>{{ s.access === "invited" ? "위 목록의 사람만 열 수 있습니다." : "찾아서 열 수 있는 사람 모두에게 적용됩니다." }}</small>
       </div>
 
       <footer><button class="primary" @click="emit('close')">완료</button></footer>
