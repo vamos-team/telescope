@@ -1,6 +1,6 @@
 # 화면별 Information Architecture (IA)
 
-v02-canvas 데모(코드 `frontend/`, 빌드 `docs/planning/demo/index.html`) 화면을 기준으로, 메뉴 → 화면 → 기능(클릭 → 결과)을 정리했다. 화면에서 부르는 API는 [API 명세](api-spec.md)의 절 번호로 적고, 호출 흐름은 [API 다이어그램](api-diagram.md)을 본다.
+v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`) 화면을 기준으로, 메뉴 → 화면 → 기능(클릭 → 결과)을 정리했다. 화면에서 부르는 API는 [API 명세](api-spec.md)의 절 번호로 적고, 호출 흐름은 [API 다이어그램](api-diagram.md)을 본다.
 
 - 기준 코드: `frontend/src` (`App.vue`, `components/*.vue`, `components/nodes/*.vue`)
 - 기능 ID(F-xx), 등급(must / should / 추가), 데모 시나리오는 [기획서](../planning/기획서.md)를 따른다.
