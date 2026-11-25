@@ -38,7 +38,7 @@ function add() {
 </script>
 
 <template>
-  <div v-if="t" class="scrim" @click.self="emit('close')" @pointerup="dragging = false">
+  <div v-if="t" class="scrim" @pointerup="dragging = false">
     <div class="overlay" role="dialog" :aria-label="t.title">
       <header><h2>{{ t.company }} · {{ t.title }} <small>{{ t.period }}</small></h2>
         <p>{{ t.basis }} 기준 / 단위 {{ t.unit }} / 접수번호 {{ t.rcept_no }}</p>
