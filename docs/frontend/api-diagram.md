@@ -60,7 +60,7 @@ sequenceDiagram
   F->>B: POST /auth/login
   B-->>F: accessToken, user
   F->>B: GET /canvases?filter=all
-  B-->>F: 볼 수 있는 캔버스 목록 (myRole, access, 미리보기)
+  B-->>F: 볼 수 있는 캔버스 목록 (myRole, 미리보기)
   Note over F: 캔버스 홈 (C00)
   alt 타일 클릭
     U->>F: 캔버스 고르기
@@ -80,13 +80,13 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-  actor U as 소유자 · 편집자
+  actor U as 소유자
   participant F as 공유 창
   participant B as backend
 
   U->>F: 로고 → 메뉴 팝업(C15) → 정보 수정
   F->>B: GET /canvases/{id}/shares
-  B-->>F: ownerId, members, access, people
+  B-->>F: ownerId, members, people
   U->>F: 찾기 칸 클릭
   F->>B: GET /users?q=&excludeCanvas={id}
   B-->>F: 추천 (같은 부서 먼저, 최대 6명)
@@ -96,8 +96,6 @@ sequenceDiagram
   U->>F: 후보 고르기 (편집 가능 · 보기 가능)
   F->>B: PUT /canvases/{id}/shares
   B-->>F: 바뀐 공유 상태
-  U->>F: 일반 액세스 바꾸기 (초대한 사람만 · 회사 전체 보기)
-  F->>B: PUT /canvases/{id}/shares
   Note over B: 초대받은 사람의 GET /canvases에 바로 나타남
 ```
 

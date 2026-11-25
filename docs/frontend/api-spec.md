@@ -16,7 +16,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | 시각 | ISO 8601 문자열 (`2026-11-25T09:30:00`) |
 | 금액 단위 | 원본 표는 공시 단위 그대로(`unit`). 비교·근거 값은 서버가 십억원으로 변환(`UNIT_TO_BIL`). 화면은 표시만 바꿈 |
 | 오래 걸리는 작업 | `202` + `{ jobId }`를 받고 `GET /api/v1/jobs/{id}`를 `SUCCEEDED`·`FAILED`까지 폴링한 뒤 결과 조회 API를 부름. 콜백 없음 |
-| 권한 | 캔버스마다 소유자 · 편집 · 보기 권한(3.9). 권한 없는 캔버스는 403. 공용 문서 수집·삭제는 관리자만 |
+| 권한 | 캔버스마다 소유자 · 편집 · 보기 권한(3.9). 공유 설정은 소유자만 바꾼다. 일반 액세스(회사 전체 보기)는 없다. 권한 없는 캔버스는 403. 공용 문서 수집·삭제는 관리자만 |
 
 ### 1.1 화면별 호출 요약
 
@@ -92,7 +92,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 ### 3.1 `GET /api/v1/canvases`
 
-내가 볼 수 있는 캔버스 목록(캔버스 홈 C00). 소유한 것, 초대받은 것, 일반 액세스(부서 · 회사 전체)로 열리는 것을 모두 담는다. 최근 수정 순.
+내가 볼 수 있는 캔버스 목록(캔버스 홈 C00). 소유한 것과 초대받은 것을 담는다. 최근 수정 순.
 
 | 쿼리 | 설명 | 타입 |
 |---|---|---|
@@ -110,7 +110,6 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | `cardCount` | 카드 수 | number |
 | `ownerId` | 소유자 사번 | string |
 | `myRole` | 내 권한 `owner` / `edit` / `view` | string |
-| `access` | 일반 액세스 `invited` / `company`(회사 전체 보기) | string |
 | `quarter` | 분기 (예: `2026년 1분기`). 상단 제목 옆에 표시 | string |
 | `thumbnail` | 홈 미리보기. 카드 `{ kind, x, y }` 목록 또는 이미지 URL (정해야 함) | object |
 
@@ -122,7 +121,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | `quarter` | 분기 (예: `2026년 1분기`) | string |
 | `editorIds` | 편집 권한을 줄 사번 목록 (C14 편집할 사람) | string[] |
 
-응답은 3.1의 항목 하나. `201`. 만든 사람이 소유자가 되고, `editorIds`는 `edit`으로 초대되며, 일반 액세스는 `invited`(초대한 사람만)로 시작한다.
+응답은 3.1의 항목 하나. `201`. 만든 사람이 소유자가 되고, `editorIds`는 `edit`으로 초대된다.
 
 ### 3.3 `PATCH /api/v1/canvases/{id}` · `DELETE /api/v1/canvases/{id}`
 
@@ -237,25 +236,24 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 ### 3.9 `GET /api/v1/canvases/{id}/shares` · `PUT /api/v1/canvases/{id}/shares`
 
-공유 창(C13). `GET`은 권한 있는 사람 전원(활동 로그 "이 캔버스 사람"에도 씀), `PUT`은 소유자 · 편집 권한만 부른다.
+공유 창(C13). `GET`은 권한 있는 사람 전원(활동 로그 "이 캔버스 사람"에도 씀), `PUT`은 소유자만 부른다.
 
 | 필드 | 설명 | 타입 |
 |---|---|---|
 | `ownerId` | 소유자 사번 (`GET`만, 바꿀 수 없음) | string |
 | `members` | 직접 초대한 사람 `{ userId, role }`. `role`은 `edit` / `view`. 목록에서 빠지면 권한 삭제 | object[] |
-| `access` | 일반 액세스 `invited`(초대한 사람만) / `company`(회사 전체, 보기 권한 고정). 편집 권한은 `members`로만 줌 | string |
 
-`GET` 응답에는 일반 액세스로 권한을 받은 사람까지 펼친 `people[]`(`{ id, name, dept, job, role }`)를 함께 준다.
+`GET` 응답에는 소유자와 초대한 사람을 펼친 `people[]`(`{ id, name, dept, job, role }`)를 함께 준다.
 
 ```json
-{ "members": [{ "userId": "2001", "role": "view" }], "access": "invited" }
+{ "members": [{ "userId": "2001", "role": "view" }] }
 ```
 
-권한 계산 순서: 소유자 → 직접 초대 권한 → 일반 액세스. 바꾼 결과는 활동 로그에 "공유 권한을 바꿈"으로 남는다.
+권한 계산 순서: 소유자 → 직접 초대 권한. 둘 다 아니면 권한 없음. 바꾼 결과는 활동 로그에 "공유 권한을 바꿈"으로 남는다.
 
 | HTTP | 상황 | 화면 문구 |
 |---|---|---|
-| 403 | 보기 권한으로 `PUT` | 화면은 공유 창을 읽기 전용으로 보여 줌 ("보기 권한이라 공유 설정을 바꿀 수 없습니다.") |
+| 403 | 소유자가 아닌 사람(편집 · 보기 권한)이 `PUT` | 화면은 공유 창을 읽기 전용으로 보여 줌 ("공유 설정은 소유자만 바꿀 수 있습니다.") |
 | 404 | 없는 사번 | "찾는 사람이 없거나 이미 권한이 있습니다." |
 
 ## 4. 공시
