@@ -15,6 +15,7 @@
 | `numbers.py` | 숫자·단위·기간 판별, 한국어 금액 정규화 |
 | `model.py` | 데이터 구조 |
 | `facts.py` | 증감표 사실 추출, XBRL 값으로 확인 |
+| `xbrl_reader.py` | XBRL 형식 읽기(인스턴스·이름표·표시/계산/정의 연결선). 해석 없음. `read_xbrl`은 원본 그대로(`loaders/xbrl.py`가 DuckDB에 적재) |
 | `xbrl_vocab.py`, `xbrl_vocab.json` | 증감표 후보 목록, DART XBRL zip에서 만든다 |
 | `align.py` | 항목 매칭: 이름이 달라도 같은 뜻인 항목 찾기 (`align()`). 임베딩 모델은 `.env`의 `PARSER_EMBED_MODEL`로 정한다 |
 | `requirements.txt` | 패키지와 버전 | 
