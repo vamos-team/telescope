@@ -21,7 +21,7 @@ const cv = useCanvas();
 const flow = useVueFlow("canvas");
 const srcOpen = ref(false);  // 자료 추가 팝업
 const rp = ref("context");  // 오른쪽 패널 탭
-const lpOpen = ref(true), rpOpen = ref(true);  // 왼쪽·오른쪽 사이드바 열림 (기본 둘 다 열림)
+const rpOpen = ref(true);  // 오른쪽 사이드바 열림 (기본 열림). 왼쪽 사이드바는 항상 열림
 const selLink = ref<string | null>(null);
 
 // 캔버스 상태 → Vue Flow 노드/엣지 (좌표는 store가 원본)
@@ -173,10 +173,14 @@ onUnmounted(() => window.removeEventListener("keydown", key));
   <template v-else>
   <CanvasTabs />
   <div class="bar">
-    <button v-if="!lpOpen" class="sb" title="왼쪽 사이드바 열기" aria-label="왼쪽 사이드바 열기" @click="lpOpen = true"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2.5" /><path d="M7.5 3.5v13" /></svg></button>
     <h1 class="logo" title="Telescope"><Logo /><span class="sr">Telescope</span></h1>
+    <b class="ctitle" :title="cv.canvasName">{{ cv.canvasName }}</b>
     <span v-if="api.meta.subtitle" class="sub">{{ api.meta.subtitle }}</span>
     <div class="acts">
+      <div class="team" title="같은 부서 팀원. 고르면 그 사람 이름으로 조작이 기록됩니다">
+        <span v-for="m in cv.members" :key="m.name" class="av" :data-me="m.name === cv.author" :title="who(m.name)">{{ m.name[0] }}</span>
+        <select v-model="cv.author" aria-label="작성자"><option v-for="m in cv.members" :key="m.name" :value="m.name">{{ m.name }} · {{ m.job }}</option></select>
+      </div>
       <button class="primary" title="자료 추가 (⌘K)" @click="srcOpen = true">+ 자료 추가</button>
       <button class="line" @click="addMemo">메모</button>
       <button class="line" :disabled="!cv.cards.length" @click="clearAll">비우기</button>
@@ -184,7 +188,7 @@ onUnmounted(() => window.removeEventListener("keydown", key));
     </div>
   </div>
   <div class="main">
-    <LeftPanel v-if="lpOpen" @focus="focusCard" @close="lpOpen = false" />
+    <LeftPanel @focus="focusCard" />
     <div class="flow-wrap" @dragover.prevent @drop.prevent="onDrop">
       <VueFlow id="canvas" class="flow" :nodes="nodes" :edges="edges" :min-zoom="0.2" :max-zoom="2" :default-edge-options="{ type: 'default' }"
         @node-drag-stop="onDragStop" @edge-click="onEdgeClick" @pane-click="selLink = null">
@@ -216,10 +220,6 @@ onUnmounted(() => window.removeEventListener("keydown", key));
           <div class="seg" role="group" aria-label="표시 단위">
             <button :aria-pressed="cv.unit === 'raw'" @click="cv.unit = 'raw'">원본 단위</button>
             <button :aria-pressed="cv.unit === 'bil'" @click="cv.unit = 'bil'">십억원</button>
-          </div>
-          <div class="team" title="같은 부서 팀원. 고르면 그 사람 이름으로 조작이 기록됩니다">
-            <span v-for="m in cv.members" :key="m.name" class="av" :data-me="m.name === cv.author" :title="who(m.name)">{{ m.name[0] }}</span>
-            <select v-model="cv.author" aria-label="작성자"><option v-for="m in cv.members" :key="m.name" :value="m.name">{{ m.name }} · {{ m.job }}</option></select>
           </div>
         </Panel>
         <Panel position="bottom-right" class="zoom">
