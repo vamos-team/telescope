@@ -9,6 +9,8 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 // --mode html: docs/frontend/demo.html 한 파일 빌드 (scripts/inline.mjs가 합침)
 export default defineConfig(({ mode }) => ({
   base: './',
+  // Electron(electron/main.cjs)이 5173을 열므로 포트를 고정. 이미 쓰이면 다른 포트로 넘어가지 않고 멈춤
+  server: { port: 5173, strictPort: true },
   ...(mode === 'html' && {
     build: { cssCodeSplit: false, assetsInlineLimit: 1e8, rollupOptions: { output: { inlineDynamicImports: true } } },
   }),

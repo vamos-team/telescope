@@ -103,8 +103,9 @@ export const useCanvas = defineStore("canvas", {
     canvases: (s): CanvasMeta[] => { void s.saved; return Object.values(readAll()).map((x) => x.meta).filter((m) => roleOf(m, s.user))
       .sort((a, b) => b.updated.localeCompare(a.updated)); },
     meta(): CanvasMeta | undefined { return this.canvases.find((m) => m.id === this.canvasId); },
-    role(): Role | null { return this.meta ? roleOf(this.meta, this.user) : this.canvasId ? "owner" : null; },
+    role(): Role | null { return this.meta ? roleOf(this.meta, this.user) : null; },  // 메타가 없으면(권한이 풀림 등) 권한 없음
     readOnly(): boolean { return this.role === "view"; },
+    canEdit(): boolean { return this.role === "owner" || this.role === "edit"; },  // 소유자 · 편집 권한만 편집
     // 이 캔버스에 권한 있는 사람 (활동 로그 목록, 공유 창)
     members(): (typeof ALL_MEMBERS[number] & { role: Role })[] {
       const m = this.meta; if (!m) return [];
@@ -115,7 +116,7 @@ export const useCanvas = defineStore("canvas", {
   },
   actions: {
     emit(e: CanvasEvent) {
-      if (this.readOnly) { this.error = "보기 권한만 있습니다."; return; }  // 모든 편집이 지나는 곳에서 한 번 막음
+      if (this.blocked()) return;  // 이벤트 단계에서도 한 번 더 막음
       this.queue.push({ author: this.author, ...e });  // 예시 메모처럼 작성자를 지정한 이벤트는 그대로
       if (e.type !== "move_card") this.rev++;
       if (ACT[e.type]) this.activity.unshift({ author: this.author, text: ACT[e.type] + (e.card_id ? ` (${e.card_id})` : ""),
@@ -164,8 +165,9 @@ export const useCanvas = defineStore("canvas", {
     },
     restoreUser() { try { const u = JSON.parse(sessionStorage.getItem(KEY + ":user") ?? "null"); if (u?.id) return this.login(u.id); } catch { /* 무시 */ } },
     save() {
-      if (!this.canvasId || !this.user || this.readOnly) return;
+      if (!this.canvasId || !this.user) return;
       const all = readAll(), prev = all[this.canvasId]?.meta;
+      if (prev && !["owner", "edit"].includes(roleOf(prev, this.user) ?? "")) return;  // 저장된 캔버스는 편집 권한이 있을 때만. 처음 저장(새 캔버스)은 통과
       all[this.canvasId] = { meta: { id: this.canvasId, name: this.canvasName, dept: prev?.dept ?? this.user.dept, owner: prev?.owner ?? this.author,
         updated: now(), updatedBy: this.author, count: this.cards.length, quarter: prev?.quarter, ...(prev ? shareOf(prev) : { ownerId: this.user.id, share: {}, access: "invited" as Access }) },
         cards: JSON.parse(JSON.stringify(this.cards)), links: this.links, seq: this.seq, activity: this.activity.slice(0, 200), log: this.log,
@@ -205,7 +207,7 @@ export const useCanvas = defineStore("canvas", {
       }
       for (const c of this.cards) if (c.kind === "compare") c.version++;
     },
-    rename(name: string) { if (this.readOnly) return; this.canvasName = name.trim() || "제목 없는 캔버스"; this.save(); },
+    rename(name: string) { if (this.blocked()) return; this.canvasName = name.trim() || "제목 없는 캔버스"; this.save(); },
     removeCanvas(id: string) {  // 소유자만
       const all = readAll(); if (!all[id] || roleOf(all[id].meta, this.user) !== "owner") return;
       delete all[id]; writeAll(all); this.saved++;
@@ -219,8 +221,11 @@ export const useCanvas = defineStore("canvas", {
       x.meta = { ...x.meta, ...shareOf(x.meta), ...patch }; writeAll(all); this.saved++;
       this.activity.unshift({ author: this.author, text: "공유 권한을 바꿈", time: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) });
     },
+    // 화면 상태를 바꾸기 전에 권한 확인. 편집 권한이 없으면 안내만 하고 막음 (키보드로 버튼을 눌러도 상태가 바뀌지 않게)
+    blocked() { if (this.canEdit) return false; this.error = "보기 권한만 있습니다."; return true; },
     newId() { return "c" + ++this.seq; },
     addTableCard(tableId: string, rows: number[], cols: number[], vcol = cols[0], pos = { x: 0, y: 0 }) {
+      if (this.blocked()) return "";
       const id = this.newId();
       this.cards.push({ id, kind: "table", tableId, rows, cols, vcol, edits: {}, sort: null, checked: false, ...pos });
       this.emit({ type: "add_card", card_id: id, table_id: tableId, rows, cols });
@@ -228,6 +233,7 @@ export const useCanvas = defineStore("canvas", {
       return id;
     },
     addRows(id: string, rows: number[]) {
+      if (this.blocked()) return;
       const c = this.cards.find((x) => x.id === id) as TableCard;
       c.rows = [...new Set([...c.rows, ...rows])].sort((a, b) => a - b);
       this.emit({ type: "add_rows", card_id: id, rows });
@@ -243,35 +249,42 @@ export const useCanvas = defineStore("canvas", {
     },
     clear() { [...this.cards].forEach((c) => this.remove(c.id)); },
     removeRow(id: string, r: number) {
+      if (this.blocked()) return;
       const c = this.cards.find((x) => x.id === id) as TableCard;
       c.rows = c.rows.filter((x) => x !== r);
       this.emit({ type: "remove_row", card_id: id, r });
     },
     editCell(id: string, r: number, c: number, value: number | null) {
+      if (this.blocked()) return;
       const card = this.cards.find((x) => x.id === id) as TableCard;
       card.edits[`${r},${c}`] = value;
       this.emit({ type: "edit_cell", card_id: id, r, c, value });
     },
     setPeriod(id: string, c: number) {
+      if (this.blocked()) return;
       (this.cards.find((x) => x.id === id) as TableCard).vcol = c;
       this.emit({ type: "select_period", card_id: id, c });
     },
     sortCard(id: string, key: string | number | null, desc = false) {
+      if (this.blocked()) return;
       (this.cards.find((x) => x.id === id) as TableCard).sort = key === null ? null : { key, desc };
       this.emit({ type: "sort_card", card_id: id, key, desc });
     },
     move(id: string, x: number, y: number) {
+      if (this.blocked()) return;
       const c = this.cards.find((k) => k.id === id); if (!c) return;
       c.x = x; c.y = y;
       this.emit({ type: "move_card", card_id: id, x, y }); // 컨텍스트에는 영향 없음 (서버에서 무시)
     },
     addDocCard(docId: string, pos = { x: 0, y: 0 }) {
+      if (this.blocked()) return "";
       const id = this.newId();
       this.cards.push({ id, kind: "doc", docId, ...pos });
       this.emit({ type: "add_doc", card_id: id, doc_id: docId });
       return id;
     },
     addMemo(text: string, pos = { x: 0, y: 0 }, author?: string, type: "memo" | "request" = "memo") {
+      if (this.blocked()) return "";
       author ??= this.author;
       const id = this.newId();
       this.cards.push({ id, kind: "memo", author, text, type, ...pos });
@@ -279,34 +292,41 @@ export const useCanvas = defineStore("canvas", {
       return id;
     },
     setMemoType(id: string, type: "memo" | "request") {
+      if (this.blocked()) return;
       (this.cards.find((c) => c.id === id) as MemoCard).type = type;
       this.emit({ type: "set_memo_type", card_id: id, memo_type: type });
     },
     editMemo(id: string, text: string) {
+      if (this.blocked()) return;
       (this.cards.find((c) => c.id === id) as MemoCard).text = text;
       this.emit({ type: "edit_memo", card_id: id, text });
     },
     addLink(source: string, target: string, rel = RELS[0]) {
+      if (this.blocked()) return;
       if (source === target || this.links.some((l) => l.source === source && l.target === target)) return;
       const id = "l" + ++this.seq;
       this.links.push({ id, source, target, rel });
       this.emit({ type: "add_link", link_id: id, source, target, rel });
     },
     setLink(id: string, rel: string) {
+      if (this.blocked()) return;
       this.links.find((l) => l.id === id)!.rel = rel;
       this.emit({ type: "set_link", link_id: id, rel });
     },
     removeLink(id: string) {
+      if (this.blocked()) return;
       this.links = this.links.filter((l) => l.id !== id);
       this.emit({ type: "remove_link", link_id: id });
     },
     addChart(compareId: string) {
+      if (this.blocked()) return "";
       const c = this.cards.find((x) => x.id === compareId)!, id = this.newId();
       this.cards.push({ id, kind: "chart", compareId, x: c.x, y: c.y + 520 });
       this.save();
       return id;
     },
     remove(id: string) {
+      if (this.blocked()) return;
       if (this.cards.find((c) => c.id === id)?.kind === "chart") { this.cards = this.cards.filter((c) => c.id !== id); this.save(); return; }
       this.cards.filter((c) => c.kind === "chart" && c.compareId === id).forEach((c) => this.remove(c.id));
       this.links = this.links.filter((l) => l.source !== id && l.target !== id);
@@ -315,6 +335,7 @@ export const useCanvas = defineStore("canvas", {
       this.emit({ type: "remove_card", card_id: id });
     },
     createCompare() {
+      if (this.blocked()) return null;
       const src = this.checked; if (src.length < 2) return null;
       const id = this.newId();
       const x = Math.max(...src.map((c) => c.x)) + 620, y = Math.min(...src.map((c) => c.y));
@@ -324,6 +345,7 @@ export const useCanvas = defineStore("canvas", {
       return id;
     },
     confirmMapping(conceptId: string, company: string, cells: string[], accepted: boolean) {
+      if (this.blocked()) return;
       this.emit({ type: "confirm_mapping", concept_id: conceptId, company, cells, accepted });
     },
   },

@@ -19,7 +19,7 @@ BACK = Path(os.environ.get("TEMPLATE_BACKEND", HERE.parents[1] / "_template/back
 if not (BACK / "app/ingest/dart_xml.py").exists():
     sys.exit(f"Python 백엔드 템플릿을 찾지 못했습니다: {BACK}\n"
              "TEMPLATE_BACKEND에 템플릿의 backend 폴더 경로를 넣어 실행하세요 (frontend/README.md 6장). "
-             "화면만 고쳤다면 이 단계 없이 npm run dev 또는 npm run build:html만 하면 됩니다.")
+             "화면만 고쳤다면 이 단계 없이 npm run dev로 확인하면 됩니다. docs/frontend/demo.html은 요청이 있을 때만 npm run build:html로 다시 만듭니다.")
 sys.path.insert(0, str(BACK))
 
 import yaml  # noqa: E402

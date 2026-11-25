@@ -81,17 +81,22 @@ async function addFound(tableId: string, rows: number[], pos = nextPos()) {
 }
 // 인사이트의 "비교 카드로 올리기": 3사 표를 올려 비교 카드로 묶는다. 값 열은 1Q26(당분기)
 const CUR = /1Q26|당분기|제 10 기 1분기/;
+// 비동기 작업 중 다른 캔버스로 바뀌면 멈춤 (캔버스를 열 때마다 sessionId가 새로 생김)
+const sameCanvas = (sid: string) => () => cv.sessionId === sid;
 async function addCompare(tableIds: string[], at?: { x: number; y: number }) {
+  if (!cv.canEdit) return;
+  const same = sameCanvas(cv.sessionId);
   srcOpen.value = false;
   for (const c of cv.cards) if (c.kind === "table") c.checked = false;
   for (const [k, id] of tableIds.entries()) {
     const t = await api.table(id), cols = t.cols.map((_, i) => i);
+    if (!same()) return;
     const cid = cv.addTableCard(id, t.rows.map((r) => r.r), cols, Math.max(0, t.cols.findIndex((x) => CUR.test(x))),
       at ? { x: at.x, y: at.y + k * 420 } : nextPos());
     (cv.cards.find((c) => c.id === cid) as TableCard).checked = true;
   }
   cv.createCompare();
-  if (!at) setTimeout(arrange, 500); // ponytail: loadExample과 같은 고정 지연
+  if (!at) setTimeout(() => same() && arrange(), 500); // ponytail: loadExample과 같은 고정 지연
 }
 function onAdd(tableId: string, rows: number[], cols: number[]) {
   const cardId = cv.overlay.cardId;
@@ -103,6 +108,7 @@ const nextPos = () => ({ x: 40 + (cv.cards.length % 8) * 30, y: 40 + (cv.cards.l
 
 // 자료 추가 화면에서 선택한 카드들을 캔버스로 끌어다 놓기. 놓은 자리부터 오른쪽으로 펼친다
 async function onDrop(e: DragEvent) {
+  if (!cv.canEdit) return;  // 보기 권한이면 다른 창에서 끌어와도 무시
   const raw = e.dataTransfer?.getData("application/x-canvas"); if (!raw) return;
   srcOpen.value = false;
   const at = flow.screenToFlowCoordinate({ x: e.clientX, y: e.clientY });
@@ -158,11 +164,13 @@ function arrange() {
 }
 
 async function loadExample() {
-  const ex = api.meta.example; if (!ex) return;
+  const ex = api.meta.example; if (!ex || !cv.canEdit) return;
+  const same = sameCanvas(cv.sessionId);
   cv.clear();
   const ids: string[] = [];
   for (const e of ex.cards) {
     const t = await api.table(e.table_id);
+    if (!same()) return;
     const cols = e.cols ?? t.cols.map((_, i) => i);
     ids.push(cv.addTableCard(e.table_id, e.rows ?? t.rows.map((r) => r.r), cols, e.vcol ?? cols[0]));
   }
@@ -177,7 +185,7 @@ async function loadExample() {
   for (const d of ex.docs) key[d] = cv.addDocCard(d);
   ex.memos.forEach((m, i) => (key[`memo:${i}`] = cv.addMemo(m.text, { x: 0, y: 0 }, m.author, m.type)));
   for (const [s, t, rel] of ex.links) if (key[s] && key[t]) cv.addLink(key[s], key[t], rel);
-  setTimeout(arrange, 500); // ponytail: 이벤트 전송(150ms)과 비교 결과 렌더 뒤 배치하도록 고정 지연
+  setTimeout(() => same() && arrange(), 500); // ponytail: 이벤트 전송(150ms)과 비교 결과 렌더 뒤 배치하도록 고정 지연
 }
 function clearAll() { if (cv.cards.length && confirm("캔버스의 카드를 모두 지울까요?")) cv.clear(); }
 
@@ -188,7 +196,9 @@ const key = (e: KeyboardEvent) => {
   if (e.key === "Escape") { if (shareOpen.value) shareOpen.value = false; else if (srcOpen.value) srcOpen.value = false; else { selLink.value = null; active.value = null; } }
 };
 // 다른 캔버스(세션)를 열면 화면을 그 캔버스에 맞춘다
-watch(() => cv.canvasId, () => setTimeout(() => flow.fitView({ padding: 0.1, duration: 300 }), 300));
+watch(() => cv.canvasId, () => { selLink.value = null; active.value = null; shareOpen.value = false; setTimeout(() => flow.fitView({ padding: 0.1, duration: 300 }), 300); });
+// 열어 둔 캔버스에 대한 권한이 사라지면(공유 창에서 내 권한 삭제 등) 홈으로
+watch(() => !!cv.canvasId && !cv.meta, (lost) => { if (lost) { shareOpen.value = false; cv.goHome(); } });
 onMounted(() => { cv.restoreUser(); window.addEventListener("keydown", key); (window as unknown as Record<string, unknown>).__aiSelfCheck = () => selfCheck(api.analysis); });
 onUnmounted(() => window.removeEventListener("keydown", key));
 </script>
@@ -228,7 +238,7 @@ onUnmounted(() => window.removeEventListener("keydown", key));
         <Panel v-if="cv.error" position="top-center" class="linkbar err-bar" role="alert">
           <span>{{ cv.error }}</span><button @click="cv.error = ''">닫기</button>
         </Panel>
-        <Panel v-if="link" position="top-center" class="linkbar">
+        <Panel v-if="link && cv.canEdit" position="top-center" class="linkbar">
           <span>{{ cardName(link.source) }} → {{ cardName(link.target) }}</span>
           <select :value="link.rel" aria-label="관계" @change="cv.setLink(link.id, ($event.target as HTMLSelectElement).value)">
             <option v-for="r in RELS" :key="r">{{ r }}</option></select>
@@ -263,7 +273,7 @@ onUnmounted(() => window.removeEventListener("keydown", key));
     @example="srcOpen = false; loadExample()" />
   <SourceOverlay :table-id="cv.overlay.tableId" :match="cv.overlay.match" :card-id="cv.overlay.cardId"
     @close="cv.openSource(null)" @add="onAdd" />
-  <ShareDialog v-if="shareOpen" @close="shareOpen = false" />
+  <ShareDialog v-if="shareOpen && cv.meta" @close="shareOpen = false" />
   </template>
   <NewCanvasDialog v-if="cv.creating" />
   </template>

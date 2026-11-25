@@ -32,7 +32,7 @@ function setRole(id: string, v: string) {
       <header><h2>'{{ cv.canvasName }}' 공유</h2><button class="x" aria-label="닫기" @click="emit('close')">✕</button></header>
 
       <div v-if="can" class="inv">
-        <input v-model="q" placeholder="사번, 이름, 부서로 사내 사람 찾기" aria-label="초대할 사람 찾기" @focus="focused = true" @click="focused = true" @input="focused = true" @blur="blur" />
+        <input v-model="q" placeholder="사번, 이름, 부서로 사내 사람 찾기" aria-label="초대할 사람 찾기" @keydown.enter.prevent="found[0] && invite(found[0].id)" @focus="focused = true" @click="focused = true" @input="focused = true" @blur="blur" />
         <select v-model="role" aria-label="초대 권한"><option value="edit">편집 가능</option><option value="view">보기 가능</option></select>
         <ul v-if="focused" class="found">
           <li v-if="!q.trim() && found.length" class="cap">추천</li>
