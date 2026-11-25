@@ -3,9 +3,14 @@ spring:
     name: telescope-backend
   profiles:
     default: local
+  # RDS는 공용 인스턴스라 우리 테이블은 app 스키마에만 둔다. 스키마가 없으면 Flyway가 만든다.
+  flyway:
+    default-schema: app
   jpa:
     hibernate:
       ddl-auto: validate
+    properties:
+      "[hibernate.default_schema]": app
 
 # infra 구현체 전환용 설정. 실제 ai 서비스/클라우드 스토리지가 생기면 여기서 바꾼다.
 infra:
