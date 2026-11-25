@@ -235,6 +235,6 @@ QUEUED ──▶ RUNNING ──▶ SUCCEEDED
 | 테스트 | 확인하는 것 |
 |---|---|
 | `JobTest` | 상태 전이와 `syncFrom`의 모든 분기 (단위) |
-| `JobRepositoryTest` | MySQL에서 `ddl-auto: validate` 통과, enum·시각 저장, 잠금 조회 |
+| `JobRepositoryTest` | PostgreSQL에서 `ddl-auto: validate` 통과, enum·시각 저장, 잠금 조회 |
 | `JobServiceTest` | 조회 시 갱신, 종료 작업의 ai 미호출, ai 오류 처리, 동시 조회에서 먼저 종료된 상태 유지(잠금을 빼면 실패함을 확인). 응답을 정할 수 있는 가짜 ai 대역 사용 |
 | `JobControllerTest` | 200, 404 응답 형식 |

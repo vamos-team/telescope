@@ -44,7 +44,7 @@ MVP 제외: 콜백(작업 상태는 폴링으로 조회), 사내 데이터 연�
 
 | 저장소 | 쓰기 | 읽기 |
 |---|---|---|
-| MySQL (운영 데이터) | backend만 | backend |
+| PostgreSQL (운영 데이터) | backend만 | backend |
 | DuckDB (재무 수치) | `pipelines/loaders` 배치만. 새 파일을 만들고 검증한 뒤 교체 | `mcp-server` (읽기 전용으로만 연다) |
 | ChromaDB (문서 검색) | 자료 준비(ingest)만 | `mcp-server`, 분석 서비스 |
 | 파일 저장소 (원본, 추출 결과) | backend, ai | backend, ai |
