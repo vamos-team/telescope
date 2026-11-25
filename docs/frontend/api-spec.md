@@ -75,7 +75,7 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 
 ### 2.3 `GET /api/v1/users?q={검색어}`
 
-공유 창(C13)에서 초대할 사내 사람을 찾는다. 사번 · 이름 · 부서 일부로 찾고 최대 6명을 돌려준다. `q`가 비어 있으면 추천(요청한 사람과 같은 부서 먼저)을 돌려준다. 두 경우 모두 `excludeCanvas={id}`를 주면 그 캔버스에 이미 권한 있는 사람을 뺀다.
+공유 창(C13)에서 초대할 사내 사람을 찾는다. 사번 · 이름 · 부서 일부로 찾고 최대 6명을 돌려준다.
 
 ```json
 { "data": [{ "id": "2001", "name": "최예산", "dept": "AIDC사업본부", "job": "재무기획" }], "error": null }
@@ -87,7 +87,7 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 
 ### 3.1 `GET /api/v1/canvases`
 
-내가 볼 수 있는 캔버스 목록(캔버스 홈 C00). 소유한 것, 초대받은 것, 일반 액세스(회사 전체 보기)로 열리는 것을 모두 담는다. 최근 수정 순.
+내가 볼 수 있는 캔버스 목록(캔버스 홈 C00). 소유한 것, 초대받은 것, 일반 액세스(부서 · 회사 전체)로 열리는 것을 모두 담는다. 최근 수정 순.
 
 | 쿼리 | 설명 | 타입 |
 |---|---|---|
@@ -105,7 +105,8 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 | `cardCount` | 카드 수 | number |
 | `ownerId` | 소유자 사번 | string |
 | `myRole` | 내 권한 `owner` / `edit` / `view` | string |
-| `access` | 일반 액세스 `invited` / `company`(회사 전체 보기) | string |
+| `access` | 일반 액세스 `invited` / `dept` / `company` | string |
+| `accessRole` | 일반 액세스 권한 `edit` / `view` | string |
 | `thumbnail` | 홈 미리보기. 카드 `{ kind, x, y }` 목록 또는 이미지 URL (정해야 함) | object |
 
 ### 3.2 `POST /api/v1/canvases`
@@ -114,7 +115,7 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 |---|---|---|
 | `name` | 이름. 없으면 `"{부서} 캔버스 {n}"` | string? |
 
-응답은 3.1의 항목 하나. `201`. 만든 사람이 소유자가 되고, 일반 액세스는 `invited`(초대한 사람만)로 시작한다.
+응답은 3.1의 항목 하나. `201`. 만든 사람이 소유자가 되고, 일반 액세스는 `dept` · `edit`(만든 사람의 부서 전체 편집)으로 시작한다.
 
 ### 3.3 `PATCH /api/v1/canvases/{id}` · `DELETE /api/v1/canvases/{id}`
 
@@ -227,12 +228,13 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 |---|---|---|
 | `ownerId` | 소유자 사번 (`GET`만, 바꿀 수 없음) | string |
 | `members` | 직접 초대한 사람 `{ userId, role }`. `role`은 `edit` / `view`. 목록에서 빠지면 권한 삭제 | object[] |
-| `access` | 일반 액세스 `invited`(초대한 사람만) / `company`(회사 전체, 보기 권한 고정). 편집 권한은 `members`로만 줌 | string |
+| `access` | 일반 액세스 `invited`(초대한 사람만) / `dept`(소유 부서 전체) / `company`(회사 전체) | string |
+| `accessRole` | 일반 액세스 권한 `edit` / `view`. `invited`면 무시 | string |
 
 `GET` 응답에는 일반 액세스로 권한을 받은 사람까지 펼친 `people[]`(`{ id, name, dept, job, role }`)를 함께 준다.
 
 ```json
-{ "members": [{ "userId": "2001", "role": "view" }], "access": "invited" }
+{ "members": [{ "userId": "2001", "role": "view" }], "access": "dept", "accessRole": "edit" }
 ```
 
 권한 계산 순서: 소유자 → 직접 초대 권한 → 일반 액세스. 바꾼 결과는 활동 로그에 "공유 권한을 바꿈"으로 남는다.
