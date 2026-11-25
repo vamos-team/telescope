@@ -15,13 +15,15 @@ export const UNIT_TO_BIL: Record<string, number> = { 원: 1e-9, 천원: 1e-6, �
 export type CanvasEvent = { type: string; [k: string]: unknown };
 // 캔버스에 올리는 비정형 자료 (IR·뉴스·사내 자료). 사내 자료는 파서 모델이 만든 요약본
 export interface DocFigure { label: string; value: number; unit: string; period: string }
-export interface Doc { id: string; kind: "ir" | "news" | "internal"; company: string; title: string; publisher: string; date: string;
+export interface Doc { id: string; kind: "ir" | "ar" | "news" | "internal"; company: string; title: string; publisher: string; date: string;
   summary: string; figures: DocFigure[]; url: string; tags: string[]; uploaded?: boolean }
+// 자료 종류 표시 이름. 색은 data-src(공시 회색, IR·AR 초록, 뉴스 주황, 사내 검정)
+export const KIND_LABEL: Record<Doc["kind"], string> = { ir: "IR", ar: "AR", news: "뉴스", internal: "사내 자료" };
 // IR 자료 제목은 회사명 + 분기만 (전체 제목은 title 속성으로). 뉴스·사내 자료는 원래 제목
 export const docTitle = (d: Doc) => d.kind === "ir" ? `${d.company} ${d.title.match(/[1-4]Q\d{2}/)?.[0] ?? d.date.slice(0, 7)}` : d.title;
 // 근거 한 줄: 표 셀(공시) 또는 문서 수치·요약. cite가 프롬프트·초안에서 쓰는 근거 ID
 export interface Evidence { tag: string; company: string; label: string; value: number | null; unit: string; period: string;
-  cite: string; card_id: string; source: "공시" | "IR" | "뉴스" | "사내"; text?: string; edited?: boolean }
+  cite: string; card_id: string; source: "공시" | "IR" | "AR" | "뉴스" | "사내"; text?: string; edited?: boolean }
 export interface Deliverable { id: string; name: string; goal: string; sections: { title: string; tags: string[] }[]; assume: string[] }
 export interface Insight { id: string; title: string; concepts: string[]; ai: string; news: string[] }
 export interface Analysis { focus: string; tag_names: Record<string, string>; deliverables: Deliverable[]; insights: Insight[];

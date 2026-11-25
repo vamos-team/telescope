@@ -3,14 +3,16 @@
 //   context/compiler.py → context() (문서·메모·연결 층 추가)
 // 임베딩 검색, LLM 질의(ask/warmup), 이벤트 영속화는 없다 (새로고침하면 초기화).
 import data from "./data.json";
+import { panelOf, dashText, dashEvidence } from "./dashboard";
 import { UNIT_TO_BIL, type SourceTable, type SearchResult, type CompareResult, type CompareLine, type Part, type CanvasEvent, type Doc, type Evidence, type Context, type Analysis } from "../api";
 
 interface Member { label: string; grp?: string; title?: string; alt?: Member[] }
 interface Concept { id: string; name: string; alias?: string[]; members: Record<string, Member[]>; note?: string }
-interface WCard { card_id: string; kind: "table" | "compare" | "doc" | "memo"; seq: number; doc_id?: string; text?: string; author?: string; memo_type?: string; table_id?: string; rows: number[]; cols: number[];
+interface WCard { card_id: string; kind: "table" | "compare" | "doc" | "prompt" | "dash"; seq: number; doc_id?: string; text?: string; author?: string; panel?: string; table_id?: string; rows: number[]; cols: number[];
   vcol: number | null; edits: Record<string, number | null>; sort: [string | number, boolean] | null; sources: string[] }
-interface Link { source: string; target: string; rel: string }
-interface Workspace { cards: Map<string, WCard>; links: Map<string, Link>; mappings: CanvasEvent[]; seq: number; layers: string[] }
+interface Link { source: string; target: string; rel: string; prompt?: string }
+// prompts: 카드 프롬프트 (화면 전용 시각화 카드 것도 받으려고 카드와 따로 둠)
+interface Workspace { cards: Map<string, WCard>; links: Map<string, Link>; prompts: Map<string, string>; mappings: CanvasEvent[]; seq: number; layers: string[] }
 
 const TABLES = new Map((data.tables as unknown as SourceTable[]).map((t) => [t.table_id, t]));
 const CONCEPTS = data.concepts as Concept[];
@@ -23,7 +25,7 @@ const memberMatches = (m: Member, t: SourceTable, r: number) => {
   return norm(row.label) === norm(m.label) && (m.grp == null || row.grp === m.grp) && (m.title == null || t.title.includes(m.title));
 };
 export interface Example { cards: { table_id: string; rows: number[] | null; cols?: number[] | null; vcol?: number }[]; compares: number[][];
-  docs: string[]; charts?: number[]; memos: { author: string; text: string; type?: "memo" | "request" }[]; links: [string, string, string][] }
+  docs: string[]; charts?: number[]; prompts: string[]; links: [string, string, string][] }
 export const meta = { subtitle: (data as { subtitle?: string }).subtitle ?? "",
   example: (data as unknown as { example?: Example }).example ?? null };
 export const analysis = (data as unknown as { analysis: Analysis }).analysis;
@@ -91,7 +93,7 @@ export function search(q: string, k = 20): SearchResult[] {
 // ---------- 이벤트 리듀서 ----------
 const sessions = new Map<string, Workspace>();
 const ws = (sid: string) => {
-  if (!sessions.has(sid)) sessions.set(sid, { cards: new Map(), links: new Map(), mappings: [], seq: 0, layers: ["", "", ""] });
+  if (!sessions.has(sid)) sessions.set(sid, { cards: new Map(), links: new Map(), prompts: new Map(), mappings: [], seq: 0, layers: ["", "", ""] });
   return sessions.get(sid)!;
 };
 
@@ -109,17 +111,18 @@ function apply(w: Workspace, e: CanvasEvent) {
     case "add_rows": if (c) c.rows = [...new Set([...c.rows, ...ns(e.rows)])].sort((a, b) => a - b); break;
     case "remove_row": if (c) c.rows = c.rows.filter((r) => r !== n(e.r)); break;
     case "remove_card":
-      w.cards.delete(e.card_id as string);
+      w.cards.delete(e.card_id as string); w.prompts.delete(e.card_id as string);
       for (const o of w.cards.values()) o.sources = o.sources.filter((s) => s !== e.card_id);
       for (const [id, l] of w.links) if (l.source === e.card_id || l.target === e.card_id) w.links.delete(id);
       break;
-    case "add_doc": case "add_memo":
-      w.cards.set(e.card_id as string, { card_id: e.card_id as string, kind: e.type === "add_doc" ? "doc" : "memo", seq: w.seq,
-        doc_id: e.doc_id as string | undefined, text: e.text as string | undefined, author: e.author as string | undefined, memo_type: e.memo_type as string | undefined,
+    case "add_doc": case "add_prompt": case "add_dash":
+      w.cards.set(e.card_id as string, { card_id: e.card_id as string, kind: e.type === "add_doc" ? "doc" : e.type === "add_dash" ? "dash" : "prompt", seq: w.seq,
+        doc_id: e.doc_id as string | undefined, text: e.text as string | undefined, author: e.author as string | undefined, panel: e.panel as string | undefined,
         rows: [], cols: [], vcol: null, edits: {}, sort: null, sources: [] });
       break;
-    case "edit_memo": if (c) c.text = e.text as string; break;
-    case "set_memo_type": if (c) c.memo_type = e.memo_type as string; break;
+    case "edit_prompt": if (c) c.text = e.text as string; break;
+    case "set_card_prompt": { const t = (e.text as string).trim(); if (t) w.prompts.set(e.card_id as string, t); else w.prompts.delete(e.card_id as string); break; }
+    case "set_link_prompt": { const l = w.links.get(e.link_id as string); if (l) l.prompt = (e.text as string).trim(); break; }
     case "add_link": w.links.set(e.link_id as string, { source: e.source as string, target: e.target as string, rel: e.rel as string }); break;
     case "set_link": { const l = w.links.get(e.link_id as string); if (l) l.rel = e.rel as string; break; }
     case "remove_link": w.links.delete(e.link_id as string); break;
@@ -221,17 +224,17 @@ export function compare(sid: string, cardId: string): CompareResult {
 
 // ---------- 컨텍스트 컴파일 (context/compiler.py 포팅 + 문서·메모·연결) ----------
 // 변경 빈도가 낮은 층이 앞: L0 system → L1 출처 → L2 카드 내용 → L3 조작·연결 → L4 요청. 앞층이 같으면 prefix 캐시 재사용
-const SYSTEM = `당신은 SKT 재무기획 담당자(FP&A)가 사업기획서·투자계획서·예산서를 쓰도록 돕는 보조입니다.
+const SYSTEM = `당신은 SKT 재무기획 담당자(FP&A)가 사업기획서·예산서를 쓰도록 돕는 보조입니다.
 - 숫자를 쓸 때는 근거 ID를 함께 적습니다. 표 값은 [셀ID], 문서 수치는 [doc:문서ID#f번호], 문서 내용은 [doc:문서ID]입니다.
 - 컨텍스트에 없는 숫자는 만들지 않습니다. 근거가 없는 항목은 "근거 부족"으로 적습니다.
 - 값 유형을 나눠 적습니다: 공시(원본 숫자), 계산(코드로 낸 값), AI 해석.
 - 연결/별도, 단위, 기간이 다르면 먼저 밝힙니다. 편집 레이어(L3)의 값은 사용자가 고친 값이므로 원본과 구분합니다.
-- 메모는 팀원 의견입니다. 사실 근거로 쓰지 않습니다.
+- 프롬프트(프롬프트 카드, 카드 프롬프트, 선 프롬프트)는 사용자의 작성 지시입니다. 사실 근거로 쓰지 않고, 해당 근거를 어떻게 쓸지에만 반영합니다.
 - 회사마다 계정명이 다를 수 있습니다. 아래 개념 사전과 사용자가 확정한 대응을 우선합니다.`;
 const LAYERS = ["L0_system", "L1_sources", "L2_workspace", "L3_edits", "L4_task"];
 const fmtN = (v: number | null | undefined) => v == null ? "" : Number.isInteger(v) ? String(v) : v.toFixed(4).replace(/0+$/, "");
 const hash = (s: string) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193); return (h >>> 0).toString(16).padStart(8, "0"); };
-const docKind = { ir: "IR", news: "뉴스", internal: "사내" } as const;
+const docKind = { ir: "IR", ar: "AR", news: "뉴스", internal: "사내" } as const;
 
 function compile(w: Workspace, task: string) {
   const cards = [...w.cards.values()].sort((a, b) => a.seq - b.seq);
@@ -256,7 +259,8 @@ function compile(w: Workspace, task: string) {
     blocks.push([`## 카드 ${c.card_id} | ${docKind[d.kind]} | ${d.company} | ${d.title} | doc:${d.id}`, `요약: ${d.summary}`,
       ...d.figures.map((f, i) => `f${i}\t${f.label}\t${fmtN(f.value)} ${f.unit}\t${f.period}`)].join("\n"));
   }
-  for (const c of cards.filter((c) => c.kind === "memo")) blocks.push(`## ${c.memo_type === "request" ? "보완 요청" : "메모"} ${c.card_id} | 작성 ${c.author}\n${c.text}`);
+  for (const c of cards.filter((c) => c.kind === "dash" && panelOf(c.panel!)))
+    blocks.push(`## 카드 ${c.card_id} | 공시 대시보드 | ${panelOf(c.panel!)!.title} | ${panelOf(c.panel!)!.sub} | 단위 억원 | dash:${c.panel}\n${dashText(c.panel!)}`);
   L.L2_workspace = blocks.length ? "# 캔버스 카드\n" + blocks.join("\n\n") : "";
 
   const ed: string[] = [];
@@ -271,6 +275,12 @@ function compile(w: Workspace, task: string) {
   for (const c of cards.filter((c) => c.kind === "compare")) ed.push(`- 비교 카드 ${c.card_id}: ${c.sources.join(", ")}`);
   for (const l of [...w.links.values()].sort((a, b) => (a.source + a.target).localeCompare(b.source + b.target)))
     ed.push(`- 연결 ${l.source} -[${l.rel}]-> ${l.target}`);
+  // 사용자 프롬프트: 프롬프트 카드, 카드 프롬프트, 선 프롬프트 (작성 지시)
+  const pr: string[] = [];
+  for (const c of cards.filter((c) => c.kind === "prompt" && c.text?.trim())) pr.push(`- 프롬프트 카드 ${c.card_id}: ${c.text!.trim()}`);
+  for (const [id, t] of [...w.prompts].sort()) pr.push(`- 카드 ${id}에 대한 지시: ${t}`);
+  for (const l of w.links.values()) if (l.prompt) pr.push(`- 연결 ${l.source} -[${l.rel}]-> ${l.target}에 대한 지시: ${l.prompt}`);
+  if (pr.length) ed.push("", "# 사용자 프롬프트", ...pr);
   L.L3_edits = ed.length ? "# 사용자 조작과 연결\n" + ed.join("\n") : "";
   L.L4_task = task ? `# 요청\n${task}` : "";
   return { layers: L, hashes: Object.fromEntries(LAYERS.map((k) => [k, hash(L[k] ?? "")])) };
@@ -296,6 +306,8 @@ export function evidence(sid: string): Evidence[] {
         out.push({ tag, company: t.company, label: t.rows[r].label, value: v == null ? null : +(v * UNIT_TO_BIL[t.unit]).toFixed(1), unit: "십억원",
           period: t.cols[col], cite: cellId(t, r, col), card_id: c.card_id, source: "공시", edited });
       }
+    } else if (c.kind === "dash") {
+      for (const e of dashEvidence(c.panel!)) out.push({ ...e, card_id: c.card_id, source: "공시" });
     } else if (c.kind === "doc" && docs.has(c.doc_id!)) {
       const d = docs.get(c.doc_id!)!;
       for (const tag of d.tags) {

@@ -4,6 +4,7 @@ import { Handle, Position } from "@vue-flow/core";
 import { computed, ref, watch } from "vue";
 import { api, UNIT_TO_BIL, type SourceTable } from "../../api";
 import { useCanvas, type TableCard } from "../../stores/canvas";
+import CardPrompt from "./CardPrompt.vue";
 
 const props = defineProps<{ data: { cardId: string } }>();
 const cv = useCanvas();
@@ -52,11 +53,10 @@ function edit(r: number, c: number, e: Event) {
 </script>
 
 <template>
-  <section v-if="t" class="card" :data-co="t.company" :class="{ focus: cv.focus === card.id }">
+  <section v-if="t" class="card" data-src="dart" :class="{ focus: cv.focus === card.id }">
     <Handle type="target" :position="Position.Left" /><Handle type="source" :position="Position.Right" />
     <header class="drag-handle">
-      <span class="co">{{ t.company }}</span><div class="t"><b>{{ t.title }}</b><small>{{ t.basis }} / {{ t.period || t.rcept_no }}</small></div>
-      <label class="nodrag"><input v-model="card.checked" type="checkbox" /> 비교</label>
+      <span class="co">공시 {{ t.company }}</span><div class="t"><b>{{ t.title }}</b><small>{{ t.basis }} / {{ t.period || t.rcept_no }}</small></div>
       <button class="nodrag txt" @click="cv.openSource(card.tableId, [], card.id)" title="원본 표에서 행 고르기">원본</button>
       <button class="nodrag" @click="cv.remove(card.id)" aria-label="카드 닫기">✕</button>
     </header>
@@ -78,5 +78,6 @@ function edit(r: number, c: number, e: Event) {
     <footer>단위 {{ unitLabel }} · {{ card.rows.length }}행
       <select class="nodrag" :value="card.vcol" @change="cv.setPeriod(card.id, +($event.target as HTMLSelectElement).value)">
         <option v-for="c in card.cols" :key="c" :value="c">비교 열: {{ t.cols[c] }}</option></select></footer>
+    <CardPrompt :id="card.id" :text="card.prompt" />
   </section>
 </template>

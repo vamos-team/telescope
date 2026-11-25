@@ -1,23 +1,30 @@
 <script setup lang="ts">
-// 자료 추가 화면 (+ 자료 추가, ⌘K): 캔버스 위를 어둡게 덮고 카드를 띄운다. 하단 가운데 탭(공시 / IR·뉴스 / 사내 자료)과 채팅창형 검색창(v01 v04 하단 입력창 모양)
-// 탭 전환: Tab·Shift+Tab, ⌘/Ctrl+1·2·3. 닫기: Esc, 어두운 화면이나 오른쪽 위 ✕
-// 카드를 누르면 선택되고, 선택이 있으면 어두운 화면이 걷혀 선택한 카드를 캔버스로 끌어다 놓는 화면이 된다
+// 자료 검색 화면 (상단 "자료 검색", ⌘K). 하단 탭 두 개(검색 / 인사이트, Tab으로 전환)와 입력창
+// - 검색: 입력이 비면 대시보드 3개. Enter → 재무 데이터 리스트(공시 임베딩 검색 자리) + IR·AR 리스트. 재무 행을 누르면 원본 창에서 행을 골라 선택 목록에 담음
+// - 인사이트: 입력이 비면 3사 비교 인사이트 + 관련 뉴스. Enter(확인) → 질문 개념에 닿는 AI 해석 비교 테이블 + 뉴스
+// - 누르면 선택(입력창 위 칩 목록), "추가하기"로 캔버스에 올림. 길게 누르면 그 항목만 집어 캔버스로 바로 끌어 놓음(선택 목록과 별개)
+// - 입력창 왼쪽 +: 사내 자료 파일을 골라 선택 목록에 담음
 import { ref, watch, computed, nextTick, onMounted, onUnmounted } from "vue";
-import { api, docTitle, type SearchResult, type Doc, type Insight } from "../api";
+import { api, docTitle, KIND_LABEL, type SearchResult, type Doc, type Insight } from "../api";
 import { useCanvas } from "../stores/canvas";
+import { DASH_PANELS } from "../local/dashboard";
+import DashPanel from "./DashPanel.vue";
+import SourceOverlay from "./SourceOverlay.vue";
+
+// 캔버스로 보내는 항목. 끌기 데이터(application/x-canvas)와 "추가하기"가 같은 모양을 씀
+export interface Pick { key: string; label: string; tag: string; src: string; kind: "doc" | "table" | "compare" | "dash";
+  id?: string; tableId?: string; rows?: number[]; cols?: number[]; tables?: string[]; panel?: string }
 
 const props = defineProps<{ open: boolean }>();
-const emit = defineEmits<{ close: []; pick: [tableId: string, rows: number[]]; addTable: [tableId: string, rows: number[]];
-  addDoc: [id: string]; addCompare: [tableIds: string[]]; example: [] }>();
+const emit = defineEmits<{ close: []; add: [items: Pick[]]; example: [] }>();
 const cv = useCanvas();
 const A = api.analysis;
-const tab = ref<"dart" | "news" | "internal">("dart");
-const q = ref(""), input = ref<HTMLInputElement>();
-const dart = ref<SearchResult[]>([]), docs = ref<{ doc: Doc; why: string; s?: number }[]>([]);
-const bump = ref(0);  // 업로드 뒤 목록 다시 읽기
-const busy = ref(false), err = ref("");
+const tab = ref<"search" | "insight">("search");
+const q = ref(""), sq = ref(""), input = ref<HTMLInputElement>(), file = ref<HTMLInputElement>();
+const dart = ref<SearchResult[]>([]), irar = ref<Doc[]>([]), news = ref<{ doc: Doc; why: string }[]>([]);
 const basis = ref<{ companies: string[]; tags: string[] }>({ companies: [], tags: [] });
 const nf = ref("전체");
+const busy = ref(false), err = ref("");
 
 // 추천 기준: 캔버스 표·문서 카드의 회사, 카드 개념 태그. 캔버스가 비면 분석 대상 회사(focus)
 async function refreshBasis() {
@@ -28,137 +35,170 @@ async function refreshBasis() {
   }
   basis.value = { companies: cos.size ? [...cos] : [A.focus], tags: [...new Set(Object.values(cv.tags).flat())] };
 }
-
-let t = 0;
-async function load() {
-  if (tab.value === "dart") dart.value = q.value.trim() ? await api.searchQuestion(q.value) : [];
-  else if (tab.value === "internal") docs.value = await api.searchDocs(q.value, ["internal"]);
-  else docs.value = q.value.trim() ? await api.searchDocs(q.value, ["ir", "news"]) : api.recommend(basis.value.companies, basis.value.tags, ["ir", "news"]);
+// Enter(확인)를 누르면 검색어 확정. 입력을 다 지우면 대시보드·인사이트 홈으로
+async function submit() {
+  sq.value = q.value.trim();
+  if (tab.value === "search" && sq.value) { dart.value = await api.searchQuestion(sq.value); irar.value = (await api.searchDocs(sq.value, ["ir", "ar"])).map((x) => x.doc); }
+  news.value = sq.value ? await api.searchDocs(sq.value, ["news"]) : api.recommend(basis.value.companies, basis.value.tags, ["news"]);
 }
-watch([q, bump], () => { clearTimeout(t); t = window.setTimeout(load, 120); });
-// 탭을 바꾸거나 팝업을 열 때마다 추천 기준을 다시 계산
-watch([() => props.open, tab], async ([open], old) => {
+watch(q, (v) => { if (!v.trim() && sq.value) submit(); });
+watch(tab, () => { if (q.value.trim() !== sq.value) submit(); });
+watch(() => props.open, async (open) => {
   if (!open) return;
-  if (!old?.[0]) { q.value = ""; tab.value = "dart"; sel.value = []; browse.value = false; dragging.value = false; }  // 새로 열면 공시 탭부터
-  await refreshBasis(); await load();
+  q.value = ""; sq.value = ""; tab.value = "search"; sel.value = []; dragging.value = false;
+  await refreshBasis(); await submit();
   nextTick(() => input.value?.focus());
 }, { immediate: true });
 
-const onCanvas = (id: string) => cv.cards.some((c) => c.kind === "doc" && c.docId === id);
-// 화면 맨 위 가운데 회사 필터: IR 자료와 뉴스 모두에 적용
 const coOk = (co: string) => nf.value === "전체" || (nf.value === "3사 공통" ? /3사|업계/.test(co) : co === nf.value);
-const ir = computed(() => docs.value.filter((x) => x.doc.kind === "ir" && coOk(x.doc.company)));
 const NF = ["전체", "SKT", "KT", "LGU+", "3사 공통"];
-const news = computed(() => docs.value.filter((x) => x.doc.kind === "news" && coOk(x.doc.company)));
-
-// 3사 비교 AI 분석: 캔버스 개념과 겹치는 수 + 지금 목록(추천·질문 결과)에 있는 근거 뉴스 수로 정렬. 질문 중이면 닿는 것만
-// 3사 비교 AI 분석 (공시 탭): 캔버스 개념과 겹치는 수로 정렬. 질문 중이면 질문 개념이 닿는 분석만 (개념이 안 잡히면 찾은 공시 표로)
+const newsShown = computed(() => news.value.filter((x) => coOk(x.doc.company)));
+// 3사 비교 인사이트: 캔버스 개념과 겹치는 수로 정렬. 확정한 질문이 있으면 질문 개념에 닿는 것만
 const insights = computed(() => {
-  const found = new Set(dart.value.map((r) => r.table_id)), qc = api.conceptsFor(q.value);
-  const scored = A.insights.map((i) => ({ i, s: i.concepts.filter((c) => basis.value.tags.includes(c)).length,
-    hit: qc.size ? i.concepts.some((c) => qc.has(c)) : facts(i).tables.some((t) => found.has(t)) }));
-  return (q.value.trim() ? scored.filter((x) => x.hit) : scored).sort((a, b) => b.s - a.s).map((x) => x.i);
+  const qc = api.conceptsFor(sq.value);
+  const scored = A.insights.map((i) => ({ i, s: i.concepts.filter((c) => basis.value.tags.includes(c)).length, hit: i.concepts.some((c) => qc.has(c)) }));
+  return (sq.value ? scored.filter((x) => x.hit) : scored).sort((a, b) => b.s - a.s).map((x) => x.i);
 });
 const facts = (i: Insight) => api.peerFacts(i.concepts.slice(0, 2));
 const pct = (a: number | null, b: number | null) => a == null || b == null || !a ? "—" : `${b >= a ? "+" : ""}${((b - a) / Math.abs(a) * 100).toFixed(1)}%`;
 const num = (v: number | null) => v == null ? "—" : v.toLocaleString("ko-KR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const date = (d: string) => d.slice(2).replace(/-/g, ".");
 
-// 업로드: 실제 서비스는 파서 모델이 본문·표를 요약하고 임베딩해 적재. 데모는 텍스트 파일만 읽어 앞부분을 요약으로 쓴다
+// ---------- 항목 → Pick ----------
+const docPick = (d: Doc): Pick => ({ key: "doc:" + d.id, label: docTitle(d), tag: KIND_LABEL[d.kind], src: d.kind, kind: "doc", id: d.id });
+const tablePick = (r: SearchResult, rows = r.hits.map((h) => h.r), cols?: number[]): Pick =>
+  ({ key: "tbl:" + r.table_id, label: `${r.company} ${r.title}`, tag: "공시", src: "dart", kind: "table", tableId: r.table_id, rows, cols });
+const insPick = (i: Insight): Pick => ({ key: "ins:" + i.id, label: i.title, tag: "3사 비교", src: "viz", kind: "compare", tables: facts(i).tables });
+const dashPick = (p: typeof DASH_PANELS[number]): Pick => ({ key: "dash:" + p.id, label: p.title, tag: "대시보드", src: "viz", kind: "dash", panel: p.id });
+
+// ---------- 선택 (칩 목록) ----------
+const sel = ref<Pick[]>([]);
+const isSel = (k: string) => sel.value.some((x) => x.key === k);
+const toggle = (p: Pick) => { sel.value = isSel(p.key) ? sel.value.filter((x) => x.key !== p.key) : [...sel.value, p]; };
+const put = (p: Pick) => { sel.value = [...sel.value.filter((x) => x.key !== p.key), p]; };
+function addAll() { if (!sel.value.length) return; emit("add", sel.value); sel.value = []; }
+
+// 재무 데이터 행 → 원본 창에서 행 고르기 → 선택 목록에 담기
+const detail = ref<SearchResult | null>(null);
+function picked(_: string, rows: number[], cols: number[]) { put(tablePick(detail.value!, rows, cols)); detail.value = null; }
+
+// ---------- 짧게 누르기 = 선택, 길게 누르기(400ms) = 그 항목만 집어 캔버스로 끌기 ----------
+const hold = ref(""), armed = ref(""), dragging = ref(false);
+let timer = 0;
+function down(p: Pick, e: PointerEvent) {
+  if (e.button !== 0 || (e.target as HTMLElement).closest("a,button")) return;
+  hold.value = p.key; armed.value = "";
+  clearTimeout(timer); timer = window.setTimeout(() => { armed.value = p.key; }, 400);
+}
+function up() { clearTimeout(timer); hold.value = ""; }
+function click(p: Pick, e: MouseEvent) {
+  if ((e.target as HTMLElement).closest("a,button")) return;
+  if (armed.value === p.key) { armed.value = ""; return; }  // 길게 눌렀다 놓은 것은 선택이 아님
+  toggle(p);
+}
+function dragStart(p: Pick, e: DragEvent) {
+  if (armed.value !== p.key) { e.preventDefault(); return; }  // 길게 누른 항목만 끌 수 있음
+  e.dataTransfer!.setData("application/x-canvas", JSON.stringify([p]));
+  e.dataTransfer!.effectAllowed = "copy";
+  setTimeout(() => { dragging.value = true; hold.value = ""; });  // 같은 틱에 화면을 바꾸면 브라우저가 끌기를 취소함
+}
+function dragEnd() { dragging.value = false; armed.value = ""; }
+// 항목마다 붙이는 속성·이벤트 묶음
+const pk = (p: Pick) => ({ class: ["pickable", { on: isSel(p.key), lift: hold.value === p.key && armed.value === p.key }], draggable: true, "data-src": p.src,
+  onPointerdown: (e: PointerEvent) => down(p, e), onPointerup: up, onPointerleave: up, onClick: (e: MouseEvent) => click(p, e),
+  onDragstart: (e: DragEvent) => dragStart(p, e), onDragend: dragEnd });
+
+// ---------- 사내 자료 업로드 (+): 실제 서비스는 파서 모델이 본문·표를 요약하고 임베딩해 적재. 데모는 텍스트 파일만 읽어 앞부분을 요약으로 ----------
 const KEYWORDS: Record<string, string[]> = { capex: ["capex", "설비투자", "설비"], ai_dc: ["데이터센터", "aidc", "gpu"], da: ["감가상각"],
   comm: ["수수료", "마케팅"], rev: ["매출", "영업수익"], opex: ["영업비용", "비용"], opi: ["영업이익"], dividend: ["배당"], labor: ["인건비"], debt: ["차입"],
   rp_purch: ["특수관계자", "내부거래", "계열사"] };
 async function upload(e: Event) {
-  await uploadFiles(Array.from((e.target as HTMLInputElement).files ?? []));
-  (e.target as HTMLInputElement).value = "";
-}
-const over = ref(false);  // 파일을 올리기 칸 위로 끄는 중
-function dropFiles(e: DragEvent) { over.value = false; const fs = Array.from(e.dataTransfer?.files ?? []); if (fs.length) uploadFiles(fs); }
-async function uploadFiles(files: File[]) {
+  const el = e.target as HTMLInputElement;
   busy.value = true; err.value = "";
   try {
-    for (const [i, f] of files.entries()) {
+    for (const [i, f] of Array.from(el.files ?? []).entries()) {
       const isText = /\.(txt|md|csv|json)$/i.test(f.name);
       const text = isText ? (await f.text()).replace(/\s+/g, " ").trim() : "";
       const figures = [...text.matchAll(/([가-힣A-Za-z]{2,12})\s*[:=]?\s*(-?\d[\d,]*(?:\.\d+)?)\s*(십억원|억원|백만원|조원|원|%)/g)].slice(0, 4)
         .map((m) => ({ label: m[1], value: +m[2].replace(/,/g, ""), unit: m[3], period: "업로드 자료" }));
       const hay = (f.name + text).toLowerCase().replace(/\s+/g, "");
-      api.registerDoc({ id: `up${Date.now()}${i}`, kind: "internal", company: A.focus, title: f.name.replace(/\.[^.]+$/, ""),
+      put(docPick(api.registerDoc({ id: `up${Date.now()}${i}`, kind: "internal", company: A.focus, title: f.name.replace(/\.[^.]+$/, ""),
         publisher: "업로드 (파서 요약)", date: new Date().toISOString().slice(0, 10), url: "", uploaded: true, figures,
         tags: Object.entries(KEYWORDS).filter(([, ks]) => ks.some((k) => hay.includes(k))).map(([id]) => id),
         summary: text ? text.slice(0, 180) + (text.length > 180 ? "…" : "")
-          : `${f.name.split(".").pop()!.toUpperCase()} ${Math.ceil(f.size / 1024)}KB. 파서 모델을 연결하면 본문 요약과 표 수치가 이 자리에 들어감` });
+          : `${f.name.split(".").pop()!.toUpperCase()} ${Math.ceil(f.size / 1024)}KB. 파서 모델을 연결하면 본문 요약과 표 수치가 이 자리에 들어감` })));
     }
-    q.value = ""; bump.value++;
   } catch (x) { err.value = `파일을 읽지 못했습니다: ${(x as Error).message}`; }
-  finally { busy.value = false; }
+  finally { busy.value = false; el.value = ""; }
 }
 
-const PH = { dart: "공시 데이터를 검색하세요 (예: SKT 감가상각비, KT 영업이익)",
-  news: "IR 자료와 뉴스를 검색하세요 (예: SKT 설비투자, 데이터센터 전력)", internal: "사내 자료를 검색하세요 (예: 설비투자 예산안, 회선 증설)" };
-const KIND = { ir: "IR", news: "뉴스", internal: "사내" };
-
-
-
-// ---------- 선택 → 끌어다 놓기 ----------
-// 끌기 데이터: application/x-canvas = 선택한 항목 배열 [{kind:"doc",id} | {kind:"table",tableId,rows} | {kind:"compare",tables}]
-interface Pick { key: string; label: string; tag: string; kind: "doc" | "table" | "compare"; id?: string; tableId?: string; rows?: number[]; tables?: string[] }
-const sel = ref<Pick[]>([]);
-const browse = ref(false);    // 선택이 있어도 카드를 더 고르는 중
-const dragging = ref(false);  // 카드를 바로 끄는 중
-// 누르고 있는 카드: 캔버스 카드 모양(데이터 성격별 색 + 종류 표시)으로 바뀜. 끌기 미리보기 이미지도 이 모양으로 찍힘
-const hold = ref("");
-const mode = computed(() => dragging.value || (sel.value.length && !browse.value) ? "drag" : "dim");
-const isSel = (k: string) => sel.value.some((x) => x.key === k);
-// 누르면 선택하고 바로 끌어다 놓는 화면으로. Shift·⌘/Ctrl을 누른 채 누르면 어두운 화면에 남아 여러 장을 고름
-function toggle(p: Pick, e?: MouseEvent) {
-  sel.value = isSel(p.key) ? sel.value.filter((x) => x.key !== p.key) : [...sel.value, p];
-  browse.value = !!(e && (e.shiftKey || e.metaKey || e.ctrlKey));
-}
-const docPick = (d: Doc): Pick => ({ key: "doc:" + d.id, label: docTitle(d), tag: KIND[d.kind], kind: "doc", id: d.id });
-const tablePick = (r: SearchResult): Pick => ({ key: "tbl:" + r.table_id, label: `${r.company} ${r.title}`, tag: "공시", kind: "table", tableId: r.table_id, rows: r.hits.map((h) => h.r) });
-const insPick = (i: Insight): Pick => ({ key: "ins:" + i.id, label: i.title, tag: "3사 비교", kind: "compare", tables: facts(i).tables });
-function startDrag(e: DragEvent, p?: Pick) {
-  if (p && !isSel(p.key)) sel.value = [...sel.value, p];
-  e.dataTransfer!.setData("application/x-canvas", JSON.stringify(sel.value));
-  e.dataTransfer!.effectAllowed = "copy";
-  setTimeout(() => { dragging.value = true; hold.value = ""; });  // 같은 틱에 화면을 바꾸면 브라우저가 끌기를 취소함
-}
-
-// ---------- 키보드: Tab·Shift+Tab(공시 → IR·뉴스 → 사내 자료 순환), ⌘/Ctrl+1·2·3 로 탭 전환 (Esc 닫기는 App) ----------
-const TABS = [["dart", "공시"], ["news", "IR·뉴스"], ["internal", "사내 자료"]] as const;
-function step(d: number) { const i = TABS.findIndex(([k]) => k === tab.value); tab.value = TABS[(i + d + 3) % 3][0]; browse.value = true; }
+const PH = { search: "공시 재무 데이터와 IR·AR을 검색하고 Enter (예: SKT 감가상각비, KT 영업이익)",
+  insight: "비교할 주제를 입력하고 Enter (예: 3사 영업이익, 감가상각비)" };
+// ---------- 키보드: Tab·Shift+Tab 으로 검색 ↔ 인사이트 (Esc 닫기는 App) ----------
 function onKey(e: KeyboardEvent) {
-  if (!props.open) return;
-  if (e.key === "Tab" && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); step(e.shiftKey ? -1 : 1); }
-  else if ((e.metaKey || e.ctrlKey) && ["1", "2", "3"].includes(e.key)) { e.preventDefault(); tab.value = TABS[+e.key - 1][0]; browse.value = true; }
+  if (!props.open || detail.value) return;
+  if (e.key === "Tab" && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); tab.value = tab.value === "search" ? "insight" : "search"; }
 }
 onMounted(() => window.addEventListener("keydown", onKey));
 onUnmounted(() => window.removeEventListener("keydown", onKey));
-const mac = /Mac|iPhone|iPad/.test(navigator.platform);
 </script>
 
 <template>
-  <div v-if="open" class="adder" :class="[mode, 'tab-' + tab, { over }]"
-    @dragover="tab === 'internal' && $event.dataTransfer?.types.includes('Files') && ($event.preventDefault(), over = true)"
-    @dragleave.self="over = false" @drop="tab === 'internal' && $event.dataTransfer?.types.includes('Files') && ($event.preventDefault(), dropFiles($event))" role="dialog" aria-label="자료 추가">
-    <div v-if="mode === 'dim'" class="dimbg" />
+  <div v-if="open" class="adder" :class="[dragging ? 'drag' : 'dim', 'tab-' + tab]" role="dialog" aria-label="자료 검색">
+    <div class="dimbg" />
     <div class="corner">
       <button v-if="api.meta.example" class="ex" @click="emit('example')">예시 불러오기</button>
       <button class="x" aria-label="닫기 (Esc)" title="닫기 (Esc)" @click="emit('close')">✕</button>
     </div>
-
-    <div v-if="tab === 'news' && mode === 'dim'" class="cofilter seg" role="radiogroup" aria-label="회사">
+    <div v-if="tab === 'insight'" class="cofilter seg" role="radiogroup" aria-label="뉴스 회사">
       <button v-for="x in NF" :key="x" :aria-pressed="nf === x" @click="nf = x">{{ x }}</button></div>
 
-    <!-- 흐린 화면 위 카드 -->
-    <main class="stage" :aria-hidden="mode === 'drag'">
+    <main class="stage" :aria-hidden="dragging">
       <div class="inner">
-        <!-- 공시: 3사 비교 AI 분석 + 찾은 공시 표 -->
-        <template v-if="tab === 'dart'">
+        <!-- 검색: 대시보드 -->
+        <template v-if="tab === 'search' && !sq">
+          <div class="sech first"><h3>대시보드 <small>DART 공시, 억원</small></h3></div>
+          <div class="dgrid">
+            <section v-for="p in DASH_PANELS" :key="p.id" class="dcell" v-bind="pk(dashPick(p))">
+              <span class="lk">대시보드</span>
+              <header><b>{{ p.title }}</b><small>{{ p.sub }}</small></header>
+              <DashPanel :panel="p.id" />
+            </section>
+          </div>
+        </template>
+
+        <!-- 검색: 결과 리스트 (재무 데이터 + IR·AR) -->
+        <template v-else-if="tab === 'search'">
+          <div class="sech first"><h3>재무 데이터 <small>{{ dart.length }}</small></h3></div>
+          <div class="ilist">
+            <article v-for="r in dart" :key="r.table_id" class="irow" v-bind="pk(tablePick(r))">
+              <span class="lk">공시</span>
+              <span class="src" data-src="dart">공시</span>
+              <div class="tx"><b>{{ r.company }} {{ r.title }}</b><span>{{ r.hits.slice(0, 4).map((h) => h.label).join(", ") }}</span></div>
+              <span class="meta">{{ [r.basis, r.period, r.unit].filter(Boolean).join(" · ") }}</span>
+              <button @click.stop="detail = r">행 고르기</button>
+            </article>
+            <p v-if="!dart.length" class="none">일치하는 계정이 없습니다.</p>
+          </div>
+          <div class="sech"><h3>IR·AR <small>{{ irar.length }}</small></h3></div>
+          <div class="ilist">
+            <article v-for="d in irar" :key="d.id" class="irow" v-bind="pk(docPick(d))">
+              <span class="lk">{{ KIND_LABEL[d.kind] }}</span>
+              <span class="src" :data-src="d.kind">{{ KIND_LABEL[d.kind] }}</span>
+              <div class="tx"><b :title="d.title">{{ docTitle(d) }}</b><span>{{ d.summary }}</span></div>
+              <span class="meta">{{ d.company }} · {{ d.publisher }} · {{ date(d.date) }}</span>
+              <a v-if="d.url" :href="d.url" target="_blank" rel="noopener" draggable="false">원본</a>
+            </article>
+            <p v-if="!irar.length" class="none">맞는 IR·AR 자료가 없습니다.</p>
+          </div>
+        </template>
+
+        <!-- 인사이트: AI 해석 비교 테이블 + 관련 뉴스 -->
+        <template v-else>
+          <div class="sech first"><h3>{{ sq ? `'${sq}' 비교 분석` : "3사 비교 인사이트" }} <small>{{ insights.length }}</small></h3><span class="tag ai">AI 해석</span></div>
           <div class="icards row">
-            <section v-for="i in insights" :key="i.id" class="icard pickable" :class="{ on: isSel('ins:' + i.id), lift: hold === 'ins:' + i.id }" @pointerdown="hold = 'ins:' + i.id" @pointerup="hold = ''" @pointerleave="hold = ''" draggable="true"
-              @click="toggle(insPick(i), $event)" @dragstart="startDrag($event, insPick(i))" @dragend="dragging = false">
-              <span class="lk co">비교</span>
+            <section v-for="i in insights" :key="i.id" class="icard" v-bind="pk(insPick(i))">
+              <span class="lk">3사 비교</span>
               <h4>{{ i.title }}</h4>
               <div>
                 <div class="lab2">사실 <span class="tag">공시</span><span class="tag">계산</span><small>십억원</small></div>
@@ -169,109 +209,45 @@ const mac = /Mac|iPhone|iPad/.test(navigator.platform);
                 </table>
               </div>
               <div class="aip"><div class="ai-lab">AI 해석</div><p :title="i.ai">{{ i.ai }}</p>
-                <div class="nrefs"><template v-for="n in i.news.slice(0, 2)" :key="n"><a v-if="api.docs.get(n)" :href="api.docs.get(n)!.url" target="_blank" rel="noopener" draggable="false" @click.stop>
+                <div class="nrefs"><template v-for="n in i.news.slice(0, 2)" :key="n"><a v-if="api.docs.get(n)" :href="api.docs.get(n)!.url" target="_blank" rel="noopener" draggable="false">
                   {{ api.docs.get(n)!.publisher }} {{ api.docs.get(n)!.date.slice(5) }} · {{ api.docs.get(n)!.title }}</a></template></div></div>
-              <button class="ask2" @click.stop="emit('addCompare', facts(i).tables)">비교 카드로 올리기 · 3사 표 {{ facts(i).tables.length }}개</button>
             </section>
-            <p v-if="!insights.length" class="none">검색어와 닿는 비교 분석이 없습니다.</p>
+            <p v-if="!insights.length" class="none">입력한 주제와 닿는 비교 분석이 없습니다.</p>
           </div>
-          <template v-if="q.trim()">
-            <div class="sech"><h3>공시 표 <small>{{ dart.length }}</small></h3></div>
-            <div class="tgrid">
-              <article v-for="r in dart" :key="r.table_id" class="tcard pickable" :data-co="r.company" :class="{ on: isSel('tbl:' + r.table_id), lift: hold === 'tbl:' + r.table_id }" @pointerdown="hold = 'tbl:' + r.table_id" @pointerup="hold = ''" @pointerleave="hold = ''" draggable="true"
-                @click="toggle(tablePick(r), $event)" @dragstart="startDrag($event, tablePick(r))" @dragend="dragging = false">
-                <span class="lk co" :data-co="r.company">{{ r.company }}</span>
-                <b class="ti">{{ r.title }}</b>
-                <small>{{ [r.basis, r.period].filter(Boolean).join(" · ") }}</small>
-                <span class="m"><span v-for="h in r.hits.slice(0, 4)" :key="h.r">{{ h.label }}<em>{{ h.why }}</em></span></span>
-                <div class="ft"><span class="meta">{{ r.company }} · {{ r.unit }}</span>
-                  <button class="line" @click.stop="emit('pick', r.table_id, r.hits.map((h) => h.r))">행 고르기</button>
-                  <button @click.stop="emit('addTable', r.table_id, r.hits.map((h) => h.r))">+ 찾은 행 올리기</button></div>
-              </article>
-              <p v-if="!dart.length" class="none">일치하는 계정이 없습니다.</p>
-            </div>
-          </template>
-        </template>
-
-        <!-- IR·뉴스 -->
-        <template v-else-if="tab === 'news'">
-          <div class="sech"><h3>IR 자료 원본 <small>{{ ir.length }}</small></h3></div>
+          <div class="sech"><h3>관련 뉴스 <small>{{ newsShown.length }}</small></h3></div>
           <div class="hs">
-            <article v-for="{ doc: d, why } in ir" :key="d.id" class="dcard pickable" :class="{ on: isSel('doc:' + d.id), lift: hold === 'doc:' + d.id }" @pointerdown="hold = 'doc:' + d.id" @pointerup="hold = ''" @pointerleave="hold = ''" :data-kind="d.kind" draggable="true"
-              @click="toggle(docPick(d), $event)" @dragstart="startDrag($event, docPick(d))" @dragend="dragging = false">
-              <span class="lk kind" :data-kind="d.kind">{{ KIND[d.kind] }}</span>
+            <article v-for="{ doc: d, why } in newsShown" :key="d.id" class="dcard" v-bind="pk(docPick(d))">
+              <span class="lk">뉴스</span>
               <b class="ti" :title="d.title">{{ docTitle(d) }}</b>
               <p class="su">{{ d.summary }}</p>
-              <div class="fg"><span v-for="(f, i) in d.figures.slice(0, 2)" :key="i">{{ f.label }} <b>{{ f.value.toLocaleString("ko-KR") }}{{ f.unit === "%" ? "%" : " " + f.unit }}</b></span></div>
               <small class="why">{{ why }}</small>
-              <div class="ft"><span class="meta">{{ d.company }} · {{ d.publisher }} · {{ d.date.slice(2).replace(/-/g, ".") }}</span><a v-if="d.url" :href="d.url" target="_blank" rel="noopener" draggable="false" @click.stop>원본</a>
-                <button :disabled="onCanvas(d.id)" @click.stop="emit('addDoc', d.id)">{{ onCanvas(d.id) ? "올림" : "+ 올리기" }}</button></div>
+              <div class="ft"><span class="meta">{{ d.company }} · {{ d.publisher }} · {{ date(d.date) }}</span>
+                <a v-if="d.url" :href="d.url" target="_blank" rel="noopener" draggable="false">원본</a></div>
             </article>
-            <p v-if="!ir.length" class="none">맞는 IR 자료가 없습니다.</p>
-          </div>
-          <div class="sech"><h3>관련 뉴스 <small>{{ news.length }}</small></h3></div>
-          <div class="hs">
-            <article v-for="{ doc: d, why } in news" :key="d.id" class="dcard pickable" :class="{ on: isSel('doc:' + d.id), lift: hold === 'doc:' + d.id }" @pointerdown="hold = 'doc:' + d.id" @pointerup="hold = ''" @pointerleave="hold = ''" :data-kind="d.kind" draggable="true"
-              @click="toggle(docPick(d), $event)" @dragstart="startDrag($event, docPick(d))" @dragend="dragging = false">
-              <span class="lk kind" :data-kind="d.kind">{{ KIND[d.kind] }}</span>
-              <b class="ti" :title="d.title">{{ docTitle(d) }}</b>
-              <p class="su">{{ d.summary }}</p>
-              <div class="fg"><span v-for="(f, i) in d.figures.slice(0, 2)" :key="i">{{ f.label }} <b>{{ f.value.toLocaleString("ko-KR") }}{{ f.unit === "%" ? "%" : " " + f.unit }}</b></span></div>
-              <small class="why">{{ why }}</small>
-              <div class="ft"><span class="meta">{{ d.company }} · {{ d.publisher }} · {{ d.date.slice(2).replace(/-/g, ".") }}</span><a v-if="d.url" :href="d.url" target="_blank" rel="noopener" draggable="false" @click.stop>원본</a>
-                <button :disabled="onCanvas(d.id)" @click.stop="emit('addDoc', d.id)">{{ onCanvas(d.id) ? "올림" : "+ 올리기" }}</button></div>
-            </article>
-            <p v-if="!news.length" class="none">맞는 뉴스가 없습니다.</p>
-          </div>
-        </template>
-
-        <!-- 사내 자료 -->
-        <template v-else>
-          <!-- 사내 자료는 리스트: 제목 · 요약 한 줄 · 핵심 수치 · 출처 · 올리기 -->
-          <div class="ilist">
-            <article v-for="{ doc: d, why } in docs" :key="d.id" class="irow pickable" :class="{ on: isSel('doc:' + d.id), lift: hold === 'doc:' + d.id }" data-kind="internal" draggable="true"
-              @pointerdown="hold = 'doc:' + d.id" @pointerup="hold = ''" @pointerleave="hold = ''"
-              @click="toggle(docPick(d), $event)" @dragstart="startDrag($event, docPick(d))" @dragend="dragging = false">
-              <span class="lk kind" data-kind="internal">사내</span>
-              <div class="tx"><b :title="d.title">{{ d.title }}</b><span>{{ d.summary }}</span></div>
-              <div class="fg"><span v-for="(f, i) in d.figures.slice(0, 2)" :key="i">{{ f.label }} <b>{{ f.value.toLocaleString("ko-KR") }} {{ f.unit }}</b></span></div>
-              <span class="meta" :title="why">{{ d.publisher }} · {{ d.date.slice(2).replace(/-/g, ".") }}</span>
-              <button :disabled="onCanvas(d.id)" @click.stop="emit('addDoc', d.id)">{{ onCanvas(d.id) ? "올림" : "+ 올리기" }}</button>
-            </article>
-            <p v-if="!docs.length" class="none">일치하는 자료가 없습니다.</p>
-          </div>
-          <!-- 리스트 아래 남는 공간의 세로 가운데: 누르면 파일 선택, 파일은 화면 어디에 끌어다 놓아도 올라감 -->
-          <div class="upwrap">
-            <label class="upline">
-              <input type="file" multiple accept=".txt,.md,.csv,.json,.pdf,.xlsx,.docx,.hwp" @change="upload" />
-              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 13V3.5M6 7.5l4-4 4 4" /><path d="M3.5 12.5v3a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5v-3" /></svg>
-              <span>{{ busy ? "요약하는 중" : over ? "놓으면 올라갑니다" : "클릭하거나 파일을 끌어 놓으세요" }}</span>
-              <small>TXT, MD, CSV</small>
-              <small v-if="err" class="err">{{ err }}</small>
-            </label>
+            <p v-if="!newsShown.length" class="none">맞는 뉴스가 없습니다.</p>
           </div>
         </template>
       </div>
     </main>
 
-    <!-- 선택한 카드: 어두운 화면이 걷히고 캔버스로 끌어다 놓는 단계 -->
-    <section v-if="mode === 'drag' && sel.length" class="tray" aria-label="선택한 카드">
-      <header><b>선택한 {{ sel.length }}개를 캔버스로 끌어다 놓으세요</b>
-        <button @click="browse = true">카드 더 고르기</button><button @click="sel = []">선택 해제</button></header>
-      <div class="items" draggable="true" @dragstart="startDrag($event)" @dragend="dragging = false">
-        <span v-for="p in sel" :key="p.key" class="pk"><span class="kind">{{ p.tag }}</span><b>{{ p.label }}</b>
+    <!-- 하단: 탭 + 선택 칩 + 입력창 (+ 업로드 / 추가하기) -->
+    <div class="dock">
+      <div class="tabs3" role="tablist" aria-label="자료 검색 보기">
+        <button role="tab" :aria-selected="tab === 'search'" @click="tab = 'search'">검색</button>
+        <button role="tab" :aria-selected="tab === 'insight'" @click="tab = 'insight'">인사이트</button>
+      </div>
+      <div v-if="sel.length" class="chips2" aria-label="선택한 항목">
+        <span v-for="p in sel" :key="p.key" class="chip" :data-src="p.src"><b :title="p.label">{{ p.label }}</b>
           <button :aria-label="p.label + ' 선택 해제'" @click="toggle(p)">✕</button></span>
       </div>
-    </section>
-
-    <!-- 하단 가운데: 탭 버튼 + 채팅창형 검색창. 입력하면 바로 결과가 바뀜(버튼 없음) -->
-    <div class="dock">
-      <div class="tabs3" role="tablist" aria-label="자료 종류">
-        <button v-for="[k, label] in TABS" :key="k" role="tab" :aria-selected="tab === k" :data-tab="k" @click="tab = k; browse = true">{{ label }}</button>
-      </div>
-      <form class="cin" @submit.prevent="load">
-        <input ref="input" v-model="q" type="search" :placeholder="PH[tab]" :aria-label="PH[tab]" autocomplete="off" @focus="browse = true" />
+      <form class="cin" @submit.prevent="submit">
+        <button type="button" class="plus" :title="busy ? '요약하는 중' : '사내 자료 첨부'" aria-label="사내 자료 첨부" @click="file?.click()">+</button>
+        <input ref="file" class="hide" type="file" multiple accept=".txt,.md,.csv,.json,.pdf,.xlsx,.docx,.hwp" @change="upload" />
+        <input ref="input" v-model="q" type="search" :placeholder="PH[tab]" :aria-label="PH[tab]" autocomplete="off" />
+        <button type="button" class="addb" :disabled="!sel.length" @click="addAll">추가하기{{ sel.length ? ` ${sel.length}` : "" }}</button>
       </form>
+      <small v-if="err" class="err">{{ err }}</small>
     </div>
+    <SourceOverlay v-if="detail" :table-id="detail.table_id" :match="detail.hits.map((h) => h.r)" pick @close="detail = null" @add="picked" />
   </div>
 </template>

@@ -27,24 +27,28 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | 캔버스 홈 (C00) | 볼 수 있는 캔버스 목록·삭제 | `GET /canvases`, `DELETE /canvases/{id}` | `canvases`, `removeCanvas`, `thumb` |
 | 새 캔버스 (C14) | 이름 · 분기 · 편집할 사람으로 생성, 사람 찾기 | `POST /canvases`, `GET /users?q=` | `newCanvas`, `findPeople` |
 | 상단 바 | 캔버스 이름 변경 | `PATCH /canvases/{id}` | `rename` |
+| 메뉴 팝업 (C15) | 나의 캔버스 목록 | `GET /canvases` | `canvases`, `canvas.open` |
 | 공유 창 (C13) | 사내 사람 찾기 | `GET /users?q=` | `ALL_MEMBERS` 상수 |
 | 공유 창 (C13) | 권한 조회·변경 | `GET/PUT /canvases/{id}/shares` | `members`, `setShare` |
 | 캔버스 | 캔버스 열기 | `GET /canvases/{id}` | `canvas.open` |
-| 캔버스 | 카드·연결 조작 | `POST /canvases/{id}/events` | `api.postEvents` |
-| 왼쪽 사이드바 | 활동 로그 | `GET /canvases/{id}/activities` | `canvas.activity` |
+| 캔버스 | 카드·연결·프롬프트 조작 | `POST /canvases/{id}/events` | `api.postEvents` |
+| 왼쪽 사이드바 | 프롬프트 목록 | (캔버스 상태에서 계산, API 없음) | `cardTitle`, `userPrompts` |
 | 캔버스 | 같은 개념 자동 연결 | `GET /canvases/{id}/card-tags` | `api.cardTags` |
-| 자료 추가 · 공시 | 공시 검색 | `GET /filings/search` | `api.searchQuestion` |
-| 자료 추가 · 공시 / 원본 보기 | 공시 표 조회 | `GET /filings/tables/{tableId}` | `api.table`, `api.noteTable` |
-| 자료 추가 · 공시 | 3사 비교 AI 분석 | `GET /insights` | `api.analysis.insights`, `api.peerFacts` |
-| 자료 추가 · IR·뉴스 / 사내 자료 | 문서 검색·추천 | `GET /documents` | `api.searchDocs`, `api.recommend` |
-| 자료 추가 · 사내 자료 | 파일 업로드 | `POST /documents/uploads` | `api.registerDoc` |
+| 자료 검색 · 검색 (입력 없음) | 대시보드 3개 | `GET /dashboard` | `local/dashboard.ts` `DASH` |
+| 자료 검색 · 검색 | 재무 데이터 검색 | `GET /filings/search` | `api.searchQuestion` |
+| 자료 검색 · 검색 / 원본 보기 | 공시 표 조회 | `GET /filings/tables/{tableId}` | `api.table`, `api.noteTable` |
+| 자료 검색 · 검색 | IR·AR 검색 | `GET /documents?kind=ir,ar` | `api.searchDocs` |
+| 자료 검색 · 인사이트 | AI 해석 비교 테이블 | `GET /insights` | `api.analysis.insights`, `api.peerFacts` |
+| 자료 검색 · 인사이트 | 관련 뉴스 검색·추천 | `GET /documents?kind=news` | `api.searchDocs`, `api.recommend` |
+| 자료 검색 · 입력창 `+` | 사내 자료 업로드 | `POST /documents/uploads` | `api.registerDoc` |
 | 비교·시각화 카드 | 표 비교 결과 | `GET /canvases/{id}/compares/{cardId}` | `api.compare` |
-| 오른쪽 사이드바 | 결과물 양식, 개념 이름 | `GET /deliverables` | `api.analysis.deliverables`, `tag_names` |
-| 프롬프트 탭 | 프롬프트 추출 | `POST /canvases/{id}/context` | `api.context` |
-| 결과물 탭 | 근거 목록 | `GET /canvases/{id}/evidence` | `api.evidence` |
-| 결과물 탭 | 초안 생성 | `POST /canvases/{id}/drafts` → job | `ai.draft` |
-| 질문 탭 | 질문 생성 | `POST /canvases/{id}/questions` → job | `ai.questions` |
-| 평가 탭 | 평가 | `POST /canvases/{id}/evaluations` | `ai.evaluate` |
+| 결과 패널 머리 | 결과물 양식, 개념 이름 | `GET /deliverables` | `api.analysis.deliverables`, `tag_names` |
+| 결과 패널 머리 | 프롬프트 복사 (부가 기능) | `POST /canvases/{id}/context` | `api.context` |
+| 생성하기 | 근거 목록 | `GET /canvases/{id}/evidence` | `api.evidence` |
+| 생성하기 → 결과물 | 결과물 생성 | `POST /canvases/{id}/drafts` → job | `ai.draft` (+ `userPrompts`) |
+| 생성하기 → 질문 | 질문 생성 | `POST /canvases/{id}/questions` → job | `ai.questions` |
+| 생성하기 → 평가 | 평가 | `POST /canvases/{id}/evaluations` | `ai.evaluate` |
+| 결과물 · 질문 | PDF · Markdown 내보내기 | (화면에서 만듦, API 없음) | `window.print`, Blob 내려받기 |
 
 데모에만 있는 기능은 API를 두지 않는다: 로그인 화면의 데모 계정 미리 입력, `예시 불러오기`(`api.meta.example`), 시각화 카드(화면 전용, 컨텍스트 제외), 홈 미리보기(`thumb`, 실제 서비스는 서버가 만든 썸네일 또는 카드 좌표), `api.warmup`·`api.ask`(LLM 없음).
 
@@ -153,10 +157,14 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 |---|---|---|
 | `table` | `tableId`, `rows`, `cols`, `vcol`, `edits`, `sort` | 공시 표 카드. `vcol`은 비교 기준 열, `edits`는 `"r,c": 값` |
 | `compare` | `sources` | 표 비교 카드. 원본 표 카드 ID 목록 |
-| `doc` | `docId` | IR·뉴스·사내 자료 카드 |
-| `memo` | `author`, `text`, `memoType` | `memoType`: `memo` / `request`(보완 요청) |
+| `doc` | `docId` | IR·AR·뉴스·사내 자료 카드 |
+| `prompt` | `author`, `text` | 프롬프트 카드. 작성 지시, 사실 근거로 쓰지 않음 |
+| `dash` | `panel` | 대시보드 카드. `panel`: `opi`(3사 영업이익 추이) / `capex`(SKT CapEx·감가상각비) / `peer`(3사 주요 지표) |
+| `chart` | `compareId` | 시각화 카드 (화면 전용) |
 
-연결 `rel`: `근거` / `설명` / `반박` / `관련`.
+프롬프트 카드를 뺀 모든 카드는 `prompt`(카드 프롬프트, 이 근거를 어떻게 활용할지)를 가질 수 있다.
+
+연결 `rel`: `근거` / `설명` / `반박` / `관련`. 연결은 `prompt`(선 프롬프트, 이 관계를 어떻게 쓸지)를 가질 수 있다.
 
 ### 3.6 `POST /api/v1/canvases/{id}/events`
 
@@ -187,16 +195,20 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | `edit_cell` | `cardId`, `r`, `c`, `value` | 값을 수정함 |
 | `revert_card` | `cardId` | — |
 | `add_doc` | `cardId`, `docId` | 자료를 올림 |
-| `add_memo` | `cardId`, `text`, `memoType` | 메모를 남김 |
-| `edit_memo` | `cardId`, `text` | 메모를 고침 |
-| `set_memo_type` | `cardId`, `memoType` | 메모 종류를 바꿈 |
+| `add_dash` | `cardId`, `panel` | 대시보드를 올림 |
+| `add_prompt` | `cardId`, `text` | 프롬프트 카드를 만듦 |
+| `edit_prompt` | `cardId`, `text` | 프롬프트를 고침 |
+| `set_card_prompt` | `cardId`, `text` | 카드 프롬프트를 고침. 빈 값이면 지움 |
+| `set_link_prompt` | `linkId`, `text` | 선 프롬프트를 고침. 빈 값이면 지움 |
 | `create_compare` | `cardId`, `sources` | 비교 카드를 만듦 |
 | `confirm_mapping` | `conceptId`, `company`, `cells`, `accepted` | 계정 대응을 확정함 |
 | `add_link` | `linkId`, `source`, `target`, `rel` | 카드를 연결함 |
 | `set_link` | `linkId`, `rel` | 연결 관계를 바꿈 |
 | `remove_link` | `linkId` | 연결을 지움 |
 | `remove_card` | `cardId` | 카드를 지움. 서버가 그 카드의 연결과 비교 원본에서도 뺌 |
-| `move_card` | `cardId`, `x`, `y` | 좌표만 저장. 컨텍스트·활동 로그에 영향 없음 |
+| `move_card` | `cardId`, `x`, `y` | 좌표만 저장. 컨텍스트·활동 기록에 영향 없음 |
+
+예전 저장본의 `add_memo` · `edit_memo`는 `add_prompt` · `edit_prompt`로 읽고, `set_memo_type`은 버린다.
 
 ```json
 { "events": [
@@ -283,11 +295,12 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 ### 4.3 `GET /api/v1/insights`
 
-`공시` 탭 위쪽 3사 비교 AI 분석 카드. 카드마다 3사 수치 증감, AI 해석, 근거 뉴스를 담는다.
+자료 검색 `인사이트` 탭의 AI 해석 비교 테이블. 카드마다 3사 수치 증감, AI 해석, 근거 뉴스를 담는다. 수치는 코드로 계산하고 LLM은 해석 문장만 쓴다(설계서 3장).
 
 | 쿼리 | 설명 | 타입 |
 |---|---|---|
-| `q` | 검색어. 있으면 그 낱말이 닿는 개념의 카드만 | string? |
+| `q` | 주제. 있으면 그 낱말이 닿는 개념의 카드만(입력하고 Enter) | string? |
+| `asOfDate` | 기준 시점. 이 날짜 이전 공시·뉴스만 | string |
 
 | 응답 `data[]` | 설명 | 타입 |
 |---|---|---|
@@ -296,15 +309,30 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | `ai` | AI 해석 문장 | string |
 | `news[]` | 근거 문서 ID (5.1의 `id`) | string[] |
 | `facts[]` | `{ concept, name, rows: [{ company, cur, prv }] }`. 기준 분기·전년 동기, 십억원 | object[] |
-| `tables[]` | `비교 카드로 올리기`를 누르면 올릴 표 ID | string[] |
+| `tables[]` | 캔버스에 올릴 때 함께 올릴 3사 표 ID | string[] |
 
-## 5. 문서 (IR·뉴스·사내 자료)
+### 4.4 `GET /api/v1/dashboard`
+
+자료 검색 `검색` 탭의 입력 전 대시보드 3개. 데모는 `frontend/src/local/dashboard.json`(템플릿 대시보드 API 조회값). 실제 서비스는 DuckDB 적재 재무 수치를 `mcp-server`로 조회하고 비율은 코드로 계산한다.
+
+| 쿼리 | 설명 | 타입 |
+|---|---|---|
+| `companies` | 회사 (기본 3사) | string? |
+| `years` | 연도 범위 (기본 최근 5년) | string? |
+
+| 응답 `data` | 설명 | 타입 |
+|---|---|---|
+| `years[]`, `unit` | 연도, 단위(억원) | number[], string |
+| `revenue`, `opIncome`, `capex`, `depPpe`, `liabilities`, `equity` | 회사 → 연도별 값 | Record<string, number[]> |
+| `source` | 출처와 조회 시각 | string |
+
+## 5. 문서 (IR·AR·뉴스·사내 자료)
 
 ### 5.1 `GET /api/v1/documents`
 
 | 쿼리 | 설명 | 타입 |
 |---|---|---|
-| `kind` | `ir`, `news`, `internal` 중 하나 이상 (쉼표로 구분) | string |
+| `kind` | `ir`, `ar`(애널리스트 리포트, 쟁점 요약만), `news`, `internal` 중 하나 이상 (쉼표로 구분) | string |
 | `q` | 검색어. 회사가 나오면 그 회사와 3사 공통 자료만 | string? |
 | `company` | 회사 필터 (`SKT`, `KT`, `LGU+`) | string? |
 | `canvasId` | `q`가 없을 때 이 캔버스의 회사·개념과 겹치는 순으로 추천 | string? |
@@ -351,7 +379,9 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 `CompareLine`: `{ label, why, conceptId, note, values: (Part[] | null)[], totals?: (number | null)[] }`. `values`는 `groups` 순서이고, `Part`는 `{ cardId, cellId, label, valueBil }`(십억원). `cellId` 형식은 `{tableId}#r{행}c{열}`.
 
-## 7. 결과물·질문·평가 (오른쪽 사이드바)
+## 7. 결과물·질문·평가 (오른쪽 결과 패널)
+
+상단 `생성하기` 한 번으로 7.3 → 7.4 → 7.5 → 7.6을 차례로 부르고, 프로세스 바에 단계별 진행을 표시한다.
 
 ### 7.1 `GET /api/v1/deliverables`
 
@@ -365,7 +395,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 ### 7.2 `POST /api/v1/canvases/{id}/context`
 
-`프롬프트` 탭의 `프롬프트 추출`. 캔버스의 카드·메모·연결·수정 이력을 층으로 묶는다. 화면은 부르기 전에 남은 이벤트를 먼저 보낸다.
+결과 패널 머리의 `프롬프트 복사`(부가 기능). 생성(7.4)도 같은 층을 서버 안에서 쓴다. 캔버스의 카드·연결·수정 이력·사용자 프롬프트를 층으로 묶는다. 화면은 부르기 전에 남은 이벤트를 먼저 보낸다.
 
 | 요청 | 설명 | 타입 |
 |---|---|---|
@@ -374,11 +404,11 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 | 응답 `data` | 설명 | 타입 |
 |---|---|---|
-| `layers` | `L0_system`(규칙·개념 사전), `L1_sources`(출처), `L2_workspace`(카드·메모), `L3_edits`(수정·대응·비교·연결), `L4_task`(요청) | Record |
+| `layers` | `L0_system`(규칙·개념 사전), `L1_sources`(출처), `L2_workspace`(카드·대시보드), `L3_edits`(수정·대응·비교·연결 + `# 사용자 프롬프트`: 프롬프트 카드, 카드 프롬프트, 선 프롬프트), `L4_task`(요청) | Record |
 | `hashes` | 층별 해시. 앞 층이 같으면 LLM prefix 캐시 재사용 | Record |
 | `messages[]` | `{ role, content }`. L0~L2는 system, L3~L4는 user | object[] |
 
-근거 ID 형식: 표 셀 `[{tableId}#r{행}c{열}]`, 문서 수치 `[doc:{문서ID}#f{번호}]`, 문서 내용 `[doc:{문서ID}]`.
+근거 ID 형식: 표 셀 `[{tableId}#r{행}c{열}]`, 대시보드 값 `[dash:{panel}#{회사}]`, 문서 수치 `[doc:{문서ID}#f{번호}]`, 문서 내용 `[doc:{문서ID}]`.
 
 ### 7.3 `GET /api/v1/canvases/{id}/evidence`
 
@@ -390,18 +420,17 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | `value`, `unit` | 값. 공시는 십억원으로 변환. 문서 요약 줄은 `null` | number \| null, string |
 | `cite` | 근거 ID | string |
 | `cardId` | 카드 ID | string |
-| `source` | `공시` / `IR` / `뉴스` / `사내` | string |
+| `source` | `공시` / `IR` / `AR` / `뉴스` / `사내` (대시보드 값은 `공시`) | string |
 | `text` | 문서 요약 (문서 줄만) | string? |
 | `edited` | 사용자가 고친 값이면 `true` | boolean |
 
 ### 7.4 `POST /api/v1/canvases/{id}/drafts`
 
-`결과물` 탭의 `초안 생성`. LLM을 부르므로 작업으로 돌린다(job `ANALYSIS`).
+생성하기의 첫 단계. LLM을 부르므로 작업으로 돌린다(job `ANALYSIS`). 결과물 종류는 예산서(`budget`) · 사업기획서(`business`).
 
 | 요청 | 설명 | 타입 |
 |---|---|---|
 | `deliverableId` | 결과물 유형 | string |
-| `extra` | 추가 요청 | string? |
 | `asOfDate` | 기준 시점. 이 날짜 이전 자료만 씀 | string |
 
 `202` + `{ jobId }` → 완료 뒤 `GET /api/v1/drafts/{draftId}`(`draftId`는 작업 결과에서 받음, 받는 방식은 backend와 합의).
@@ -410,14 +439,14 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 |---|---|---|
 | `id`, `createdAt` | 초안 ID, 만든 시각 | string |
 | `deliverable` | 7.1의 양식 하나 | object |
-| `sections[]` | `{ title, lines: [{ text, cite[], kind }] }`. `kind`: `공시` / `IR` / `뉴스` / `사내` / `AI 해석` / `근거 부족` | object[] |
+| `sections[]` | `{ title, lines: [{ text, cite[], kind, hint? }] }`. `kind`: `공시` / `IR` / `AR` / `뉴스` / `사내` / `AI 해석` / `근거 부족` / `프롬프트`. 첫 섹션 `작성 지시`는 사용자 프롬프트 목록, `hint`는 그 줄의 근거 카드에 붙은 카드 프롬프트 | object[] |
 | `assumptions[]` | 다음 분기 가정 `{ tag, name, value, cite, period }`. 사용자 수정값·전년 동기 열은 쓰지 않음 | object[] |
 
-서버는 LLM 응답의 근거 ID가 컨텍스트에 실제로 있는지 검증한다. 근거 없는 숫자는 내보내지 않는다. 결과는 고치지 않고 새로 쌓는다.
+PDF · Markdown 파일은 화면이 이 응답으로 만든다(PDF는 브라우저 인쇄). 서버는 LLM 응답의 근거 ID가 컨텍스트에 실제로 있는지 검증한다. 근거 없는 숫자는 내보내지 않는다. 결과는 고치지 않고 새로 쌓는다.
 
 ### 7.5 `POST /api/v1/canvases/{id}/questions`
 
-`질문` 탭의 `질문 생성`. job `PREDICTION`. 요청은 `{ asOfDate }`.
+생성하기의 두 번째 단계. job `PREDICTION`. 요청은 `{ asOfDate }`. Markdown 파일은 화면이 만든다.
 
 완료 뒤 `GET /api/v1/question-sets/{id}`:
 
@@ -428,7 +457,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 ### 7.6 `POST /api/v1/canvases/{id}/evaluations`
 
-`평가` 탭. 질문은 다음 분기 리포트 쟁점과 같은 주제면 적중, 초안 가정은 실제 실적과 차이 5% 이내면 맞음으로 판정한다. 다음 분기 자료는 평가에서만 쓴다.
+생성하기의 세 번째 단계. 질문은 다음 분기 리포트 쟁점과 같은 주제면 적중, 초안 가정은 실제 실적과 차이 5% 이내면 맞음으로 판정한다. 다음 분기 자료는 평가에서만 쓴다.
 
 | 요청 | 설명 | 타입 |
 |---|---|---|
@@ -454,7 +483,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | 비교 조회 실패 | 이전 결과를 그대로 보여 줌 |
 | 카드 태그 조회 실패 | 이전 태그를 유지 |
 | 401 | 로그인 화면으로 |
-| job `FAILED` | `errorMessage`를 탭 안에 표시하고 다시 실행 버튼 유지 |
+| job `FAILED` | 프로세스 바의 그 단계에 `errorMessage`를 표시하고 `다시 생성` 유지 |
 
 ## 9. 정해야 할 것
 
@@ -465,5 +494,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 - 다른 팀원의 조작을 화면에 반영하는 방식 (폴링 주기, `GET /canvases/{id}/events?after={seq}` 여부)
 - 초안·질문 작업 결과 ID를 받는 경로 (`GET /jobs/{id}` 응답에 넣을지, 캔버스별 최신 결과 조회로 할지)
 - 평가의 동기·비동기 여부
+- 생성하기 세 단계를 한 작업으로 묶을지, 단계별 작업 세 개로 둘지 (프로세스 바 진행 표시 방식)
+- 결과물 PDF를 서버에서 만들지 (데모는 브라우저 인쇄)
 - 업로드 허용 형식과 업로드 문서 정책 (`CLAUDE.md` 7장)
 - 채팅 응답 방식 (`CLAUDE.md` 7장). 데모에 채팅 화면이 없어 이 문서에 넣지 않음

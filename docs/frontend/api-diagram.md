@@ -9,11 +9,11 @@ flowchart LR
   subgraph FE["화면 (Vue)"]
     L[로그인]
     H[캔버스 홈 · 새 캔버스 창]
-    SH[공유 창]
+    SH[메뉴 팝업 · 공유 창]
     T[상단 바 · 왼쪽 사이드바]
-    C[캔버스 카드]
-    S[자료 추가]
-    R[오른쪽 사이드바]
+    C[캔버스 카드 · 프롬프트]
+    S[자료 검색]
+    R[오른쪽 결과 패널]
   end
 
   subgraph API["backend /api/v1"]
@@ -22,7 +22,7 @@ flowchart LR
     SHR["/canvases/{id}/shares"]
     EV["/canvases/{id}/events"]
     CMP["/canvases/{id}/compares · card-tags"]
-    FL["/filings · /insights"]
+    FL["/filings · /insights · /dashboard"]
     DC["/documents"]
     OUT["/canvases/{id}/context · evidence<br/>drafts · questions · evaluations"]
     JB["/jobs/{id}"]
@@ -32,6 +32,7 @@ flowchart LR
 
   L --> AU
   H --> CV
+  SH --> CV
   SH --> AU
   SH --> SHR
   T --> CV
@@ -72,8 +73,7 @@ sequenceDiagram
   B-->>F: meta(myRole), cards, links, lastSeq
   Note over F: myRole이 view면 편집 도구를 숨김
   F->>B: GET /canvases/{id}/card-tags
-  F->>B: GET /canvases/{id}/activities
-  F->>B: GET /canvases/{id}/shares
+  Note over F: 오른쪽 결과 패널은 생성하기 전까지 없음
 ```
 
 ## 2-1. 공유 (C13)
@@ -84,7 +84,7 @@ sequenceDiagram
   participant F as 공유 창
   participant B as backend
 
-  U->>F: 상단 바 공유
+  U->>F: 로고 → 메뉴 팝업(C15) → 정보 수정
   F->>B: GET /canvases/{id}/shares
   B-->>F: ownerId, members, access, people
   U->>F: 찾기 칸 클릭
@@ -111,7 +111,7 @@ sequenceDiagram
   participant F as 화면
   participant B as backend
 
-  U->>F: 카드 올리기 · 연결 · 값 수정
+  U->>F: 카드 올리기 · 연결 · 값 수정 · 카드 · 선 프롬프트
   F->>F: 로컬 상태 반영, 큐에 이벤트 추가
   Note over F: 150ms 동안 묶음
   F->>B: POST /canvases/{id}/events
@@ -125,7 +125,7 @@ sequenceDiagram
   end
 ```
 
-## 4. 자료 추가
+## 4. 자료 검색
 
 ```mermaid
 sequenceDiagram
@@ -135,25 +135,26 @@ sequenceDiagram
   participant A as ai
 
   rect rgba(128,128,128,0.08)
-  Note over U,B: 공시 탭
-  U->>F: 질문 입력
-  F->>B: GET /filings/search?q=
-  F->>B: GET /insights?q=
-  U->>F: 행 고르기
+  Note over U,B: 검색 탭
+  F->>B: GET /dashboard (입력 없음: 대시보드 3개)
+  U->>F: 검색어 + Enter
+  F->>B: GET /filings/search?q= (재무 데이터 리스트)
+  F->>B: GET /documents?kind=ir,ar&q= (IR·AR 리스트)
+  U->>F: 재무 행 · 행 고르기
   F->>B: GET /filings/tables/{tableId}
-  F->>B: POST /canvases/{id}/events (add_card)
+  Note over F: 고른 행 · 열은 선택 칩에 담음 (아직 이벤트 없음)
   end
 
   rect rgba(128,128,128,0.08)
-  Note over U,B: IR·뉴스 탭
-  F->>B: GET /documents?kind=ir,news&canvasId= (검색어 없으면 추천)
-  U->>F: 카드를 캔버스로 끌기
-  F->>B: POST /canvases/{id}/events (add_doc)
+  Note over U,B: 인사이트 탭 (Tab)
+  U->>F: 주제 + Enter
+  F->>B: GET /insights?q=&asOfDate=
+  F->>B: GET /documents?kind=news&q= (입력 없으면 캔버스 기준 추천)
   end
 
   rect rgba(128,128,128,0.08)
-  Note over U,A: 사내 자료 탭
-  U->>F: 파일 끌어 놓기
+  Note over U,A: 입력창 +
+  U->>F: 파일 선택
   F->>B: POST /documents/uploads
   B->>A: 자료 준비 작업 시작
   B-->>F: 202 jobId, documentIds
@@ -161,11 +162,18 @@ sequenceDiagram
     F->>B: GET /jobs/{id}
   end
   F->>B: GET /documents/{id}
-  F->>B: POST /canvases/{id}/events (add_doc)
+  Note over F: 선택 칩에 담음
   end
+
+  alt 추가하기 (선택 칩 전부)
+    U->>F: 추가하기
+  else 길게 눌러 끌기 (그 항목만)
+    U->>F: 캔버스에 놓기
+  end
+  F->>B: POST /canvases/{id}/events (add_card · add_doc · add_dash · create_compare)
 ```
 
-## 5. 프롬프트 · 초안 · 질문 · 평가
+## 5. 생성하기 (결과물 → 질문 → 평가)
 
 ```mermaid
 sequenceDiagram
@@ -175,23 +183,20 @@ sequenceDiagram
   participant A as ai
 
   F->>B: GET /deliverables
-  Note over F: 탭마다 실행 전에 남은 이벤트를 먼저 보냄
+  U->>F: 생성하기 (결과물 종류: 예산서 · 사업기획서)
+  Note over F: 남은 이벤트(프롬프트 포함)를 먼저 보내고 결과 패널을 엶
+  F->>B: GET /canvases/{id}/evidence (근거 ID → 카드 찾기)
 
-  U->>F: 프롬프트 추출
-  F->>B: POST /canvases/{id}/context
-  B-->>F: layers L0~L4, hashes, messages
-
-  U->>F: 초안 생성
+  Note over F: 프로세스 바 1 결과물
   F->>B: POST /canvases/{id}/drafts (deliverableId, asOfDate)
-  B->>A: 분석 작업 시작
+  B->>A: 분석 작업 시작 (컨텍스트 L0~L4, 사용자 프롬프트 포함)
   B-->>F: 202 jobId
   loop SUCCEEDED · FAILED까지
     F->>B: GET /jobs/{id}
   end
   F->>B: GET /drafts/{draftId}
-  F->>B: GET /canvases/{id}/evidence (근거 ID → 카드 찾기)
 
-  U->>F: 질문 생성
+  Note over F: 프로세스 바 2 질문
   F->>B: POST /canvases/{id}/questions (asOfDate)
   B->>A: 예측 작업 시작
   B-->>F: 202 jobId
@@ -200,9 +205,16 @@ sequenceDiagram
   end
   F->>B: GET /question-sets/{id}
 
-  U->>F: 평가
+  Note over F: 프로세스 바 3 평가
   F->>B: POST /canvases/{id}/evaluations (questionSetId, draftId)
   B-->>F: hit, off, missed, checks, precision, recall
+
+  opt 내보내기 · 부가 기능
+    U->>F: 결과물 PDF · Markdown, 질문 Markdown (화면에서 만듦)
+    U->>F: 프롬프트 복사
+    F->>B: POST /canvases/{id}/context
+    B-->>F: layers L0~L4, messages
+  end
 ```
 
 ## 6. 작업 상태 (job)

@@ -4,6 +4,7 @@ import { Handle, Position } from "@vue-flow/core";
 import { computed, ref, watch } from "vue";
 import { api, type CompareResult } from "../../api";
 import { useCanvas, type ChartCard, type CompareCard } from "../../stores/canvas";
+import CardPrompt from "./CardPrompt.vue";
 
 const props = defineProps<{ data: { cardId: string } }>();
 const cv = useCanvas();
@@ -41,5 +42,6 @@ const fmt = (v: number | null | undefined) => v == null ? "—" : v.toLocaleStri
         </div>
       </div>
     </div>
+    <CardPrompt :id="card.id" :text="card.prompt" />
   </section>
 </template>
