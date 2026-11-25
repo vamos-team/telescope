@@ -4,7 +4,7 @@
 
 ## 1. 기술 스택
 
-- Java 21, Spring Boot, Gradle 단일 모듈, JPA, Flyway, MySQL
+- Java 21, Spring Boot, Gradle 단일 모듈, JPA, Flyway, PostgreSQL
 - base 패키지: `com.telescope.backend`
 - 기존 `spring-boot-starter-webmvc`와 Spring Boot 버전은 임의로 바꾸지 않는다.
 - Boot가 버전을 관리하는 의존성은 버전을 적지 않는다. 관리 범위 밖이면 버전을 고정한다.
@@ -72,12 +72,12 @@
 
 ## 5. DB와 스키마
 
-- DB는 MySQL이다. PostgreSQL이나 H2로 바꾸지 않는다.
+- DB는 PostgreSQL이다(배포 환경: RDS PostgreSQL 18). MySQL이나 H2로 바꾸지 않는다.
 - 스키마 변경은 Flyway로만 한다. `db/migration/V<번호>__<설명>.sql`
 - JPA 설정은 `ddl-auto: validate`를 유지한다. `update`, `create`를 쓰지 않는다.
 - **이미 적용된 마이그레이션 파일은 수정하지 않는다.** 변경은 새 번호의 파일을 추가한다.
 - 마이그레이션 번호가 겹치지 않게 새 파일을 만들기 전에 현재 최신 번호를 확인한다.
-- DB 접속 정보는 환경변수(`MYSQL_*`)로 주입한다. 기본값에 비밀번호를 넣지 않는다.
+- DB 접속 정보는 환경변수(`SPRING_DATASOURCE_*`)로 주입한다. 기본값에 비밀번호를 넣지 않는다.
 
 ## 6. 도메인 규칙
 
