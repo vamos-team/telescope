@@ -2,7 +2,9 @@
 // 여기서는 같은 입력(캔버스 근거 + data/demo/analysis.json 양식)으로 항상 같은 결과를 만든다.
 import type { Analysis, Deliverable, Evidence } from "../api";
 
-export interface Line { text: string; cite: string[]; kind: "공시" | "IR" | "뉴스" | "사내" | "AI 해석" | "근거 부족" }
+export interface Line { text: string; cite: string[]; kind: "공시" | "IR" | "AR" | "뉴스" | "사내" | "AI 해석" | "근거 부족" | "프롬프트"; hint?: string }
+// 사용자 프롬프트: 프롬프트 카드(cardId 없음 또는 자기 ID), 카드 프롬프트(cardId), 선 프롬프트(where에 출발 → 도착)
+export interface UserPrompt { cardId?: string; where: string; text: string }
 export interface Draft { deliverable: Deliverable; sections: { title: string; lines: Line[] }[];
   assumptions: { tag: string; name: string; value: number; cite: string; period: string }[] }
 export interface Question { topic: string; q: string; why: string; level: string; cite: string[] }
@@ -10,9 +12,11 @@ export interface Question { topic: string; q: string; why: string; level: string
 const CUR = /1Q26|당분기|제 10 기 1분기/;  // 기준 분기 열 (server.ts peerFacts와 같은 규칙)
 const num = (v: number) => v.toLocaleString("ko-KR", { maximumFractionDigits: 1 });
 
-export function draft(a: Analysis, ev: Evidence[], id: string): Draft {
+export function draft(a: Analysis, ev: Evidence[], id: string, prompts: UserPrompt[] = []): Draft {
   const d = a.deliverables.find((x) => x.id === id)!;
   const name = (t: string) => a.tag_names[t] ?? t;
+  // 카드 프롬프트는 그 카드에서 나온 근거 줄 옆에 지시로 표시 (목업: 실제 서비스는 LLM이 지시대로 문장을 씀)
+  const hintOf = (cardId: string) => prompts.filter((p) => p.cardId === cardId).map((p) => p.text).join(" / ") || undefined;
   const sections = d.sections.map((s) => {
     const lines: Line[] = [];
     for (const tag of s.tags) {
@@ -21,9 +25,9 @@ export function draft(a: Analysis, ev: Evidence[], id: string): Draft {
       // 주 대상 회사의 숫자 먼저, 비교 회사는 뒤에
       const nums = es.filter((e) => e.value != null).sort((x, y) => +(y.company === a.focus) - +(x.company === a.focus));
       for (const e of nums.slice(0, 3))
-        lines.push({ text: `${e.company} ${e.label} ${num(e.value!)}${e.unit} (${e.period}${e.edited ? ", 사용자 수정값" : ""})`, cite: [e.cite], kind: e.source });
+        lines.push({ text: `${e.company} ${e.label} ${num(e.value!)}${e.unit} (${e.period}${e.edited ? ", 사용자 수정값" : ""})`, cite: [e.cite], kind: e.source, hint: hintOf(e.card_id) });
       const doc = es.find((e) => e.text);
-      if (doc) lines.push({ text: doc.text!, cite: [doc.cite], kind: doc.source });
+      if (doc) lines.push({ text: doc.text!, cite: [doc.cite], kind: doc.source, hint: hintOf(doc.card_id) });
     }
     const cited = lines.filter((l) => l.cite.length).length;
     if (cited) lines.push({ text: `${s.tags.map(name).join("·")} 근거 ${cited}건을 바탕으로 ${d.goal}의 이 항목을 구성함`, cite: [], kind: "AI 해석" });
@@ -35,6 +39,7 @@ export function draft(a: Analysis, ev: Evidence[], id: string): Draft {
     const e = ev.find((x) => x.tag === tag && x.company === a.focus && x.source === "공시" && x.value != null && !x.edited && CUR.test(x.period));
     return e ? [{ tag, name: name(tag), value: e.value!, cite: e.cite, period: e.period }] : [];
   });
+  if (prompts.length) sections.unshift({ title: "작성 지시", lines: prompts.map((p) => ({ text: `${p.where}: ${p.text}`, cite: [], kind: "프롬프트" as const })) });
   if (assumptions.length) sections.push({ title: "부록. 다음 분기 가정", lines: assumptions.map((x) =>
     ({ text: `${a.next_quarter.label} ${x.name}는 직전 분기(${x.period}) 수준 ${num(x.value)}십억원 유지 가정`, cite: [x.cite], kind: "AI 해석" as const })) });
   return { deliverable: d, sections, assumptions };
@@ -64,12 +69,12 @@ export function evaluate(a: Analysis, qs: Question[], d: Draft | null) {
 // ponytail: 판정 규칙 확인용 자체 점검. 브라우저 콘솔에서 window.__aiSelfCheck() 로 실행
 export function selfCheck(a: Analysis) {
   const ev: Evidence[] = [{ tag: "da", company: a.focus, label: "감가상각비", value: 590.7, unit: "십억원", period: "1Q26", cite: "x#r5c1", card_id: "c1", source: "공시" }];
-  const qs = questions(a, ev), d = draft(a, ev, "invest"), r = evaluate(a, qs, d);
+  const qs = questions(a, ev), d = draft(a, ev, "budget"), r = evaluate(a, qs, d);
   console.assert(qs.length === 1 && qs[0].topic === "da_trend", "질문: da 태그는 da_trend 하나");
   console.assert(r.precision === 0 && r.recall === 0, "평가: da_trend는 2Q 쟁점에 없음");
   console.assert(d.sections.some((s) => s.lines.some((l) => l.kind === "근거 부족")), "초안: 없는 태그는 근거 부족");
   console.assert(r.checks.length === 1 && !r.checks[0].ok === (Math.abs(r.checks[0].diff) > 5), "가정 대조");
-  console.assert(draft(a, [{ ...ev[0], edited: true }], "invest").assumptions.length === 0, "가정: 사용자 수정값 제외");
-  console.assert(draft(a, [{ ...ev[0], period: "1Q25" }], "invest").assumptions.length === 0, "가정: 기준 분기 열만");
+  console.assert(draft(a, [{ ...ev[0], edited: true }], "budget").assumptions.length === 0, "가정: 사용자 수정값 제외");
+  console.assert(draft(a, [{ ...ev[0], period: "1Q25" }], "budget").assumptions.length === 0, "가정: 기준 분기 열만");
   return "ok";
 }

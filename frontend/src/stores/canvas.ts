@@ -1,19 +1,23 @@
 // 캔버스 상태 + 이벤트 큐. 화면은 로컬 상태로 즉시 갱신하고, 이벤트는 묶어서 서버로 보낸다.
 // 서버가 이벤트 로그의 원본(source of truth)이며, 컨텍스트 층 해시를 돌려준다.
 import { defineStore } from "pinia";
-import { api, type CanvasEvent, type Doc } from "../api";
+import { api, docTitle, type CanvasEvent, type Doc } from "../api";
+import { panelOf } from "../local/dashboard";
 
 export interface TableCard { id: string; kind: "table"; tableId: string; rows: number[]; cols: number[];
   vcol: number; edits: Record<string, number | null>; sort: { key: string | number; desc: boolean } | null;
-  checked: boolean; x: number; y: number }
-export interface CompareCard { id: string; kind: "compare"; sources: string[]; x: number; y: number; version: number }
-export interface DocCard { id: string; kind: "doc"; docId: string; x: number; y: number }
-// 메모 종류(F-07): 일반 메모 / 보완 요청. type이 없는 이전 저장본은 일반 메모
-export interface MemoCard { id: string; kind: "memo"; author: string; text: string; type?: "memo" | "request"; x: number; y: number }
-// 시각화 카드: 비교 카드 결과를 막대그래프로. 화면에만 있고 서버 이벤트는 없음 (ponytail: 컨텍스트에 안 들어감, 필요하면 add_chart 이벤트)
-export interface ChartCard { id: string; kind: "chart"; compareId: string; x: number; y: number }
-export type Card = TableCard | CompareCard | DocCard | MemoCard | ChartCard;
-export interface Link { id: string; source: string; target: string; rel: string }
+  checked: boolean; x: number; y: number; prompt?: string }
+export interface CompareCard { id: string; kind: "compare"; sources: string[]; x: number; y: number; version: number; prompt?: string }
+export interface DocCard { id: string; kind: "doc"; docId: string; x: number; y: number; prompt?: string }
+// 프롬프트 카드: 생성(결과물·질문)에 줄 지시. 다른 카드처럼 선으로 잇는다
+export interface PromptCard { id: string; kind: "prompt"; author: string; text: string; x: number; y: number; prompt?: string }
+// 시각화 카드: 비교 카드 결과를 막대그래프로. 화면에만 있고 서버 이벤트는 없음 (ponytail: 표 값은 컨텍스트에 안 들어감, 카드 프롬프트만 들어감)
+export interface ChartCard { id: string; kind: "chart"; compareId: string; x: number; y: number; prompt?: string }
+// 대시보드 카드: 자료 검색 대시보드 패널을 캔버스로 가져온 것 (panel = DASH_PANELS id)
+export interface DashCard { id: string; kind: "dash"; panel: string; x: number; y: number; prompt?: string }
+export type Card = TableCard | CompareCard | DocCard | PromptCard | ChartCard | DashCard;
+// prompt: 이 선(관계)을 생성에서 어떻게 쓸지 사용자 지시
+export interface Link { id: string; source: string; target: string; rel: string; prompt?: string }
 export const RELS = ["근거", "설명", "반박", "관련"];
 // 팀 공유 목업: 같은 캔버스를 보는 팀원. 실제 서비스에서는 로그인 사용자와 이벤트 로그의 작성자
 // 로그인: 사번 + 비밀번호(목업이라 아무 값이나 통과). 들어가면 캔버스 홈에서 볼 수 있는 캔버스를 고른다 (실제 서비스는 사내 SSO)
@@ -71,7 +75,7 @@ const KEY = "telescope-canvas:v1";
 const readAll = (): Record<string, Saved> => { try { return JSON.parse(localStorage.getItem(KEY) ?? "{}"); } catch { return {}; } };
 const writeAll = (all: Record<string, Saved>) => { try { localStorage.setItem(KEY, JSON.stringify(all)); } catch { /* 저장 불가(사생활 보호 모드 등): 화면에서만 유지 */ } };
 const now = () => new Date().toISOString();
-const ACT: Record<string, string> = { add_card: "공시 표를 올림", add_doc: "자료를 올림", add_memo: "메모를 남김", set_memo_type: "메모 종류를 바꿈", edit_memo: "메모를 고침",
+const ACT: Record<string, string> = { add_card: "공시 표를 올림", add_doc: "자료를 올림", add_prompt: "프롬프트 카드를 만듦", edit_prompt: "프롬프트를 고침", set_card_prompt: "카드 프롬프트를 고침", set_link_prompt: "선 프롬프트를 고침", add_dash: "대시보드를 올림",
   create_compare: "비교 카드를 만듦", add_link: "카드를 연결함", set_link: "연결 관계를 바꿈", remove_link: "연결을 지움",
   remove_card: "카드를 지움", edit_cell: "값을 수정함", confirm_mapping: "계정 대응을 확정함" };
 
@@ -90,6 +94,7 @@ export const useCanvas = defineStore("canvas", {
     author: ALL_MEMBERS[0].name,
     activity: [] as { author: string; text: string; time: string }[],
     focus: null as string | null,  // 근거 ID를 눌러 강조한 카드
+    active: null as string | null,  // 누른 카드: 그 카드와 이어진 카드만 밝게, 카드 프롬프트 칸이 펼쳐짐
     user: null as { id: string; name: string; dept: string } | null,
     canvasId: "", canvasName: "",
     creating: false,  // 새 캔버스 창
@@ -111,6 +116,21 @@ export const useCanvas = defineStore("canvas", {
       const m = this.meta; if (!m) return [];
       return ALL_MEMBERS.flatMap((p) => { const role = roleOf(m, p); return role ? [{ ...p, role }] : []; })
         .sort((a, b) => (a.role === "owner" ? -1 : b.role === "owner" ? 1 : 0));
+    },
+    // 카드 이름 (왼쪽 프롬프트 목록, 선 표시, 결과물의 작성 지시)
+    cardTitle: (s) => (id: string) => {
+      const c = s.cards.find((x) => x.id === id); if (!c) return id;
+      if (c.kind === "table") { const t = api.tableInfo(c.tableId); return `${t.company} ${t.title}`; }
+      if (c.kind === "doc") { const d = api.docs.get(c.docId); return d ? docTitle(d) : id; }
+      if (c.kind === "dash") return panelOf(c.panel)?.title ?? "대시보드";
+      if (c.kind === "prompt") return "프롬프트 카드";
+      return c.kind === "compare" ? "계정 대응 비교" : "시각화";
+    },
+    // 생성에 넣을 사용자 프롬프트 (프롬프트 카드, 카드 프롬프트, 선 프롬프트)
+    userPrompts(): { cardId?: string; where: string; text: string }[] {
+      return [...this.cards.flatMap((c) => c.kind === "prompt" ? (c.text.trim() ? [{ cardId: c.id, where: "프롬프트 카드", text: c.text.trim() }] : [])
+        : c.prompt ? [{ cardId: c.id, where: this.cardTitle(c.id), text: c.prompt }] : []),
+        ...this.links.flatMap((l) => l.prompt ? [{ where: `${this.cardTitle(l.source)} → ${this.cardTitle(l.target)} (${l.rel})`, text: l.prompt }] : [])];
     },
     checked: (s) => s.cards.filter((c): c is TableCard => c.kind === "table" && c.checked),
   },
@@ -176,7 +196,7 @@ export const useCanvas = defineStore("canvas", {
     },
     reset() {
       clearTimeout(this.timer); this.queue = []; this.error = "";
-      Object.assign(this, { sessionId: crypto.randomUUID(), cards: [], links: [], tags: {}, activity: [], log: [], seq: 0, lastChangedLayer: null, focus: null });
+      Object.assign(this, { sessionId: crypto.randomUUID(), cards: [], links: [], tags: {}, activity: [], log: [], seq: 0, lastChangedLayer: null, focus: null, active: null });
       this.overlay = { tableId: null, match: [], cardId: null };
     },
     defaultName() { return `${this.user?.dept ?? ""} 캔버스 ${this.canvases.filter((m) => roleOf(m, this.user) === "owner").length + 1}`; },
@@ -197,6 +217,10 @@ export const useCanvas = defineStore("canvas", {
       this.canvasId = id; this.canvasName = x.meta.name;
       try { sessionStorage.setItem(KEY + ":canvas", id); } catch { /* 무시 */ }
       for (const d of x.uploads ?? []) if (!api.docs.has(d.id)) api.registerDoc(d);  // 업로드 문서를 같은 ID로 다시 등록 (카드보다 먼저)
+      // 예전 저장본의 메모 카드는 프롬프트 카드로 읽음 (이벤트 로그도 같이 바꿔 재생)
+      for (const c of x.cards as (Card | { kind: string })[]) if (c.kind === "memo") c.kind = "prompt";
+      for (const e of x.log) if (e.type === "add_memo") e.type = "add_prompt"; else if (e.type === "edit_memo") e.type = "edit_prompt";
+      x.log = x.log.filter((e) => e.type !== "set_memo_type");
       Object.assign(this, { cards: x.cards, links: x.links, seq: x.seq, activity: x.activity, log: x.log });
       try {
         if (x.log.length) await api.postEvents(this.sessionId, x.log);  // 새 세션에 이벤트 재생 → 서버 상태 복원
@@ -283,23 +307,37 @@ export const useCanvas = defineStore("canvas", {
       this.emit({ type: "add_doc", card_id: id, doc_id: docId });
       return id;
     },
-    addMemo(text: string, pos = { x: 0, y: 0 }, author?: string, type: "memo" | "request" = "memo") {
+    addPrompt(text: string, pos = { x: 0, y: 0 }) {
       if (this.blocked()) return "";
-      author ??= this.author;
       const id = this.newId();
-      this.cards.push({ id, kind: "memo", author, text, type, ...pos });
-      this.emit({ type: "add_memo", card_id: id, text, author, memo_type: type });
+      this.cards.push({ id, kind: "prompt", author: this.author, text, ...pos });
+      this.emit({ type: "add_prompt", card_id: id, text });
       return id;
     },
-    setMemoType(id: string, type: "memo" | "request") {
+    editPrompt(id: string, text: string) {
       if (this.blocked()) return;
-      (this.cards.find((c) => c.id === id) as MemoCard).type = type;
-      this.emit({ type: "set_memo_type", card_id: id, memo_type: type });
+      (this.cards.find((c) => c.id === id) as PromptCard).text = text;
+      this.emit({ type: "edit_prompt", card_id: id, text });
     },
-    editMemo(id: string, text: string) {
+    // 카드 프롬프트: 이 근거를 어떻게 활용할지 (표·문서·비교·시각화·대시보드 카드)
+    setCardPrompt(id: string, text: string) {
       if (this.blocked()) return;
-      (this.cards.find((c) => c.id === id) as MemoCard).text = text;
-      this.emit({ type: "edit_memo", card_id: id, text });
+      const c = this.cards.find((x) => x.id === id); if (!c || (c.prompt ?? "") === text) return;
+      c.prompt = text;
+      this.emit({ type: "set_card_prompt", card_id: id, text });
+    },
+    setLinkPrompt(id: string, text: string) {
+      if (this.blocked()) return;
+      const l = this.links.find((x) => x.id === id); if (!l || (l.prompt ?? "") === text) return;
+      l.prompt = text;
+      this.emit({ type: "set_link_prompt", link_id: id, text });
+    },
+    addDash(panel: string, pos = { x: 0, y: 0 }) {
+      if (this.blocked()) return "";
+      const id = this.newId();
+      this.cards.push({ id, kind: "dash", panel, ...pos });
+      this.emit({ type: "add_dash", card_id: id, panel });
+      return id;
     },
     addLink(source: string, target: string, rel = RELS[0]) {
       if (this.blocked()) return;

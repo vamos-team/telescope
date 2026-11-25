@@ -4,6 +4,7 @@ import { Handle, Position } from "@vue-flow/core";
 import { computed, ref, watch } from "vue";
 import { api, type CompareResult, type CompareLine } from "../../api";
 import { useCanvas, type CompareCard, type TableCard } from "../../stores/canvas";
+import CardPrompt from "./CardPrompt.vue";
 import type { SourceTable } from "../../api";
 
 const props = defineProps<{ data: { cardId: string } }>();
@@ -58,5 +59,6 @@ function confirm(l: CompareLine, ok: boolean) {
           <td v-for="(_, i) in res.groups" :key="i">{{ fmt(l.values[i]?.[0]?.value_bil) }}</td></tr>
       </tbody></table></div>
     <footer>대응 {{ res.lines.length }}개 · Σ는 여러 계정을 합산한 값 · 셀에 마우스를 올리면 구성 계정이 보입니다</footer>
+    <CardPrompt :id="card.id" :text="card.prompt" />
   </section>
 </template>

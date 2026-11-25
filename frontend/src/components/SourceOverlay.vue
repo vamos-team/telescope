@@ -4,7 +4,8 @@ import { ref, watch, computed } from "vue";
 import { api, type SourceTable } from "../api";
 import { useCanvas, type TableCard } from "../stores/canvas";
 
-const props = defineProps<{ tableId: string | null; match: number[]; cardId?: string | null }>();
+// pick: 자료 검색 화면에서 열면 캔버스 대신 선택 목록에 담음
+const props = defineProps<{ tableId: string | null; match: number[]; cardId?: string | null; pick?: boolean }>();
 const cv = useCanvas();
 const emit = defineEmits<{ close: []; add: [tableId: string, rows: number[], cols: number[]]; openNote: [noteNo: string] }>();
 const t = ref<SourceTable | null>(null);
@@ -38,7 +39,7 @@ function add() {
 </script>
 
 <template>
-  <div v-if="t" class="scrim" @pointerup="dragging = false">
+  <div v-if="t" class="scrim" :class="{ top: pick }" @pointerup="dragging = false">
     <div class="overlay" role="dialog" :aria-label="t.title">
       <header><h2>{{ t.company }} · {{ t.title }} <small>{{ t.period }}</small></h2>
         <p>{{ t.basis }} 기준 / 단위 {{ t.unit }} / 접수번호 {{ t.rcept_no }}</p>
@@ -59,7 +60,7 @@ function add() {
       <footer><span>선택 {{ sel.size }}행 × {{ cols.size }}열</span>
         <button @click="t.rows.forEach((_, i) => sel.add(i))">전체 행 선택</button>
         <button @click="sel.clear()">선택 해제</button>
-        <button class="primary" @click="add">{{ cardId ? "카드에 반영" : "캔버스에 추가" }}</button></footer>
+        <button class="primary" @click="add">{{ cardId ? "카드에 반영" : pick ? "선택 목록에 담기" : "캔버스에 추가" }}</button></footer>
     </div>
   </div>
 </template>
