@@ -12,10 +12,10 @@ import ChartNode from "./components/nodes/ChartNode.vue";
 import LoginView from "./components/LoginView.vue";
 import LeftPanel from "./components/LeftPanel.vue";
 import Logo from "./components/Logo.vue";
-import CanvasTabs from "./components/CanvasTabs.vue";
 import HomeView from "./components/HomeView.vue";
 import ShareDialog from "./components/ShareDialog.vue";
-import { useCanvas, RELS, type TableCard } from "./stores/canvas";
+import NewCanvasDialog from "./components/NewCanvasDialog.vue";
+import { useCanvas, RELS, quarterOf, type TableCard } from "./stores/canvas";
 import { api, docTitle } from "./api";
 import { selfCheck } from "./local/ai";
 
@@ -23,6 +23,8 @@ const cv = useCanvas();
 const flow = useVueFlow("canvas");
 const srcOpen = ref(false);  // 자료 추가 팝업
 const shareOpen = ref(false);  // 공유 창
+const renaming = ref(false);  // 상단 캔버스 제목 이름 바꾸기
+const vFocus = { mounted: (el: HTMLInputElement) => el.select() };
 const rp = ref("context");  // 오른쪽 패널 탭
 const rpOpen = ref(true);  // 오른쪽 사이드바 열림 (기본 열림). 왼쪽 사이드바는 항상 열림
 const selLink = ref<string | null>(null);
@@ -193,13 +195,15 @@ onUnmounted(() => window.removeEventListener("keydown", key));
 
 <template>
   <LoginView v-if="!cv.user" />
-  <HomeView v-else-if="!cv.canvasId" />
   <template v-else>
-  <CanvasTabs />
+  <HomeView v-if="!cv.canvasId" />
+  <template v-else>
   <div class="bar">
     <h1 class="logo"><button class="home" title="캔버스 홈" aria-label="캔버스 홈" @click="cv.goHome()"><Logo /></button></h1>
-    <b class="ctitle" :title="cv.canvasName">{{ cv.canvasName }}</b>
-    <span v-if="api.meta.subtitle" class="sub">{{ api.meta.subtitle }}</span>
+    <input v-if="renaming" class="ctitle" :value="cv.canvasName" aria-label="캔버스 이름" v-focus
+      @keydown.enter="($event.target as HTMLInputElement).blur()" @blur="cv.rename(($event.target as HTMLInputElement).value); renaming = false" />
+    <b v-else class="ctitle" :title="cv.readOnly ? cv.canvasName : '두 번 눌러 이름 바꾸기'" @dblclick="renaming = !cv.readOnly">{{ cv.canvasName }}</b>
+    <span class="sub">{{ quarterOf(cv.meta) }}</span>
     <div class="acts">
       <span v-if="cv.readOnly" class="ro-note">보기 전용</span>
       <template v-else>
@@ -260,5 +264,7 @@ onUnmounted(() => window.removeEventListener("keydown", key));
   <SourceOverlay :table-id="cv.overlay.tableId" :match="cv.overlay.match" :card-id="cv.overlay.cardId"
     @close="cv.openSource(null)" @add="onAdd" />
   <ShareDialog v-if="shareOpen" @close="shareOpen = false" />
+  </template>
+  <NewCanvasDialog v-if="cv.creating" />
   </template>
 </template>
