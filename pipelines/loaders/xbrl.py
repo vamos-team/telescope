@@ -4,6 +4,9 @@
 
 원본 층(값·이름을 바꾸지 않음): filing, context, context_dim, unit, fact_numeric, fact_text, label,
 presentation, calculation, definition. annotation 층(원본에서 계산, 다시 만들 수 있음): fact_annotation.
+fact_annotation의 role_uri·display_order·member_order는 공시에 실린 순서(표시 구조)대로 정렬하는 열이다:
+    ORDER BY display_order, member_order   -- 재무제표·주석 묶음 순서 → 묶음 안 계정 순서 → 구성요소 순서
+member_order는 그 묶음에 있는 축마다(묶음 안 순서대로) 사실의 구성요소 자리. 축이 없는 사실은 그 축의 기본값(정의 구조)으로 본다.
 개념·구성요소 이름은 'ifrs-full_PropertyPlantAndEquipment' 형식(표시·계산·정의 구조·이름표와 같은 형식).
 
 기존 파일은 건드리지 않는다: '<경로>.tmp'에 만들고 검증을 통과하면 그 경로로 바꾼다.
@@ -55,7 +58,8 @@ CREATE TABLE definition (
   rcept_no VARCHAR, role_uri VARCHAR, src VARCHAR, dst VARCHAR, arcrole VARCHAR, ord DOUBLE);
 CREATE TABLE fact_annotation (
   rcept_no VARCHAR, seq INTEGER, scope VARCHAR, period_label VARCHAR, precision VARCHAR, concept_label VARCHAR,
-  company_labels VARCHAR[], member_labels VARCHAR[], candidate_names VARCHAR[], PRIMARY KEY (rcept_no, seq));
+  company_labels VARCHAR[], member_labels VARCHAR[], candidate_names VARCHAR[],
+  role_uri VARCHAR, display_order INTEGER, member_order INTEGER[], PRIMARY KEY (rcept_no, seq));
 """
 
 
@@ -67,8 +71,30 @@ def _zips(args: list[str]) -> list[Path]:
     return out
 
 
+def _display_orders(presentation: list[dict]) -> list[tuple[str, dict[str, int]]]:
+    """표시 구조 → [(묶음 role, 개념·구성요소 → 묶음 안 순서)], 묶음은 파일에 나온 순서.
+    순서는 연결선의 order대로 위에서부터 깊이 우선으로 처음 나온 자리."""
+    kids: dict[str, dict[str, list]] = {}
+    for a in presentation:
+        kids.setdefault(a["role_uri"], {}).setdefault(a["src"], []).append((a["ord"] or 0, a["dst"]))
+    out = []
+    for role, k in kids.items():
+        children = {c for v in k.values() for _, c in v}
+        pos: dict[str, int] = {}
+        stack = [r for r in reversed(list(k)) if r not in children]
+        while stack:
+            c = stack.pop()
+            if c in pos:
+                continue
+            pos[c] = len(pos)
+            stack += [d for _, d in sorted(k.get(c, []), key=lambda t: t[0], reverse=True)]
+        out.append((role, pos))
+    return out
+
+
 def _annotations(rcept_no: str, x: dict, period_end: str) -> list[tuple]:
-    """사실(숫자·텍스트)마다 연결/별도·기간 구분·반올림 단위·이름표·후보 계정명."""
+    """사실(숫자·텍스트)마다 연결/별도·기간 구분·반올림 단위·이름표·후보 계정명·표시 순서.
+    표시 묶음은 그 개념이 있는 묶음 중 사실의 구성요소(연결/별도 포함)가 가장 많이 들어 있는 것, 같으면 앞 묶음."""
     ko: dict[str, dict[str, str]] = {}
     for lb in x["labels"]:
         if lb["lang"] == "ko":
@@ -79,19 +105,35 @@ def _annotations(rcept_no: str, x: dict, period_end: str) -> list[tuple]:
     for d in x["context_dims"]:
         dims.setdefault(d["context_id"], {})[d["axis"]] = d["member"]
     units = {u["unit_id"]: u for u in x["units"]}
+    roles = _display_orders(x["presentation"])
+    defaults = {a["src"]: a["dst"] for a in x["definition"] if a["arcrole"].endswith("/dimension-default")}
+    base, n = [], 0                  # 묶음마다 앞 묶음들의 자리 수를 더해 공시 전체에서 하나의 순서로
+    for _, pos in roles:
+        base.append(n)
+        n += len(pos)
     out = []
     for f in x["facts_numeric"] + x["facts_text"]:
         c, dm = ctx.get(f["context_id"], {}), dims.get(f["context_id"], {})
-        roles = ko.get(f["concept"], {})
-        std = strip(roles.get("label", ""))
-        company = [strip(t) for r, t in roles.items() if r not in ("label", "commentaryGuidance")]
+        lab = ko.get(f["concept"], {})
+        std = strip(lab.get("label", ""))
+        company = [strip(t) for r, t in lab.items() if r not in ("label", "commentaryGuidance")]
         members = [strip(ko.get(m, {}).get("label", m)) for a, m in dm.items() if a != _SCOPE_AX]
+        hit = max(((sum(m in pos for m in dm.values()), -i) for i, (_, pos) in enumerate(roles) if f["concept"] in pos),
+                  default=None)
+        role, order, morder = None, None, None
+        if hit:
+            i = -hit[1]
+            role, pos = roles[i]
+            order = base[i] + pos[f["concept"]]
+            axes = sorted((pos[a], a) for a in set(dm) | set(defaults) if a in pos and a != _SCOPE_AX)
+            morder = [pos.get(dm.get(a, defaults.get(a)), -1) for _, a in axes]
         u = units.get(f.get("unit_id"), {})
         unit = "" if u.get("denominator") else _UNIT_KO.get(u.get("numerator", ""), u.get("numerator", ""))
         out.append((rcept_no, f["seq"], _SCOPE_OF.get(dm.get(_SCOPE_AX, ""), ""),
                     _x_period(c["end_date"], period_end) if c.get("end_date") and period_end else "",
                     _precision(f.get("decimals"), unit) if "unit_id" in f else "",
-                    std, list(dict.fromkeys(company)), members, [t for t in dict.fromkeys([std] + company) if t]))
+                    std, list(dict.fromkeys(company)), members, [t for t in dict.fromkeys([std] + company) if t],
+                    role, order, morder))
     return out
 
 
