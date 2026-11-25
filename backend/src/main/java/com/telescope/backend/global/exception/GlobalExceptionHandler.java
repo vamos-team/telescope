@@ -16,16 +16,17 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException e) {
+    public ResponseEntity<ApiResponse<?>> handleBusinessException(BusinessException e) {
         ErrorCode errorCode = e.getErrorCode();
         if (errorCode.getStatus().is5xxServerError()) {
             log.error("BusinessException: {} - {}", errorCode.getCode(), e.getMessage(), e);
         } else {
             log.warn("BusinessException: {} - {}", errorCode.getCode(), e.getMessage());
         }
-        return ResponseEntity
-                .status(errorCode.getStatus())
-                .body(ApiResponse.fail(errorCode, e.getMessage()));
+        ApiResponse<?> body = e.getData() == null
+                ? ApiResponse.fail(errorCode, e.getMessage())
+                : ApiResponse.fail(errorCode, e.getMessage(), e.getData());
+        return ResponseEntity.status(errorCode.getStatus()).body(body);
     }
 
     @ExceptionHandler(Exception.class)
