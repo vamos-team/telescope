@@ -165,7 +165,7 @@ backend                                   ai
   이어지는 상태 조회가 B로 가면 B는 그 jobId를 모르니 404를 돌려주고, backend는 실제로는
   멀쩡히 실행 중인 작업을 `FAILED`로 확정해버린다. 이 조건(단일 인스턴스 또는 sticky
   routing)을 지키지 못하면 B는 선택지에서 제외해야 한다.
-- backend 쪽은 어느 쪽이든 영향받지 않는다(`Job`은 이미 MySQL에 영구 저장되고, "ai에 없는
+- backend 쪽은 어느 쪽이든 영향받지 않는다(`Job`은 이미 PostgreSQL에 영구 저장되고, "ai에 없는
   작업"을 `FAILED`로 처리하는 경로가 있다). 그래서 이 선택은 **ai 담당자의 운영 편의와 재배포
   빈도, 그리고 인스턴스를 여러 개 띄울 계획이 있는지에 달려 있다.**
 - 제안하지는 않지만 참고: K8s 전환(#43) 이후 ai/파이프라인 쪽 파드가 아직 없어(`infra/k8s`에
@@ -291,7 +291,7 @@ backend                                   ai
 - 지금은 단일 서버 구성이고 `docker-compose.yml`의 `./data` 볼륨을 backend 컨테이너가
   마운트한다. `FileStorage`(로컬 구현)가 반환하는 `fileStorageKey`는 이 볼륨 기준 상대
   경로다. ai 컨테이너도 같은 볼륨을 마운트하면 같은 키로 파일을 읽을 수 있다는 전제다.
-- K8s 전환(#43)은 backend/frontend/mysql까지만 끝났고(`infra/k8s/*.yaml`), ai·pipelines용
+- K8s 전환(#43)은 backend/frontend까지만 끝났고(`infra/k8s/*.yaml`, DB는 #76에서 RDS PostgreSQL로 이전), ai·pipelines용
   매니페스트는 아직 없다. 공유 볼륨 전제가 K8s에서도 그대로 성립하려면 backend와 ai 파드가
   같은 PVC를 마운트해야 하는데, 이건 **이 문서(backend ↔ ai 규약)만으로 결정할 수 없고
   infra 담당 영역과 함께 정해야 한다.** `CLAUDE.md` 2번 규칙에 따라 이 자리에서 infra
@@ -309,7 +309,7 @@ backend                                   ai
   2. `PythonAiClient`는 이미 "구현체는 설정으로 교체"(`infra.python-ai-client.mode`,
      지금은 `stub`)하는 모양으로 설계돼 있다. 함수 호출은 이 교체 가능성(원격 HTTP 구현체로
      바꿔 끼우는 것)과 맞지 않는다.
-  3. K8s 전환(#43)으로 backend/frontend/mysql은 이미 별도 파드가 됐다. ai도 같은 방향으로
+  3. K8s 전환(#43)으로 backend/frontend는 이미 별도 파드가 됐다(DB는 #76부터 RDS). ai도 같은 방향으로
      갈 것이 자연스럽고, 별도 파드라면 네트워크 호출(HTTP)만 가능하다.
 - **열림**: ai 담당자가 다른 이유로 함수 호출이나 다른 프로토콜(gRPC 등)을 선호하면 이 제안을
   바꿀 수 있다. 이 문서의 나머지 항목(2.4, 2.9, 2.10)은 HTTP를 전제로 적었다.

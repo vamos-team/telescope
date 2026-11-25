@@ -1,7 +1,7 @@
 # ERD — 엔티티 정리 (초안)
 
 > 확정 전 초안이며, 세부 필드는 Flyway 마이그레이션 작성 시 조정될 수 있다.
-> 이 문서는 MySQL(backend가 쓰는 운영 데이터)만 다룬다. DuckDB(재무 수치)와 ChromaDB(문서 검색)는
+> 이 문서는 PostgreSQL(backend가 쓰는 운영 데이터)만 다룬다. DuckDB(재무 수치)와 ChromaDB(문서 검색)는
 > backend가 열지 않으며, 여기에는 "어느 버전을 썼는가" 같은 메타데이터만 남긴다.
 
 ## 1. 한눈에 보기
@@ -322,7 +322,7 @@ erDiagram
 | `isActive` | boolean | 현재 활성 여부 |
 
 - 적재 결과 하나가 데이터 버전 하나다. 활성 여부는 바뀌지만 row 자체가 그 버전의 식별자라서 `AnalysisRun.dataVersionId`가 가리킨다.
-- DuckDB 파일은 backend가 열지 않는다. "어떤 버전이 활성인지"만 MySQL 메타데이터로 보관한다.
+- DuckDB 파일은 backend가 열지 않는다. "어떤 버전이 활성인지"만 PostgreSQL 메타데이터로 보관한다.
 
 ### 4.5 analysis
 
@@ -427,7 +427,7 @@ erDiagram
 - 평가는 예측의 `asOfDate`와 평가 자신의 `asOfDate`를 구분한다. 비교 문서는 예측 기준 시점 이후부터 평가 기준 시점까지 발행된 것만 쓴다.
 - 허용 문서 범위와 기준 시점 필터는 서버가 강제한다. 필터 결과가 비어도 전체 문서로 되돌아가지 않는다.
 - 모든 문서는 발행일(`publishedDate`)과 출처(`source`)를 가진다.
-- 저장소 경계: MySQL은 backend만 쓰고, DuckDB는 loader 배치만, ChromaDB는 자료 준비(ingest)만 쓴다. backend는 DuckDB·ChromaDB를 열지 않는다.
+- 저장소 경계: PostgreSQL은 backend만 쓰고, DuckDB는 loader 배치만, ChromaDB는 자료 준비(ingest)만 쓴다. backend는 DuckDB·ChromaDB를 열지 않는다.
 - 모든 엔티티는 `BaseTimeEntity`(`createdAt`, `updatedAt`)를 상속한다 (이슈 #8 완료 후 반영).
 
 ## 6. 아직 정해지지 않은 것
