@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 자료 추가 화면 (+ 자료 추가, ⌘K): 캔버스 위를 어둡게 덮고 카드를 띄운다. 하단 가운데 탭(공시 / IR·뉴스 / 사내 자료)과 채팅창형 검색창(v01 v04 하단 입력창 모양)
-// 탭 전환: ⌘/Ctrl+1·2·3 (Tab은 기본 포커스 이동). 닫기: Esc, 어두운 화면이나 오른쪽 위 ✕
+// 탭 전환: Tab·Shift+Tab, ⌘/Ctrl+1·2·3. 닫기: Esc, 어두운 화면이나 오른쪽 위 ✕
 // 카드를 누르면 선택되고, 선택이 있으면 어두운 화면이 걷혀 선택한 카드를 캔버스로 끌어다 놓는 화면이 된다
 import { ref, watch, computed, nextTick, onMounted, onUnmounted } from "vue";
 import { api, docTitle, type SearchResult, type Doc, type Insight } from "../api";
@@ -124,11 +124,13 @@ function startDrag(e: DragEvent, p?: Pick) {
   setTimeout(() => { dragging.value = true; hold.value = ""; });  // 같은 틱에 화면을 바꾸면 브라우저가 끌기를 취소함
 }
 
-// ---------- 키보드: ⌘/Ctrl+1·2·3 로 탭 전환. Tab은 막지 않아 키보드로 버튼·업로드까지 이동 (Esc 닫기는 App) ----------
+// ---------- 키보드: Tab·Shift+Tab(공시 → IR·뉴스 → 사내 자료 순환), ⌘/Ctrl+1·2·3 로 탭 전환 (Esc 닫기는 App) ----------
 const TABS = [["dart", "공시"], ["news", "IR·뉴스"], ["internal", "사내 자료"]] as const;
+function step(d: number) { const i = TABS.findIndex(([k]) => k === tab.value); tab.value = TABS[(i + d + 3) % 3][0]; browse.value = true; }
 function onKey(e: KeyboardEvent) {
   if (!props.open) return;
-  if ((e.metaKey || e.ctrlKey) && ["1", "2", "3"].includes(e.key)) { e.preventDefault(); tab.value = TABS[+e.key - 1][0]; browse.value = true; }
+  if (e.key === "Tab" && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); step(e.shiftKey ? -1 : 1); }
+  else if ((e.metaKey || e.ctrlKey) && ["1", "2", "3"].includes(e.key)) { e.preventDefault(); tab.value = TABS[+e.key - 1][0]; browse.value = true; }
 }
 onMounted(() => window.addEventListener("keydown", onKey));
 onUnmounted(() => window.removeEventListener("keydown", onKey));
