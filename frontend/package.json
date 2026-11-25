@@ -9,8 +9,10 @@
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
-    "demo:build": "vue-tsc --build && vite build --mode demo && node scripts/inline.mjs",
-    "demo:data": "python3 scripts/make_data.py"
+    "electron": "npm run build && electron electron/main.cjs",
+    "electron:dev": "run-p dev \"electron:open -- --dev\"",
+    "electron:open": "electron electron/main.cjs",
+    "build:html": "vue-tsc --build && vite build --mode html && node scripts/inline.mjs"
   },
   "dependencies": {
     "@vue-flow/core": "1.41.2",
@@ -22,6 +24,7 @@
     "@types/node": "^24.13.4",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/tsconfig": "^0.9.1",
+    "electron": "44.11.6",
     "npm-run-all2": "^9.0.3",
     "typescript": "~6.0.0",
     "vite": "^8.2.2",
@@ -30,5 +33,9 @@
   },
   "engines": {
     "node": "^22.18.0 || >=24.12.0"
-  }
+  },
+  "allowScripts": {
+    "electron@44.11.6": true
+  },
+  "main": "electron/main.cjs"
 }

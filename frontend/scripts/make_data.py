@@ -1,4 +1,4 @@
-"""데모 데이터 생성: frontend/data (manifest.json + DART XML + CSV) + 개념 사전 → src/local/data.json.
+"""로컬 데이터 생성: frontend/data (manifest.json + DART XML + CSV) + 개념 사전 → src/local/data.json.
 
 파싱은 Python 백엔드 템플릿(_template/backend)의 parse_filing / table_from_csv를 그대로 쓴다.
 이 템플릿은 telescope 저장소에 없으므로 경로를 TEMPLATE_BACKEND로 넘긴다 (README 7장).
@@ -15,7 +15,7 @@ BACK = Path(os.environ.get("TEMPLATE_BACKEND", HERE.parents[1] / "_template/back
 if not (BACK / "app/ingest/dart_xml.py").exists():
     sys.exit(f"Python 백엔드 템플릿을 찾지 못했습니다: {BACK}\n"
              "TEMPLATE_BACKEND에 템플릿의 backend 폴더 경로를 넣어 실행하세요 (README 7장). "
-             "화면만 고쳤다면 이 단계 없이 npm run dev 또는 npm run demo:build만 하면 됩니다.")
+             "화면만 고쳤다면 이 단계 없이 npm run dev 또는 npm run build:html만 하면 됩니다.")
 sys.path.insert(0, str(BACK))
 
 import yaml  # noqa: E402
