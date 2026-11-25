@@ -75,7 +75,12 @@ def _get(endpoint: str, params: dict, key: str) -> bytes:
 
 
 def _json(endpoint: str, params: dict, key: str) -> dict:
-    j = json.loads(_get(endpoint, params, key))
+    try:
+        j = json.loads(_get(endpoint, params, key))
+    except ValueError as e:
+        raise DartError("", f"JSON이 아닌 응답 ({endpoint})") from e
+    if not isinstance(j, dict):
+        raise DartError("", f"객체가 아닌 JSON 응답 ({endpoint})")
     if j.get("status") not in ("000", "013"):          # 013: 조회된 데이터 없음
         raise DartError(j.get("status", ""), j.get("message", ""))
     return j
@@ -93,16 +98,18 @@ def report_code(report_nm: str, acc_mt: str) -> str | None:
 
 def filings(corp_code: str, start: str, end: str, key: str) -> list[dict]:
     """기간 안 정기공시(정정 포함) → [{"rcept_no", "report_code", "period", "report_nm"}]. period = 이름의 'YYYY.MM'."""
-    acc_mt = _json("company.json", {"corp_code": corp_code}, key)["acc_mt"]
+    acc_mt = str(_json("company.json", {"corp_code": corp_code}, key).get("acc_mt") or "")
+    if not acc_mt.isdigit():
+        raise DartError("013", f"회사 정보(결산월) 없음: {corp_code}")
     out, page, total = [], 1, 1
     while page <= total:
         j = _json("list.json", {"corp_code": corp_code, "bgn_de": start, "end_de": end, "pblntf_ty": "A",
                                 "last_reprt_at": "N", "page_no": page, "page_count": 100}, key)
         total = int(j.get("total_page") or 1)
-        for f in j.get("list", []):
-            name = f["report_nm"].strip()
+        for f in j.get("list") or []:
+            name = (f.get("report_nm") or "").strip()
             code = report_code(name, acc_mt)
-            if code:
+            if code and f.get("rcept_no"):
                 m = _REPORT_NM.match(name)
                 out.append({"rcept_no": f["rcept_no"], "report_code": code, "period": f"{m.group(3)}.{m.group(4)}",
                             "report_nm": name})
@@ -207,7 +214,10 @@ def main() -> None:
     parser.add_argument("--raw-dir", type=Path, default=RAW_DIR, help=f"저장 루트 (기본: {RAW_DIR})")
     args = parser.parse_args()
     for corp_code in args.corp_codes:
-        print(corp_code, collect(corp_code, args.start, args.end, args.raw_dir))
+        try:
+            print(corp_code, collect(corp_code, args.start, args.end, args.raw_dir))
+        except DartError as e:                          # 한 회사가 실패해도 다음 회사는 받는다
+            print(corp_code, "실패:", e)
     print("taxonomy", collect_taxonomy(args.raw_dir))
 
 

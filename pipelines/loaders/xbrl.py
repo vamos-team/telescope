@@ -219,7 +219,7 @@ WITH f AS (SELECT rcept_no, seq, concept, context_id, 'number' AS vtype FROM fac
            UNION ALL SELECT rcept_no, seq, concept, context_id, 'text' FROM fact_text)
 SELECT f.concept, any_value(fl.corp_code), list(DISTINCT x.period_type), any_value(f.vtype),
        list(DISTINCT l.text) FILTER (WHERE l.text IS NOT NULL),
-       mode(a.std_parent), list(DISTINCT regexp_extract(a.role_uri, 'role-([A-Z][0-9]{3})', 1))
+       list(a.std_parent) FILTER (WHERE a.std_parent IS NOT NULL), list(DISTINCT regexp_extract(a.role_uri, 'role-([A-Z][0-9]{3})', 1))
 FROM f JOIN filing fl USING (rcept_no) JOIN context x USING (rcept_no, context_id)
 JOIN fact_annotation a USING (rcept_no, seq)
 LEFT JOIN label l ON l.rcept_no = f.rcept_no AND l.concept = f.concept AND l.lang = 'ko' AND l.role = 'label'
@@ -239,10 +239,15 @@ def _id_parts(concept: str) -> tuple[str | None, str | None]:
     return re.split(r"Of(?=[A-Z])", local)[0], None
 
 
+def _most(xs: list):
+    """가장 많이 나온 값, 같으면 이름순 앞(매번 같은 결과). 없으면 None."""
+    return min(set(xs), key=lambda x: (-xs.count(x), x)) if xs else None
+
+
 def _concept_match(con, taxonomy: dict) -> None:
     """회사가 만든 개념 → concept_match(모듈 설명)."""
     from parsers.align import MODEL_ENV, _setting, similarity
-    own = con.execute(_OWN).fetchall()
+    own = sorted((*r[:5], _most(r[5]), *r[6:]) for r in con.execute(_OWN).fetchall())   # 순서 고정: 임베딩 묶음이 매번 같게
     # 표준 개념: 택소노미 + 공시에 나온 표준 개념(다른 버전). (기간 종류, 값 형식)
     std = {k: (v["period"], v["vtype"]) for k, v in taxonomy.items()}
     for k, p, vt in con.execute("""SELECT concept, mode(x.period_type), 'number' FROM fact_numeric
@@ -333,17 +338,20 @@ def load(out: str | Path, zips: list[Path], taxonomy_dir: str | Path = TAXONOMY_
     if not taxonomy:
         raise RuntimeError(f"택소노미가 없습니다: {taxonomy_dir} — python -m collectors.dart_xbrl로 받으세요")
     std_ko = {k: v["labels"]["ko"] for k, v in taxonomy.items() if v["labels"].get("ko")}
+    latest: dict[tuple, dict] = {}             # (회사, 기간 말, 보고서코드) → {접수번호: zip} — 정정본 교체
+    for z in zips:
+        m = re.match(r"(\d{14})_(\d{5})\.zip$", z.name)
+        if m:                                  # 이름이 접수번호_보고서코드.zip이 아닌 파일은 건너뛴다
+            latest.setdefault((*filing_key(z), m.group(2)), {})[m.group(1)] = z
+    if not latest:                             # 빈 DB로 기존 파일을 덮어쓰지 않게
+        raise RuntimeError(f"적재할 XBRL zip(접수번호_보고서코드.zip)이 없습니다 — 기존 파일은 그대로 둔다. "
+                           f"받은 파일 {len(zips)}개: {[z.name for z in zips[:5]]}")
     out = Path(out)
     tmp = out.with_name(out.name + ".tmp")
     tmp.unlink(missing_ok=True)
     con = duckdb.connect(str(tmp))
     con.execute(SCHEMA)
     expected, skipped = {}, 0
-    latest: dict[tuple, dict] = {}             # (회사, 기간 말, 보고서코드) → {접수번호: zip} — 정정본 교체
-    for z in zips:
-        m = re.match(r"(\d{14})_(\d{5})\.zip$", z.name)
-        if m:                                  # 이름이 접수번호_보고서코드.zip이 아닌 파일은 건너뛴다
-            latest.setdefault((*filing_key(z), m.group(2)), {})[m.group(1)] = z
     for (_, period_end, report_code), group in latest.items():
         rcept_no, *older = sorted(group, reverse=True)
         z, replaces = group[rcept_no], sorted(older)
@@ -399,6 +407,8 @@ def _validate(con, expected: dict) -> list[str]:
         "이름 없는 표준 개념 사실": """SELECT count(*) FROM fact_numeric n JOIN fact_annotation a USING (rcept_no, seq)
             WHERE n.concept NOT LIKE 'entity%' AND len(a.candidate_names) = 0""",
         "숫자로 못 읽은 숫자 사실": "SELECT count(*) FROM fact_numeric WHERE value IS NULL AND trim(value_text) <> ''",
+        "원문과 다른 숫자 값(소수 6자리 초과)": """SELECT count(*) FROM fact_numeric
+            WHERE value <> TRY_CAST(trim(value_text) AS DECIMAL(38, 18))""",
         "표준 개념이 아닌 후보": "SELECT count(*) FROM concept_match WHERE match_concept LIKE 'entity%'",
         "개인정보 개념": " UNION ALL ".join(f"SELECT count(*) FROM fact_text WHERE concept LIKE '{p}%'"
                                          for p in _PRIVATE_PREFIX),

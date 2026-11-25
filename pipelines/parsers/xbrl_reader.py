@@ -12,6 +12,7 @@
 """
 from __future__ import annotations
 
+import math
 import re
 import zipfile
 from collections import defaultdict
@@ -229,6 +230,8 @@ def read_xbrl(path) -> dict:
             try:
                 v = float(raw_v) if raw_v.strip() else None
             except ValueError:
+                v = None
+            if v is not None and not math.isfinite(v): 
                 v = None
             nums.append({"seq": seq, "concept": concept, "context_id": e.get("contextRef"), "unit_id": e.get("unitRef"),
                          "decimals": e.get("decimals"), "value_text": raw_v, "value": raw_v.strip() if v is not None else None})
