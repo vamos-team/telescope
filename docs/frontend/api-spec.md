@@ -16,15 +16,18 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 | 시각 | ISO 8601 문자열 (`2026-11-25T09:30:00`) |
 | 금액 단위 | 원본 표는 공시 단위 그대로(`unit`). 비교·근거 값은 서버가 십억원으로 변환(`UNIT_TO_BIL`). 화면은 표시만 바꿈 |
 | 오래 걸리는 작업 | `202` + `{ jobId }`를 받고 `GET /api/v1/jobs/{id}`를 `SUCCEEDED`·`FAILED`까지 폴링한 뒤 결과 조회 API를 부름. 콜백 없음 |
-| 권한 | 캔버스는 같은 부서 사용자만 조회·수정. 공용 문서 수집·삭제는 관리자만 |
+| 권한 | 캔버스마다 소유자 · 편집 · 보기 권한(3.9). 권한 없는 캔버스는 403. 공용 문서 수집·삭제는 관리자만 |
 
 ### 1.1 화면별 호출 요약
 
 | 화면 | 기능 | API | 데모 함수 |
 |---|---|---|---|
 | 로그인 | 로그인 | `POST /auth/login` | `canvas.login` |
-| 로그인 | 내 정보, 부서원 | `GET /users/me`, `GET /departments/{dept}/members` | `ALL_MEMBERS` 상수 |
-| 탭 줄·왼쪽 사이드바 | 캔버스 목록·생성·이름 변경·삭제 | `GET/POST /canvases`, `PATCH/DELETE /canvases/{id}` | `canvases`, `newCanvas`, `rename`, `removeCanvas` |
+| 로그인 | 내 정보 | `GET /users/me` | `restoreUser` |
+| 캔버스 홈 (C00) | 볼 수 있는 캔버스 목록·생성·삭제 | `GET/POST /canvases`, `DELETE /canvases/{id}` | `canvases`, `newCanvas`, `removeCanvas`, `thumb` |
+| 탭 줄 | 캔버스 이름 변경 | `PATCH /canvases/{id}` | `rename` |
+| 공유 창 (C13) | 사내 사람 찾기 | `GET /users?q=` | `ALL_MEMBERS` 상수 |
+| 공유 창 (C13) | 권한 조회·변경 | `GET/PUT /canvases/{id}/shares` | `members`, `setShare` |
 | 캔버스 | 캔버스 열기 | `GET /canvases/{id}` | `canvas.open` |
 | 캔버스 | 카드·연결 조작 | `POST /canvases/{id}/events` | `api.postEvents` |
 | 왼쪽 사이드바 | 활동 로그 | `GET /canvases/{id}/activities` | `canvas.activity` |
@@ -42,7 +45,7 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 | 질문 탭 | 질문 생성 | `POST /canvases/{id}/questions` → job | `ai.questions` |
 | 평가 탭 | 평가 | `POST /canvases/{id}/evaluations` | `ai.evaluate` |
 
-데모에만 있는 기능은 API를 두지 않는다: 로그인 화면의 데모 계정 미리 입력, `예시 불러오기`(`api.meta.example`), 시각화 카드(화면 전용, 컨텍스트 제외), 작성자 바꾸기(실제 서비스는 로그인 사용자가 작성자), `api.warmup`·`api.ask`(LLM 없음).
+데모에만 있는 기능은 API를 두지 않는다: 로그인 화면의 데모 계정 미리 입력, `예시 불러오기`(`api.meta.example`), 시각화 카드(화면 전용, 컨텍스트 제외), 홈 미리보기(`thumb`, 실제 서비스는 서버가 만든 썸네일 또는 카드 좌표), `api.warmup`·`api.ask`(LLM 없음).
 
 ## 2. 인증·사용자
 
@@ -70,12 +73,12 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 
 새로고침 뒤 토큰으로 사용자를 복원한다(`restoreUser`). 응답은 2.1의 `user`.
 
-### 2.3 `GET /api/v1/departments/{dept}/members`
+### 2.3 `GET /api/v1/users?q={검색어}`
 
-같은 부서 사용자 목록. 활동 로그·메모 작성자 표시에 쓴다.
+공유 창(C13)에서 초대할 사내 사람을 찾는다. 사번 · 이름 · 부서 일부로 찾고 최대 6명을 돌려준다. `q`가 비어 있으면 추천(요청한 사람과 같은 부서 먼저)을 돌려준다. 두 경우 모두 `excludeCanvas={id}`를 주면 그 캔버스에 이미 권한 있는 사람을 뺀다.
 
 ```json
-{ "data": [{ "id": "1001", "name": "이재무", "dept": "네트워크센터", "job": "재무기획" }], "error": null }
+{ "data": [{ "id": "2001", "name": "최예산", "dept": "AIDC사업본부", "job": "재무기획" }], "error": null }
 ```
 
 ## 3. 캔버스
@@ -84,7 +87,12 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 
 ### 3.1 `GET /api/v1/canvases`
 
-내 부서 캔버스 목록. 최근 수정 순.
+내가 볼 수 있는 캔버스 목록(캔버스 홈 C00). 소유한 것, 초대받은 것, 일반 액세스(회사 전체 보기)로 열리는 것을 모두 담는다. 최근 수정 순.
+
+| 쿼리 | 설명 | 타입 |
+|---|---|---|
+| `filter` | `all`(최근) / `mine`(내가 만든) / `shared`(공유받은). 기본 `all` | string? |
+| `q` | 캔버스 이름 검색 | string? |
 
 | 응답 `data[]` | 설명 | 타입 |
 |---|---|---|
@@ -95,6 +103,10 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 | `updatedAt` | 마지막 수정 시각 | string |
 | `updatedBy` | 마지막 수정자 | string |
 | `cardCount` | 카드 수 | number |
+| `ownerId` | 소유자 사번 | string |
+| `myRole` | 내 권한 `owner` / `edit` / `view` | string |
+| `access` | 일반 액세스 `invited` / `company`(회사 전체 보기) | string |
+| `thumbnail` | 홈 미리보기. 카드 `{ kind, x, y }` 목록 또는 이미지 URL (정해야 함) | object |
 
 ### 3.2 `POST /api/v1/canvases`
 
@@ -102,11 +114,15 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 |---|---|---|
 | `name` | 이름. 없으면 `"{부서} 캔버스 {n}"` | string? |
 
-응답은 3.1의 항목 하나. `201`.
+응답은 3.1의 항목 하나. `201`. 만든 사람이 소유자가 되고, 일반 액세스는 `invited`(초대한 사람만)로 시작한다.
 
 ### 3.3 `PATCH /api/v1/canvases/{id}` · `DELETE /api/v1/canvases/{id}`
 
-`PATCH`는 `{ name }`만 받는다. 빈 문자열이면 `"제목 없는 캔버스"`. `DELETE`는 `204`. 지운 캔버스를 보고 있었으면 화면이 목록 첫 캔버스를 연다.
+`PATCH`는 `{ name }`만 받는다. 빈 문자열이면 `"제목 없는 캔버스"`. 소유자 · 편집 권한만. `DELETE`는 소유자만, `204`. 지운 캔버스를 보고 있었으면 화면이 캔버스 홈으로 간다.
+
+| HTTP | 상황 | 화면 문구 |
+|---|---|---|
+| 403 | 이름 변경: 보기 권한 / 삭제: 소유자 아님 | 화면에서 버튼을 숨김 |
 
 ### 3.4 `GET /api/v1/canvases/{id}`
 
@@ -121,7 +137,7 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 
 | HTTP | 상황 | 화면 문구 |
 |---|---|---|
-| 403 | 다른 부서 캔버스 | — |
+| 403 | 권한 없음(공유가 풀림 등) | "이 캔버스를 볼 권한이 없습니다." 후 캔버스 홈 |
 | 404 | 없는 캔버스 | — |
 | 409 | 카드가 가리키는 표·문서가 사라짐 | "'{이름}' 캔버스 일부를 복원하지 못했습니다. 자료가 바뀌었을 수 있습니다." |
 
@@ -145,6 +161,10 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 | 요청 | 설명 | 타입 |
 |---|---|---|
 | `events` | 이벤트 목록. 작성자는 토큰의 사용자 | Event[] |
+
+| HTTP | 상황 | 화면 문구 |
+|---|---|---|
+| 403 | 보기 권한 | "보기 권한만 있습니다." (화면은 보기 권한이면 편집 도구를 숨기고 보내지 않음) |
 
 | 응답 `data` | 설명 | 타입 |
 |---|---|---|
@@ -198,6 +218,29 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 ```json
 { "data": { "c1": ["da", "capex"], "c4": ["da"] }, "error": null }
 ```
+
+### 3.9 `GET /api/v1/canvases/{id}/shares` · `PUT /api/v1/canvases/{id}/shares`
+
+공유 창(C13). `GET`은 권한 있는 사람 전원(활동 로그 "이 캔버스 사람"에도 씀), `PUT`은 소유자 · 편집 권한만 부른다.
+
+| 필드 | 설명 | 타입 |
+|---|---|---|
+| `ownerId` | 소유자 사번 (`GET`만, 바꿀 수 없음) | string |
+| `members` | 직접 초대한 사람 `{ userId, role }`. `role`은 `edit` / `view`. 목록에서 빠지면 권한 삭제 | object[] |
+| `access` | 일반 액세스 `invited`(초대한 사람만) / `company`(회사 전체, 보기 권한 고정). 편집 권한은 `members`로만 줌 | string |
+
+`GET` 응답에는 일반 액세스로 권한을 받은 사람까지 펼친 `people[]`(`{ id, name, dept, job, role }`)를 함께 준다.
+
+```json
+{ "members": [{ "userId": "2001", "role": "view" }], "access": "invited" }
+```
+
+권한 계산 순서: 소유자 → 직접 초대 권한 → 일반 액세스. 바꾼 결과는 활동 로그에 "공유 권한을 바꿈"으로 남는다.
+
+| HTTP | 상황 | 화면 문구 |
+|---|---|---|
+| 403 | 보기 권한으로 `PUT` | 화면은 공유 창을 읽기 전용으로 보여 줌 ("보기 권한이라 공유 설정을 바꿀 수 없습니다.") |
+| 404 | 없는 사번 | "찾는 사람이 없거나 이미 권한이 있습니다." |
 
 ## 4. 공시
 
@@ -411,6 +454,9 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 
 ## 9. 정해야 할 것
 
+- 공유 알림 (초대받은 사람에게 알릴지, 알린다면 메일 · 사내 메신저 중 무엇으로)
+- 소유권 넘기기, 소유자 퇴사 · 부서 이동 시 처리
+- 공유 링크 복사 기능 여부
 - 동시 편집 시 카드·연결 ID 발급과 충돌 처리 (서버 발급 vs 화면 발급)
 - 다른 팀원의 조작을 화면에 반영하는 방식 (폴링 주기, `GET /canvases/{id}/events?after={seq}` 여부)
 - 초안·질문 작업 결과 ID를 받는 경로 (`GET /jobs/{id}` 응답에 넣을지, 캔버스별 최신 결과 조회로 할지)

@@ -13,13 +13,16 @@ import LoginView from "./components/LoginView.vue";
 import LeftPanel from "./components/LeftPanel.vue";
 import Logo from "./components/Logo.vue";
 import CanvasTabs from "./components/CanvasTabs.vue";
-import { useCanvas, RELS, who, type TableCard } from "./stores/canvas";
+import HomeView from "./components/HomeView.vue";
+import ShareDialog from "./components/ShareDialog.vue";
+import { useCanvas, RELS, type TableCard } from "./stores/canvas";
 import { api, docTitle } from "./api";
 import { selfCheck } from "./local/ai";
 
 const cv = useCanvas();
 const flow = useVueFlow("canvas");
 const srcOpen = ref(false);  // 자료 추가 팝업
+const shareOpen = ref(false);  // 공유 창
 const rp = ref("context");  // 오른쪽 패널 탭
 const rpOpen = ref(true);  // 오른쪽 사이드바 열림 (기본 열림). 왼쪽 사이드바는 항상 열림
 const selLink = ref<string | null>(null);
@@ -65,7 +68,7 @@ const nodes = computed<Node[]>(() => cv.cards.map((c) => ({ id: c.id, type: c.ki
 // 여러 카드를 함께 끌어도 모든 카드의 좌표를 저장 (e.nodes에 끈 카드 전부)
 const onDragStop = (e: NodeDragEvent) => { for (const n of e.nodes) cv.move(n.id, n.position.x, n.position.y); };
 flow.onConnect((c) => cv.addLink(c.source, c.target));
-const onEdgeClick = ({ edge }: EdgeMouseEvent) => { if (cv.links.some((l) => l.id === edge.id)) selLink.value = edge.id; };
+const onEdgeClick = ({ edge }: EdgeMouseEvent) => { if (!cv.readOnly && cv.links.some((l) => l.id === edge.id)) selLink.value = edge.id; };
 const link = computed(() => cv.links.find((l) => l.id === selLink.value) ?? null);
 const cardName = (id: string) => { const c = cv.cards.find((x) => x.id === id); const d = c?.kind === "doc" ? api.docs.get(c.docId) : undefined; return d ? docTitle(d) : id; };
 
@@ -178,8 +181,9 @@ function clearAll() { if (cv.cards.length && confirm("캔버스의 카드를 모
 
 const zoom = computed(() => Math.round(flow.viewport.value.zoom * 100));
 const key = (e: KeyboardEvent) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); srcOpen.value = !srcOpen.value; }
-  if (e.key === "Escape") { if (srcOpen.value) srcOpen.value = false; else { selLink.value = null; active.value = null; } }
+  if (!cv.canvasId) return;  // 캔버스 홈에서는 캔버스 단축키 없음
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k" && !cv.readOnly) { e.preventDefault(); srcOpen.value = !srcOpen.value; }
+  if (e.key === "Escape") { if (shareOpen.value) shareOpen.value = false; else if (srcOpen.value) srcOpen.value = false; else { selLink.value = null; active.value = null; } }
 };
 // 다른 캔버스(세션)를 열면 화면을 그 캔버스에 맞춘다
 watch(() => cv.canvasId, () => setTimeout(() => flow.fitView({ padding: 0.1, duration: 300 }), 300));
@@ -189,34 +193,36 @@ onUnmounted(() => window.removeEventListener("keydown", key));
 
 <template>
   <LoginView v-if="!cv.user" />
+  <HomeView v-else-if="!cv.canvasId" />
   <template v-else>
   <CanvasTabs />
   <div class="bar">
-    <h1 class="logo" title="Telescope"><Logo /><span class="sr">Telescope</span></h1>
+    <h1 class="logo"><button class="home" title="캔버스 홈" aria-label="캔버스 홈" @click="cv.goHome()"><Logo /></button></h1>
     <b class="ctitle" :title="cv.canvasName">{{ cv.canvasName }}</b>
     <span v-if="api.meta.subtitle" class="sub">{{ api.meta.subtitle }}</span>
     <div class="acts">
-      <div class="team" title="같은 부서 팀원. 고르면 그 사람 이름으로 조작이 기록됩니다">
-        <span v-for="m in cv.members" :key="m.name" class="av" :data-me="m.name === cv.author" :title="who(m.name)">{{ m.name[0] }}</span>
-        <select v-model="cv.author" aria-label="작성자"><option v-for="m in cv.members" :key="m.name" :value="m.name">{{ m.name }} · {{ m.job }}</option></select>
-      </div>
-      <button class="primary" title="자료 추가 (⌘K)" @click="srcOpen = true">+ 자료 추가</button>
-      <button class="line" @click="addMemo">메모</button>
-      <button class="line" :disabled="!cv.cards.length" @click="clearAll">비우기</button>
+      <span v-if="cv.readOnly" class="ro-note">보기 전용</span>
+      <template v-else>
+        <button class="primary" title="자료 추가 (⌘K)" @click="srcOpen = true">+ 자료 추가</button>
+        <button class="line" @click="addMemo">메모</button>
+        <button class="line" :disabled="!cv.cards.length" @click="clearAll">비우기</button>
+      </template>
+      <button class="line" @click="shareOpen = true">공유</button>
       <button class="sb" :aria-pressed="rpOpen" :title="rpOpen ? '오른쪽 사이드바 닫기' : '오른쪽 사이드바 열기 (프롬프트·결과물·질문·평가)'" aria-label="오른쪽 사이드바" @click="rpOpen = !rpOpen"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2.5" /><path d="M12.5 3.5v13" /></svg></button>
     </div>
   </div>
   <div class="main">
     <LeftPanel @focus="focusCard" />
-    <div class="flow-wrap" @dragover.prevent @drop.prevent="onDrop">
-      <VueFlow id="canvas" class="flow" :nodes="nodes" :edges="edges" :min-zoom="0.2" :max-zoom="2" :default-edge-options="{ type: 'default' }" :delete-key-code="null"
+    <div class="flow-wrap" :class="{ ro: cv.readOnly }" @dragover.prevent @drop.prevent="onDrop">
+      <VueFlow id="canvas" class="flow" :nodes-draggable="!cv.readOnly" :nodes-connectable="!cv.readOnly" :nodes="nodes" :edges="edges" :min-zoom="0.2" :max-zoom="2" :default-edge-options="{ type: 'default' }" :delete-key-code="null"
         @node-drag-stop="onDragStop" @edge-click="onEdgeClick" @node-click="({ node }) => (active = node.id)" @pane-click="selLink = null; active = null">
         <template #node-table="p"><TableNode v-bind="p" /></template>
         <template #node-compare="p"><CompareNode v-bind="p" /></template>
         <template #node-doc="p"><DocNode v-bind="p" /></template>
         <template #node-memo="p"><MemoNode v-bind="p" /></template>
         <template #node-chart="p"><ChartNode v-bind="p" /></template>
-        <Panel v-if="!cv.cards.length" position="top-center" class="start">
+        <Panel v-if="cv.readOnly" position="top-center" class="linkbar">보기 권한으로 열었습니다. 카드를 고치려면 소유자에게 편집 권한을 요청하세요.</Panel>
+        <Panel v-else-if="!cv.cards.length" position="top-center" class="start">
           <b>자료를 캔버스에 올리세요</b>
           <span>상단 + 자료 추가(⌘K)에서 공시 표, IR·뉴스 인사이트, 사내 자료를 찾아 올리고, 카드 오른쪽 점을 다른 카드로 끌어 관계를 잇습니다. 예시도 거기서 불러옵니다.</span>
           <button class="line" @click="srcOpen = true">+ 자료 추가</button>
@@ -237,7 +243,7 @@ onUnmounted(() => window.removeEventListener("keydown", key));
           <small v-if="cv.lastChangedLayer" class="layer">마지막 조작이 바꾼 프롬프트 층: {{ cv.lastChangedLayer }}</small>
         </Panel>
         <!-- 캔버스 도구: 확대·축소 버튼처럼 오른쪽 위에 띄움 -->
-        <Panel position="top-right" class="tools">
+        <Panel v-if="!cv.readOnly" position="top-right" class="tools">
           <button :disabled="cv.checked.length < 2" @click="cv.createCompare()">표 비교</button>
           <button :disabled="!cv.cards.length" @click="arrange">자동 배치</button>
           <div class="seg" role="group" aria-label="표시 단위">
@@ -260,5 +266,6 @@ onUnmounted(() => window.removeEventListener("keydown", key));
     @example="srcOpen = false; loadExample()" />
   <SourceOverlay :table-id="cv.overlay.tableId" :match="cv.overlay.match" :card-id="cv.overlay.cardId"
     @close="cv.openSource(null)" @add="onAdd" />
+  <ShareDialog v-if="shareOpen" @close="shareOpen = false" />
   </template>
 </template>

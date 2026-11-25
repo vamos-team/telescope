@@ -16,7 +16,7 @@ export type Card = TableCard | CompareCard | DocCard | MemoCard | ChartCard;
 export interface Link { id: string; source: string; target: string; rel: string }
 export const RELS = ["근거", "설명", "반박", "관련"];
 // 팀 공유 목업: 같은 캔버스를 보는 팀원. 실제 서비스에서는 로그인 사용자와 이벤트 로그의 작성자
-// 로그인: 사번 + 비밀번호(목업이라 아무 값이나 통과). 들어가면 그 사람의 부서 캔버스를 같은 부서 사람들과 함께 보고 고친다 (실제 서비스는 사내 SSO)
+// 로그인: 사번 + 비밀번호(목업이라 아무 값이나 통과). 들어가면 캔버스 홈에서 볼 수 있는 캔버스를 고른다 (실제 서비스는 사내 SSO)
 // 부서는 기획서 1장의 사업 조직
 export const DEPTS = ["네트워크센터", "AIDC사업본부", "세일즈마케팅본부", "프로덕트브랜드본부"];
 export const ALL_MEMBERS = [
@@ -32,7 +32,29 @@ export const who = (name: string) => { const m = memberOf(name); return m ? `${m
 
 // 캔버스(세션) 저장: 카드·연결 스냅숏 + 서버로 보낸 이벤트 로그. 다시 열면 이벤트를 새 세션에 재생한다
 // ponytail: localStorage(같은 브라우저 안에서만 공유). 실제 서비스는 서버 이벤트 저장소
-export interface CanvasMeta { id: string; name: string; dept: string; owner: string; updated: string; updatedBy: string; count: number }
+// 공유(F-08 권한 목업): 소유자, 초대한 사람별 권한, 일반 액세스(초대한 사람만 / 회사 전체 보기)
+export type Role = "owner" | "edit" | "view";
+export type Access = "invited" | "company";
+export interface CanvasMeta { id: string; name: string; dept: string; owner: string; updated: string; updatedBy: string; count: number;
+  ownerId?: string; share?: Record<string, "edit" | "view">; access?: Access }
+// 예전 저장분(공유 필드 없음, 부서 전체)은 초대한 사람만으로 읽음
+export const shareOf = (m: CanvasMeta) => ({ ownerId: m.ownerId ?? memberOf(m.owner)?.id ?? "", share: m.share ?? {},
+  access: (m.access === "company" ? "company" : "invited") as Access });
+export const ROLE: Record<Role, string> = { owner: "소유자", edit: "편집 가능", view: "보기 가능" };
+export const accessText = (m: CanvasMeta) => { const s = shareOf(m);
+  return s.access === "company" ? "회사 전체 보기" : "초대한 사람만"; };
+export const when = (iso: string) => {
+  const d = new Date(iso), m = Math.round((Date.now() - d.getTime()) / 60000);
+  return m < 1 ? "방금" : m < 60 ? `${m}분 전` : m < 1440 ? `${Math.round(m / 60)}시간 전` : d.toLocaleDateString("ko-KR");
+};
+export function roleOf(m: CanvasMeta, u: { id: string; dept: string } | null): Role | null {
+  if (!u) return null;
+  const s = shareOf(m);
+  if (s.ownerId === u.id) return "owner";
+  if (s.share[u.id]) return s.share[u.id];
+  if (s.access === "company") return "view";
+  return null;
+}
 // uploads: 이 캔버스 카드가 쓰는 업로드 문서(파서 요약본). 새로고침 뒤 같은 ID로 다시 등록해 카드가 사라지지 않게 함
 interface Saved { meta: CanvasMeta; cards: Card[]; links: Link[]; seq: number; activity: { author: string; text: string; time: string }[]; log: CanvasEvent[]; uploads?: Doc[] }
 const KEY = "telescope-canvas:v1";
@@ -66,13 +88,23 @@ export const useCanvas = defineStore("canvas", {
     error: "",  // 이벤트 반영·캔버스 복원 실패 안내
   }),
   getters: {
-    members: (s) => ALL_MEMBERS.filter((m) => m.dept === s.user?.dept),
-    canvases: (s): CanvasMeta[] => { void s.saved; return Object.values(readAll()).map((x) => x.meta).filter((m) => m.dept === s.user?.dept)
+    // 볼 수 있는 캔버스 전부 (소유 · 초대 · 부서 · 회사 접근)
+    canvases: (s): CanvasMeta[] => { void s.saved; return Object.values(readAll()).map((x) => x.meta).filter((m) => roleOf(m, s.user))
       .sort((a, b) => b.updated.localeCompare(a.updated)); },
+    meta(): CanvasMeta | undefined { return this.canvases.find((m) => m.id === this.canvasId); },
+    role(): Role | null { return this.meta ? roleOf(this.meta, this.user) : this.canvasId ? "owner" : null; },
+    readOnly(): boolean { return this.role === "view"; },
+    // 이 캔버스에 권한 있는 사람 (활동 로그 목록, 공유 창)
+    members(): (typeof ALL_MEMBERS[number] & { role: Role })[] {
+      const m = this.meta; if (!m) return [];
+      return ALL_MEMBERS.flatMap((p) => { const role = roleOf(m, p); return role ? [{ ...p, role }] : []; })
+        .sort((a, b) => (a.role === "owner" ? -1 : b.role === "owner" ? 1 : 0));
+    },
     checked: (s) => s.cards.filter((c): c is TableCard => c.kind === "table" && c.checked),
   },
   actions: {
     emit(e: CanvasEvent) {
+      if (this.readOnly) { this.error = "보기 권한만 있습니다."; return; }  // 모든 편집이 지나는 곳에서 한 번 막음
       this.queue.push({ author: this.author, ...e });  // 예시 메모처럼 작성자를 지정한 이벤트는 그대로
       if (e.type !== "move_card") this.rev++;
       if (ACT[e.type]) this.activity.unshift({ author: this.author, text: ACT[e.type] + (e.card_id ? ` (${e.card_id})` : ""),
@@ -105,20 +137,26 @@ export const useCanvas = defineStore("canvas", {
       const m = memberById(id); if (!m) return false;
       this.user = { id: m.id, name: m.name, dept: m.dept }; this.author = m.name;
       try { sessionStorage.setItem(KEY + ":user", JSON.stringify(this.user)); } catch { /* 무시 */ }
-      const first = this.canvases[0];
-      return first ? this.open(first.id) : this.newCanvas();
+      return this.restoreCanvas();  // 로그인하면 캔버스 홈. 새로고침이면 보던 캔버스로
+    },
+    restoreCanvas() {
+      try { const id = sessionStorage.getItem(KEY + ":canvas"); if (id && this.canvases.some((m) => m.id === id)) return this.open(id); } catch { /* 무시 */ }
+    },
+    async goHome() {
+      await this.flush(); this.save(); this.reset(); this.canvasId = ""; this.canvasName = "";
+      try { sessionStorage.removeItem(KEY + ":canvas"); } catch { /* 무시 */ }
     },
     async logout() {  // 대기 중인 조작을 지금 사용자 이름으로 저장한 뒤 캔버스 상태를 비움 (다음 사용자가 이전 캔버스를 덮어쓰지 않게)
       await this.flush(); this.save();
       this.reset(); this.canvasId = ""; this.canvasName = ""; this.user = null;
-      try { sessionStorage.removeItem(KEY + ":user"); } catch { /* 무시 */ }
+      try { sessionStorage.removeItem(KEY + ":user"); sessionStorage.removeItem(KEY + ":canvas"); } catch { /* 무시 */ }
     },
     restoreUser() { try { const u = JSON.parse(sessionStorage.getItem(KEY + ":user") ?? "null"); if (u?.id) return this.login(u.id); } catch { /* 무시 */ } },
     save() {
-      if (!this.canvasId || !this.user) return;
+      if (!this.canvasId || !this.user || this.readOnly) return;
       const all = readAll(), prev = all[this.canvasId]?.meta;
       all[this.canvasId] = { meta: { id: this.canvasId, name: this.canvasName, dept: prev?.dept ?? this.user.dept, owner: prev?.owner ?? this.author,
-        updated: now(), updatedBy: this.author, count: this.cards.length },
+        updated: now(), updatedBy: this.author, count: this.cards.length, ...(prev ? shareOf(prev) : { ownerId: this.user.id, share: {}, access: "invited" as Access }) },
         cards: JSON.parse(JSON.stringify(this.cards)), links: this.links, seq: this.seq, activity: this.activity.slice(0, 200), log: this.log,
         uploads: this.cards.flatMap((c) => { const d = c.kind === "doc" ? api.docs.get(c.docId) : undefined; return d?.uploaded ? [d] : []; }) };
       writeAll(all); this.saved++;
@@ -133,6 +171,7 @@ export const useCanvas = defineStore("canvas", {
       await this.flush(); this.save(); this.reset();
       this.canvasId = "cv" + Date.now().toString(36); this.canvasName = name;
       this.save();
+      try { sessionStorage.setItem(KEY + ":canvas", this.canvasId); } catch { /* 무시 */ }
     },
     async open(id: string) {
       if (id === this.canvasId) return;
@@ -140,6 +179,7 @@ export const useCanvas = defineStore("canvas", {
       const x = readAll()[id]; if (!x) return;
       this.reset();
       this.canvasId = id; this.canvasName = x.meta.name;
+      try { sessionStorage.setItem(KEY + ":canvas", id); } catch { /* 무시 */ }
       for (const d of x.uploads ?? []) if (!api.docs.has(d.id)) api.registerDoc(d);  // 업로드 문서를 같은 ID로 다시 등록 (카드보다 먼저)
       Object.assign(this, { cards: x.cards, links: x.links, seq: x.seq, activity: x.activity, log: x.log });
       try {
@@ -151,10 +191,19 @@ export const useCanvas = defineStore("canvas", {
       }
       for (const c of this.cards) if (c.kind === "compare") c.version++;
     },
-    rename(name: string) { this.canvasName = name.trim() || "제목 없는 캔버스"; this.save(); },
-    removeCanvas(id: string) {
-      const all = readAll(); delete all[id]; writeAll(all); this.saved++;
-      if (id === this.canvasId) { this.canvasId = ""; const next = this.canvases[0]; next ? this.open(next.id) : this.newCanvas(); }
+    rename(name: string) { if (this.readOnly) return; this.canvasName = name.trim() || "제목 없는 캔버스"; this.save(); },
+    removeCanvas(id: string) {  // 소유자만
+      const all = readAll(); if (!all[id] || roleOf(all[id].meta, this.user) !== "owner") return;
+      delete all[id]; writeAll(all); this.saved++;
+      if (id === this.canvasId) { this.reset(); this.canvasId = ""; this.canvasName = ""; }
+    },
+    thumb(id: string) { return (readAll()[id]?.cards ?? []).map((c) => ({ kind: c.kind, x: c.x, y: c.y })); },  // 홈 미리보기
+    // 공유 바꾸기: 소유자·편집 권한만. 지금 캔버스 meta를 고쳐 바로 저장
+    setShare(patch: { share?: Record<string, "edit" | "view">; access?: Access }) {
+      if (this.role !== "owner" && this.role !== "edit") return;
+      const all = readAll(), x = all[this.canvasId]; if (!x) return;
+      x.meta = { ...x.meta, ...shareOf(x.meta), ...patch }; writeAll(all); this.saved++;
+      this.activity.unshift({ author: this.author, text: "공유 권한을 바꿈", time: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) });
     },
     newId() { return "c" + ++this.seq; },
     addTableCard(tableId: string, rows: number[], cols: number[], vcol = cols[0], pos = { x: 0, y: 0 }) {

@@ -139,7 +139,7 @@ const mac = /Mac|iPhone|iPad/.test(navigator.platform);
   <div v-if="open" class="adder" :class="[mode, 'tab-' + tab, { over }]"
     @dragover="tab === 'internal' && $event.dataTransfer?.types.includes('Files') && ($event.preventDefault(), over = true)"
     @dragleave.self="over = false" @drop="tab === 'internal' && $event.dataTransfer?.types.includes('Files') && ($event.preventDefault(), dropFiles($event))" role="dialog" aria-label="자료 추가">
-    <div v-if="mode === 'dim'" class="dimbg" @click="emit('close')" />
+    <div v-if="mode === 'dim'" class="dimbg" />
     <div class="corner">
       <button v-if="api.meta.example" class="ex" @click="emit('example')">예시 불러오기</button>
       <button class="x" aria-label="닫기 (Esc)" title="닫기 (Esc)" @click="emit('close')">✕</button>
@@ -149,7 +149,7 @@ const mac = /Mac|iPhone|iPad/.test(navigator.platform);
       <button v-for="x in NF" :key="x" :aria-pressed="nf === x" @click="nf = x">{{ x }}</button></div>
 
     <!-- 흐린 화면 위 카드 -->
-    <main class="stage" :aria-hidden="mode === 'drag'" @click.self="emit('close')">
+    <main class="stage" :aria-hidden="mode === 'drag'">
       <div class="inner">
         <!-- 공시: 3사 비교 AI 분석 + 찾은 공시 표 -->
         <template v-if="tab === 'dart'">
