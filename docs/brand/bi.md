@@ -4,7 +4,7 @@
 
 > 서비스명 Telescope의 의미와 Chat Agent 캐릭터 스텔라(Stella)의 기준을 정의합니다.
 > 관리 영역: `docs/brand/`. 작업 이슈는 #38, 작업 브랜치는 `docs/#38-brand-bi`입니다.
-> 화면 용어와 화면 ID는 [IA](../frontend/demo/ia.md)를 따릅니다. 캐릭터 그림은 시안이며, 형태와 색을 확정한 뒤 최종 일러스트로 다듬습니다.
+> 이 문서의 화면 용어와 화면 ID는 이전 화면설계 시안을 기준으로 합니다. 캐릭터 그림은 시안이며, 형태와 색을 확정한 뒤 최종 일러스트로 다듬습니다.
 
 **한눈에 보기**
 
@@ -179,11 +179,11 @@ Chat Agent의 `사실 | 인사이트` 토글(C10)과 같은 기준으로 캐릭�
   </tr>
 </table>
 
-예시의 수치는 데모 데이터(`docs/frontend/demo/data/financials.json`)의 공시값이고, 해석 문장은 샘플입니다.
+예시의 수치는 이전 데모에서 사용한 공시값이고, 해석 문장은 샘플입니다.
 
 ## 8. 서비스 적용 시안
 
-현재 데모(`docs/frontend/demo/index.html`)를 복사한 [mockup/index.html](mockup/index.html)에 스텔라만 더했습니다. 캐릭터만 크림 노랑이고 화면 색과 구성은 데모와 같습니다. 원본 데모는 바꾸지 않았습니다.
+이전 데모의 화면 색과 구성을 바탕으로 스텔라를 더한 시안입니다. [HTML 시안](mockup/index.html)
 
 <table>
   <tr><th width="35%">사이드 채팅 (C20, 사실 모드)</th><th width="65%">대화 화면 (I20, 인사이트 모드)</th></tr>

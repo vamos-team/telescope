@@ -8,9 +8,9 @@
 flowchart LR
   subgraph FE["화면 (Vue)"]
     L[로그인]
-    H[캔버스 홈]
+    H[캔버스 홈 · 새 캔버스 창]
     SH[공유 창]
-    T[탭 줄 · 왼쪽 사이드바]
+    T[상단 바 · 왼쪽 사이드바]
     C[캔버스 카드]
     S[자료 추가]
     R[오른쪽 사이드바]
@@ -63,9 +63,10 @@ sequenceDiagram
   Note over F: 캔버스 홈 (C00)
   alt 타일 클릭
     U->>F: 캔버스 고르기
-  else + 새 캔버스
-    F->>B: POST /canvases
-    B-->>F: 새 캔버스 (소유자 = 나)
+  else + 새 캔버스 (C14)
+    F->>B: GET /users?q= (편집할 사람 추천 · 찾기)
+    F->>B: POST /canvases (name, quarter, editorIds)
+    B-->>F: 새 캔버스 (소유자 = 나, 편집할 사람 초대됨)
   end
   F->>B: GET /canvases/{id}
   B-->>F: meta(myRole), cards, links, lastSeq
@@ -86,13 +87,16 @@ sequenceDiagram
   U->>F: 상단 바 공유
   F->>B: GET /canvases/{id}/shares
   B-->>F: ownerId, members, access, people
+  U->>F: 찾기 칸 클릭
+  F->>B: GET /users?q=&excludeCanvas={id}
+  B-->>F: 추천 (같은 부서 먼저, 최대 6명)
   U->>F: 사번 · 이름 · 부서 입력
-  F->>B: GET /users?q=
+  F->>B: GET /users?q={입력}&excludeCanvas={id}
   B-->>F: 후보 (최대 6명)
   U->>F: 후보 고르기 (편집 가능 · 보기 가능)
   F->>B: PUT /canvases/{id}/shares
   B-->>F: 바뀐 공유 상태
-  U->>F: 일반 액세스 바꾸기
+  U->>F: 일반 액세스 바꾸기 (초대한 사람만 · 회사 전체 보기)
   F->>B: PUT /canvases/{id}/shares
   Note over B: 초대받은 사람의 GET /canvases에 바로 나타남
 ```

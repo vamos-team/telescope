@@ -6,4 +6,4 @@
 - [프런트엔드 API 명세 (초안)](api-spec.md)
 - [프런트엔드 API 다이어그램](api-diagram.md)
 - [v02-canvas 기획서](../planning/기획서.md)
-- [v02-canvas 데모 초안](../planning/demo/README.md)
+- [v02-canvas 데모 초안](../../frontend/README.md): 코드는 `frontend/`, 빌드된 한 파일은 [`docs/frontend/demo.html`](demo.html)

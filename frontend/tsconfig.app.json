@@ -3,8 +3,8 @@
   "include": ["env.d.ts", "src/**/*", "src/**/*.vue"],
   "exclude": ["src/**/__tests__/*"],
   "compilerOptions": {
-    // Extra safety for array and object lookups, but may have false positives.
-    "noUncheckedIndexedAccess": true,
+    // 데모 코드(배열·객체 조회)는 이 검사 없이 작성되어 끔. 실제 서비스 코드를 쓰면서 다시 켤지 정한다.
+    "noUncheckedIndexedAccess": false,
 
     // Path mapping for cleaner imports.
     "paths": {

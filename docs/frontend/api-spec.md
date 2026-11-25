@@ -1,8 +1,8 @@
 # 프런트엔드 API 명세 (초안)
 
-v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서버 API로 옮겨 적은 문서다. 데모는 `_build/src/api.ts`의 `api` 객체가 브라우저 안 구현(`local/server.ts`, `local/ai.ts`)을 부른다. 실제 서비스에서는 같은 자리에서 아래 API를 부른다.
+v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화면에서 부르는 기능을 서버 API로 옮겨 적은 문서다. 데모는 `frontend/src/api.ts`의 `api` 객체가 브라우저 안 구현(`local/server.ts`, `local/ai.ts`)을 부른다. 실제 서비스에서는 같은 자리에서 아래 API를 부른다.
 
-- 근거 코드: `docs/planning/demo/_build/src/api.ts`(타입), `stores/canvas.ts`(캔버스·이벤트), `local/server.ts`(검색·비교·컨텍스트), `local/ai.ts`(초안·질문·평가)
+- 근거 코드: `frontend/src/api.ts`(타입), `stores/canvas.ts`(캔버스·이벤트), `local/server.ts`(검색·비교·컨텍스트), `local/ai.ts`(초안·질문·평가)
 - 경로와 필드는 **제안**이다. backend·ai 담당자와 합의한 뒤 확정한다. `CLAUDE.md` 7장의 미정 항목은 여기서 정하지 않는다.
 
 ## 1. 공통 규칙
@@ -24,8 +24,9 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 |---|---|---|---|
 | 로그인 | 로그인 | `POST /auth/login` | `canvas.login` |
 | 로그인 | 내 정보 | `GET /users/me` | `restoreUser` |
-| 캔버스 홈 (C00) | 볼 수 있는 캔버스 목록·생성·삭제 | `GET/POST /canvases`, `DELETE /canvases/{id}` | `canvases`, `newCanvas`, `removeCanvas`, `thumb` |
-| 탭 줄 | 캔버스 이름 변경 | `PATCH /canvases/{id}` | `rename` |
+| 캔버스 홈 (C00) | 볼 수 있는 캔버스 목록·삭제 | `GET /canvases`, `DELETE /canvases/{id}` | `canvases`, `removeCanvas`, `thumb` |
+| 새 캔버스 (C14) | 이름 · 분기 · 편집할 사람으로 생성, 사람 찾기 | `POST /canvases`, `GET /users?q=` | `newCanvas`, `findPeople` |
+| 상단 바 | 캔버스 이름 변경 | `PATCH /canvases/{id}` | `rename` |
 | 공유 창 (C13) | 사내 사람 찾기 | `GET /users?q=` | `ALL_MEMBERS` 상수 |
 | 공유 창 (C13) | 권한 조회·변경 | `GET/PUT /canvases/{id}/shares` | `members`, `setShare` |
 | 캔버스 | 캔버스 열기 | `GET /canvases/{id}` | `canvas.open` |
@@ -75,7 +76,7 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 
 ### 2.3 `GET /api/v1/users?q={검색어}`
 
-공유 창(C13)에서 초대할 사내 사람을 찾는다. 사번 · 이름 · 부서 일부로 찾고 최대 6명을 돌려준다.
+공유 창(C13)과 새 캔버스 창(C14)에서 사내 사람을 찾는다. 사번 · 이름 · 부서 일부로 찾고 최대 6명을 돌려준다. `q`가 비어 있으면 추천(요청한 사람과 같은 부서 먼저)을 돌려준다. `excludeCanvas={id}`를 주면 그 캔버스에 이미 권한 있는 사람을 뺀다.
 
 ```json
 { "data": [{ "id": "2001", "name": "최예산", "dept": "AIDC사업본부", "job": "재무기획" }], "error": null }
@@ -105,8 +106,8 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 | `cardCount` | 카드 수 | number |
 | `ownerId` | 소유자 사번 | string |
 | `myRole` | 내 권한 `owner` / `edit` / `view` | string |
-| `access` | 일반 액세스 `invited` / `dept` / `company` | string |
-| `accessRole` | 일반 액세스 권한 `edit` / `view` | string |
+| `access` | 일반 액세스 `invited` / `company`(회사 전체 보기) | string |
+| `quarter` | 분기 (예: `2026년 1분기`). 상단 제목 옆에 표시 | string |
 | `thumbnail` | 홈 미리보기. 카드 `{ kind, x, y }` 목록 또는 이미지 URL (정해야 함) | object |
 
 ### 3.2 `POST /api/v1/canvases`
@@ -114,8 +115,10 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 | 요청 | 설명 | 타입 |
 |---|---|---|
 | `name` | 이름. 없으면 `"{부서} 캔버스 {n}"` | string? |
+| `quarter` | 분기 (예: `2026년 1분기`) | string |
+| `editorIds` | 편집 권한을 줄 사번 목록 (C14 편집할 사람) | string[] |
 
-응답은 3.1의 항목 하나. `201`. 만든 사람이 소유자가 되고, 일반 액세스는 `dept` · `edit`(만든 사람의 부서 전체 편집)으로 시작한다.
+응답은 3.1의 항목 하나. `201`. 만든 사람이 소유자가 되고, `editorIds`는 `edit`으로 초대되며, 일반 액세스는 `invited`(초대한 사람만)로 시작한다.
 
 ### 3.3 `PATCH /api/v1/canvases/{id}` · `DELETE /api/v1/canvases/{id}`
 
@@ -228,13 +231,12 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 |---|---|---|
 | `ownerId` | 소유자 사번 (`GET`만, 바꿀 수 없음) | string |
 | `members` | 직접 초대한 사람 `{ userId, role }`. `role`은 `edit` / `view`. 목록에서 빠지면 권한 삭제 | object[] |
-| `access` | 일반 액세스 `invited`(초대한 사람만) / `dept`(소유 부서 전체) / `company`(회사 전체) | string |
-| `accessRole` | 일반 액세스 권한 `edit` / `view`. `invited`면 무시 | string |
+| `access` | 일반 액세스 `invited`(초대한 사람만) / `company`(회사 전체, 보기 권한 고정). 편집 권한은 `members`로만 줌 | string |
 
 `GET` 응답에는 일반 액세스로 권한을 받은 사람까지 펼친 `people[]`(`{ id, name, dept, job, role }`)를 함께 준다.
 
 ```json
-{ "members": [{ "userId": "2001", "role": "view" }], "access": "dept", "accessRole": "edit" }
+{ "members": [{ "userId": "2001", "role": "view" }], "access": "invited" }
 ```
 
 권한 계산 순서: 소유자 → 직접 초대 권한 → 일반 액세스. 바꾼 결과는 활동 로그에 "공유 권한을 바꿈"으로 남는다.
@@ -353,7 +355,7 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 
 ### 7.1 `GET /api/v1/deliverables`
 
-결과물 양식과 개념 이름. 데모는 `data/analysis.json`에서 읽는다.
+결과물 양식과 개념 이름. 데모는 `data/demo/analysis.json`(저장소 루트, git 제외)을 합친 `frontend/src/local/data.json`에서 읽는다.
 
 | 응답 `data` | 설명 | 타입 |
 |---|---|---|

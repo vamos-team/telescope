@@ -5,7 +5,15 @@ import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
 // https://vite.dev/config/
-export default defineConfig({
+// npm run dev: 실시간 편집 확인. base './': Electron이 dist/index.html을 파일로 열 수 있게 (nginx 루트 배포에도 그대로 동작)
+// --mode html: docs/frontend/demo.html 한 파일 빌드 (scripts/inline.mjs가 합침)
+export default defineConfig(({ mode }) => ({
+  base: './',
+  // Electron(electron/main.cjs)이 5173을 열므로 포트를 고정. 이미 쓰이면 다른 포트로 넘어가지 않고 멈춤
+  server: { port: 5173, strictPort: true },
+  ...(mode === 'html' && {
+    build: { cssCodeSplit: false, assetsInlineLimit: 1e8, rollupOptions: { output: { inlineDynamicImports: true } } },
+  }),
   plugins: [
     vue(),
     vueDevTools(),
@@ -15,4 +23,4 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
-})
+}))
