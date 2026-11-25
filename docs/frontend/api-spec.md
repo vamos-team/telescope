@@ -42,7 +42,7 @@ v02-canvas 데모(`docs/planning/demo`)가 화면에서 부르는 기능을 서�
 | 질문 탭 | 질문 생성 | `POST /canvases/{id}/questions` → job | `ai.questions` |
 | 평가 탭 | 평가 | `POST /canvases/{id}/evaluations` | `ai.evaluate` |
 
-데모에만 있는 기능은 API를 두지 않는다: `예시 불러오기`(`api.meta.example`), 시각화 카드(화면 전용, 컨텍스트 제외), 작성자 바꾸기(실제 서비스는 로그인 사용자가 작성자), `api.warmup`·`api.ask`(LLM 없음).
+데모에만 있는 기능은 API를 두지 않는다: 로그인 화면의 데모 계정 미리 입력, `예시 불러오기`(`api.meta.example`), 시각화 카드(화면 전용, 컨텍스트 제외), 작성자 바꾸기(실제 서비스는 로그인 사용자가 작성자), `api.warmup`·`api.ask`(LLM 없음).
 
 ## 2. 인증·사용자
 
