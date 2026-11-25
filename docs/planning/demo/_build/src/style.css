@@ -329,7 +329,14 @@ table.g.facts tr.b td{font-weight:700;color:var(--t-strong);background:var(--pri
 .lcard h1{margin:0;font-size:22px;color:var(--t-strong)}
 .lcard p{margin:-6px 0 4px;font-size:13.5px;color:var(--t-sub)}
 .lcard label{display:grid;gap:6px;font-size:13px;font-weight:700;color:var(--t-sub)}
-.lcard select{height:44px;border:1px solid var(--line);border-radius:var(--r-md);padding:0 10px;background:var(--surface);font-size:14px;font-weight:400;color:var(--t-strong)}
+.lcard select,.lcard input{height:44px;border:1px solid var(--line);border-radius:var(--r-md);padding:0 10px;background:var(--surface);font-size:14px;font-weight:400;color:var(--t-strong)}
+.lcard input:focus{outline:2px solid var(--primary-text);outline-offset:-1px}
+.lcard .lerr{margin:-4px 0 0;font-size:13px;color:var(--red)}
+.demo-acc summary{cursor:pointer;font-size:12.5px;color:var(--t-sub)}
+.demo-acc{display:grid;gap:2px}
+.demo-acc button{display:grid;grid-template-columns:44px 56px 1fr;align-items:center;gap:6px;padding:5px 6px;border-radius:6px;text-align:left;font-size:12.5px}
+.demo-acc button:hover{background:var(--hover)}
+.demo-acc button b{font-variant-numeric:tabular-nums;color:var(--t-strong)}
 .lcard .ppl{display:flex;align-items:center;gap:2px}
 .lcard .ppl small{margin-left:8px}
 .lcard button.primary{height:46px;border-radius:var(--r-md);background:var(--primary);color:var(--on-primary);font-weight:700;font-size:15px}
@@ -630,5 +637,22 @@ table.g.facts tr.b td{font-weight:700;color:var(--t-strong);background:var(--pri
 .sbx[aria-pressed="true"]{background:var(--primary-weak);color:var(--primary-text)}
 .sbx svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}
 .sbx svg path{stroke-linejoin:round}
+
+/* 카드 선택 하이라이트: 고른 카드 + 선 하나로 이어진 카드만 밝게 */
+.vue-flow__node{transition:opacity .15s}
+.vue-flow__node.dim{opacity:.25}
+.vue-flow__node.act .card{box-shadow:0 0 0 3px var(--primary-text),var(--shadow-pop)}
+.vue-flow__node.rel .card{box-shadow:0 0 0 2px color-mix(in srgb,var(--primary-text) 45%,transparent),var(--shadow)}
+.vue-flow__edge{transition:opacity .15s}
+.vue-flow__edge.dim{opacity:.12}
+.vue-flow__edge.hot .vue-flow__edge-path{stroke-width:3!important;opacity:1}
+/* 비교 원본선: 평소 움직이지 않는 얇은 회색선, 고른 카드에 닿을 때만 보라·움직임 */
+.vue-flow__edge.src .vue-flow__edge-path{stroke:var(--line-2);stroke-width:1.2;opacity:1}
+.vue-flow__edge.src.hot .vue-flow__edge-path{stroke:var(--primary-text)}
+/* 범례 = 선 종류 토글 */
+.legend button{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 6px;border-radius:999px;font-size:12px;color:var(--t-sub)}
+.legend button:hover{background:var(--hover)}
+.legend button[aria-pressed="false"]{opacity:.4}
+.legend i.src{background:var(--line-2)}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}

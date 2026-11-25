@@ -24,26 +24,44 @@ const rp = ref("context");  // 오른쪽 패널 탭
 const rpOpen = ref(true);  // 오른쪽 사이드바 열림 (기본 열림). 왼쪽 사이드바는 항상 열림
 const selLink = ref<string | null>(null);
 
-// 캔버스 상태 → Vue Flow 노드/엣지 (좌표는 store가 원본)
-const nodes = computed<Node[]>(() => cv.cards.map((c) => ({ id: c.id, type: c.kind, position: { x: c.x, y: c.y },
-  data: { cardId: c.id }, dragHandle: ".drag-handle" })));
+// 카드를 고르면 그 카드와 선 하나로 이어진 카드만 밝게, 나머지 카드·선은 흐리게 (빈 곳 클릭·Esc로 해제)
+const active = ref<string | null>(null);
+// 선 종류별 보이기 (범례 칩). "같은 개념" 자동 점선은 기본 꺼짐: 카드를 고르면 그 카드에 닿는 것만 보임
+const SRC_KIND = "비교 원본", AUTO_KIND = "같은 개념";
+const KINDS = [...RELS, SRC_KIND, AUTO_KIND];
+const shown = ref(new Set<string>(KINDS.filter((k) => k !== AUTO_KIND)));
+function toggleKind(k: string) { const s = new Set(shown.value); s.has(k) ? s.delete(k) : s.add(k); shown.value = s; }
+
 const REL_COLOR: Record<string, string> = { 근거: "var(--green)", 설명: "var(--primary-text)", 반박: "var(--red)", 관련: "var(--t-cap)" };
 const name = (t: string) => api.analysis.tag_names[t] ?? t;
-const edges = computed<Edge[]>(() => {
+// 세 종류 선을 모두 만든 원본 목록 (data.kind로 구분). 화면에는 아래 edges에서 걸러 보여 준다
+const allEdges = computed<Edge[]>(() => {
   const out: Edge[] = cv.cards.flatMap((c) => c.kind === "compare"
-    ? c.sources.map((s) => ({ id: `${s}-${c.id}`, source: s, target: c.id, animated: true, selectable: false }))
-    : c.kind === "chart" ? [{ id: `${c.compareId}-${c.id}`, source: c.compareId, target: c.id, animated: true, selectable: false }] : []);
-  for (const l of cv.links) out.push({ id: l.id, source: l.source, target: l.target, label: l.rel, markerEnd: MarkerType.ArrowClosed,
-    class: { sel: selLink.value === l.id }, style: { stroke: REL_COLOR[l.rel], strokeWidth: 2, opacity: 1 }, labelBgPadding: [6, 3], labelBgBorderRadius: 6 });
-  // 온톨로지 자동 연결: 문서 카드와 공시 표 카드가 같은 개념(태그)을 가지면 점선으로 잇는다
+    ? c.sources.map((s) => ({ id: `${s}-${c.id}`, source: s, target: c.id, selectable: false, class: "src", data: { kind: SRC_KIND } }))
+    : c.kind === "chart" ? [{ id: `${c.compareId}-${c.id}`, source: c.compareId, target: c.id, selectable: false, class: "src", data: { kind: SRC_KIND } }] : []);
+  for (const l of cv.links) out.push({ id: l.id, source: l.source, target: l.target, label: l.rel, markerEnd: MarkerType.ArrowClosed, data: { kind: l.rel },
+    class: selLink.value === l.id ? "sel" : "", style: { stroke: REL_COLOR[l.rel], strokeWidth: 2, opacity: 1 }, labelBgPadding: [6, 3], labelBgBorderRadius: 6 });
+  // 온톨로지 자동 연결: 문서 카드와 공시 표 카드가 같은 개념(태그)을 가지면 점선으로 잇는다. 라벨은 개념 이름만
   const linked = new Set(cv.links.flatMap((l) => [l.source + l.target, l.target + l.source]));
   for (const d of cv.cards.filter((c) => c.kind === "doc")) for (const t of cv.cards.filter((c) => c.kind === "table")) {
     const shared = (cv.tags[d.id] ?? []).filter((x) => (cv.tags[t.id] ?? []).includes(x));
     if (shared.length && !linked.has(d.id + t.id)) out.push({ id: `auto-${d.id}-${t.id}`, source: d.id, target: t.id, selectable: false,
-      label: "같은 개념: " + shared.map(name).join(", "), class: "auto" });
+      label: shared.map(name).join(", "), class: "auto", data: { kind: AUTO_KIND } });
   }
   return out;
 });
+const touches = (e: Edge) => e.source === active.value || e.target === active.value;
+const related = computed(() => active.value ? new Set(allEdges.value.filter(touches).flatMap((e) => [e.source, e.target])) : null);
+const edges = computed<Edge[]>(() => allEdges.value.flatMap((e) => {
+  const k = e.data.kind, hot = !!active.value && touches(e);
+  if (k === AUTO_KIND ? !(shown.value.has(k) || hot) : !shown.value.has(k)) return [];
+  const cls = [e.class, active.value ? (hot ? "hot" : "dim") : ""].filter(Boolean).join(" ");
+  return [{ ...e, class: cls, animated: k === SRC_KIND && hot, label: k === AUTO_KIND && !hot ? undefined : e.label }];
+}));
+// 캔버스 상태 → Vue Flow 노드 (좌표는 store가 원본). 하이라이트 class: act(고른 카드) / rel(이어진 카드) / dim
+const nodes = computed<Node[]>(() => cv.cards.map((c) => ({ id: c.id, type: c.kind, position: { x: c.x, y: c.y },
+  data: { cardId: c.id }, dragHandle: ".drag-handle",
+  class: !related.value ? "" : c.id === active.value ? "act" : related.value.has(c.id) ? "rel" : "dim" })));
 const onDragStop = (e: NodeDragEvent) => cv.move(e.node.id, e.node.position.x, e.node.position.y);
 flow.onConnect((c) => cv.addLink(c.source, c.target));
 const onEdgeClick = ({ edge }: EdgeMouseEvent) => { if (cv.links.some((l) => l.id === edge.id)) selLink.value = edge.id; };
@@ -105,7 +123,7 @@ function focusCite(c: string) {
   if (id) focusCard(id);
 }
 function focusCard(id: string) {
-  cv.focus = id;
+  cv.focus = id; active.value = id;
   flow.fitView({ nodes: [id], padding: 0.6, duration: 300, maxZoom: 1.1 });
   setTimeout(() => { if (cv.focus === id) cv.focus = null; }, 2000);
 }
@@ -160,7 +178,7 @@ function clearAll() { if (cv.cards.length && confirm("캔버스의 카드를 모
 const zoom = computed(() => Math.round(flow.viewport.value.zoom * 100));
 const key = (e: KeyboardEvent) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); srcOpen.value = !srcOpen.value; }
-  if (e.key === "Escape") { if (srcOpen.value) srcOpen.value = false; else selLink.value = null; }
+  if (e.key === "Escape") { if (srcOpen.value) srcOpen.value = false; else { selLink.value = null; active.value = null; } }
 };
 // 다른 캔버스(세션)를 열면 화면을 그 캔버스에 맞춘다
 watch(() => cv.canvasId, () => setTimeout(() => flow.fitView({ padding: 0.1, duration: 300 }), 300));
@@ -191,7 +209,7 @@ onUnmounted(() => window.removeEventListener("keydown", key));
     <LeftPanel @focus="focusCard" />
     <div class="flow-wrap" @dragover.prevent @drop.prevent="onDrop">
       <VueFlow id="canvas" class="flow" :nodes="nodes" :edges="edges" :min-zoom="0.2" :max-zoom="2" :default-edge-options="{ type: 'default' }"
-        @node-drag-stop="onDragStop" @edge-click="onEdgeClick" @pane-click="selLink = null">
+        @node-drag-stop="onDragStop" @edge-click="onEdgeClick" @node-click="({ node }) => (active = node.id)" @pane-click="selLink = null; active = null">
         <template #node-table="p"><TableNode v-bind="p" /></template>
         <template #node-compare="p"><CompareNode v-bind="p" /></template>
         <template #node-doc="p"><DocNode v-bind="p" /></template>
@@ -210,7 +228,8 @@ onUnmounted(() => window.removeEventListener("keydown", key));
           <button aria-label="닫기" @click="selLink = null">✕</button>
         </Panel>
         <Panel position="bottom-left" class="legend">
-          <span v-for="r in RELS" :key="r"><i :style="{ background: REL_COLOR[r] }" />{{ r }}</span><span><i class="dash" />같은 개념(자동)</span>
+          <button v-for="k in KINDS" :key="k" :aria-pressed="shown.has(k)" :title="shown.has(k) ? k + ' 선 숨기기' : k + ' 선 보이기'" @click="toggleKind(k)">
+            <i :class="{ dash: k === AUTO_KIND, src: k === SRC_KIND }" :style="REL_COLOR[k] ? { background: REL_COLOR[k] } : {}" />{{ k === AUTO_KIND ? "같은 개념(자동)" : k }}</button>
           <small v-if="cv.lastChangedLayer" class="layer">마지막 조작이 바꾼 프롬프트 층: {{ cv.lastChangedLayer }}</small>
         </Panel>
         <!-- 캔버스 도구: 확대·축소 버튼처럼 오른쪽 위에 띄움 -->

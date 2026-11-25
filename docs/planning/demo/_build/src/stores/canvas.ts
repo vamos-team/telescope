@@ -16,17 +16,18 @@ export type Card = TableCard | CompareCard | DocCard | MemoCard | ChartCard;
 export interface Link { id: string; source: string; target: string; rel: string }
 export const RELS = ["근거", "설명", "반박", "관련"];
 // 팀 공유 목업: 같은 캔버스를 보는 팀원. 실제 서비스에서는 로그인 사용자와 이벤트 로그의 작성자
-// 로그인: 사용자를 고르면 그 사람의 부서 캔버스를 같은 부서 사람들과 함께 보고 고친다 (목업. 실제 서비스는 사내 SSO)
+// 로그인: 사번 + 비밀번호(목업이라 아무 값이나 통과). 들어가면 그 사람의 부서 캔버스를 같은 부서 사람들과 함께 보고 고친다 (실제 서비스는 사내 SSO)
 // 부서는 기획서 1장의 사업 조직
 export const DEPTS = ["네트워크센터", "AIDC사업본부", "세일즈마케팅본부", "프로덕트브랜드본부"];
 export const ALL_MEMBERS = [
-  { name: "이재무", dept: "네트워크센터", job: "재무기획" }, { name: "박망", dept: "네트워크센터", job: "네트워크 기술" },
-  { name: "김센터", dept: "네트워크센터", job: "부서장" },
-  { name: "최예산", dept: "AIDC사업본부", job: "재무기획" }, { name: "정데이터", dept: "AIDC사업본부", job: "AIDC 사업" },
-  { name: "한본부", dept: "AIDC사업본부", job: "부서장" },
-  { name: "오마케", dept: "세일즈마케팅본부", job: "재무기획" }, { name: "윤영업", dept: "세일즈마케팅본부", job: "세일즈" },
-  { name: "서기획", dept: "프로덕트브랜드본부", job: "재무기획" }, { name: "강상품", dept: "프로덕트브랜드본부", job: "상품" }];
+  { id: "1001", name: "이재무", dept: "네트워크센터", job: "재무기획" }, { id: "1002", name: "박망", dept: "네트워크센터", job: "네트워크 기술" },
+  { id: "1003", name: "김센터", dept: "네트워크센터", job: "부서장" },
+  { id: "2001", name: "최예산", dept: "AIDC사업본부", job: "재무기획" }, { id: "2002", name: "정데이터", dept: "AIDC사업본부", job: "AIDC 사업" },
+  { id: "2003", name: "한본부", dept: "AIDC사업본부", job: "부서장" },
+  { id: "3001", name: "오마케", dept: "세일즈마케팅본부", job: "재무기획" }, { id: "3002", name: "윤영업", dept: "세일즈마케팅본부", job: "세일즈" },
+  { id: "4001", name: "서기획", dept: "프로덕트브랜드본부", job: "재무기획" }, { id: "4002", name: "강상품", dept: "프로덕트브랜드본부", job: "상품" }];
 export const memberOf = (name: string) => ALL_MEMBERS.find((m) => m.name === name);
+export const memberById = (id: string) => ALL_MEMBERS.find((m) => m.id === id.trim());
 export const who = (name: string) => { const m = memberOf(name); return m ? `${m.name} · ${m.dept} · ${m.job}` : name; };
 
 // 캔버스(세션) 저장: 카드·연결 스냅숏 + 서버로 보낸 이벤트 로그. 다시 열면 이벤트를 새 세션에 재생한다
@@ -56,7 +57,7 @@ export const useCanvas = defineStore("canvas", {
     author: ALL_MEMBERS[0].name,
     activity: [] as { author: string; text: string; time: string }[],
     focus: null as string | null,  // 근거 ID를 눌러 강조한 카드
-    user: null as { name: string; dept: string } | null,
+    user: null as { id: string; name: string; dept: string } | null,
     canvasId: "", canvasName: "",
     log: [] as CanvasEvent[],  // 이 캔버스에서 서버로 보낸 이벤트 전체 (저장·재생용)
     saved: 0,  // 저장할 때마다 올려 목록을 다시 읽게 함
@@ -88,15 +89,15 @@ export const useCanvas = defineStore("canvas", {
       if (res.first_changed_layer && res.first_changed_layer <= "L2_workspace") api.warmup(this.sessionId).catch(() => {});
       this.save();
     },
-    login(name: string) {
-      const m = memberOf(name); if (!m) return;
-      this.user = { name, dept: m.dept }; this.author = name;
+    login(id: string) {  // 사번으로 들어감. 없는 사번이면 false
+      const m = memberById(id); if (!m) return false;
+      this.user = { id: m.id, name: m.name, dept: m.dept }; this.author = m.name;
       try { sessionStorage.setItem(KEY + ":user", JSON.stringify(this.user)); } catch { /* 무시 */ }
       const first = this.canvases[0];
       return first ? this.open(first.id) : this.newCanvas();
     },
     logout() { this.save(); this.user = null; try { sessionStorage.removeItem(KEY + ":user"); } catch { /* 무시 */ } },
-    restoreUser() { try { const u = JSON.parse(sessionStorage.getItem(KEY + ":user") ?? "null"); if (u) return this.login(u.name); } catch { /* 무시 */ } },
+    restoreUser() { try { const u = JSON.parse(sessionStorage.getItem(KEY + ":user") ?? "null"); if (u?.id) return this.login(u.id); } catch { /* 무시 */ } },
     save() {
       if (!this.canvasId || !this.user) return;
       const all = readAll(), prev = all[this.canvasId]?.meta;
