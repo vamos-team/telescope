@@ -100,6 +100,7 @@ function apply(w: Workspace, e: CanvasEvent) {
   const n = (x: unknown) => x as number, ns = (x: unknown) => x as number[];
   switch (e.type) {
     case "add_card": {
+      if (!TABLES.has(e.table_id as string)) break;  // 데이터를 다시 만든 뒤 남은 옛 표 ID 등은 무시
       const cols = [...ns(e.cols)].sort((a, b) => a - b);
       w.cards.set(e.card_id as string, { card_id: e.card_id as string, kind: "table", seq: w.seq, table_id: e.table_id as string,
         rows: [...new Set(ns(e.rows))].sort((a, b) => a - b), cols, vcol: cols[0] ?? null, edits: {}, sort: null, sources: [] });
@@ -177,14 +178,16 @@ export function compare(sid: string, cardId: string): CompareResult {
   const used = G.map(() => new Set<string>());
   const lines: CompareLine[] = [];
   for (const c of CONCEPTS) {
+    const hit = G.map(() => [] as string[]);  // 이 개념에 걸린 행. 대응을 채택했을 때만 used로 확정 (채택 안 하면 "대응 없음"에 남김)
     const vals = G.map((g, gi) => {
       const ms = c.members[g.company] ?? [];
       const parts = ms.map((m) => find(g, m)).filter((p): p is Part => !!p);
       for (const [card, t] of g.cards) for (const r of card.rows)
-        if (ms.some((m) => alts(m).some((x) => memberMatches(x, t, r)))) used[gi].add(`${card.card_id}|${r}`);
+        if (ms.some((m) => alts(m).some((x) => memberMatches(x, t, r)))) hit[gi].push(`${card.card_id}|${r}`);
       return parts.length ? parts : null;
     });
     if (vals.filter(Boolean).length < (G.length > 1 ? 2 : 1)) continue;
+    hit.forEach((ks, gi) => ks.forEach((k) => used[gi].add(k)));
     const labels = new Set(vals.filter(Boolean).map((ps) => norm(ps![0].label.split("(")[0])));
     const same = vals.every((ps) => !ps || ps.length === 1) && labels.size === 1;
     lines.push({ label: c.name, why: same ? "동일 계정명" : "대응 사전", values: vals, concept_id: c.id, note: c.note ?? null });
@@ -289,9 +292,9 @@ export function evidence(sid: string): Evidence[] {
     if (c.kind === "table") {
       const t = table(c.table_id!), col = c.vcol ?? c.cols[0];
       for (const r of c.rows) for (const tag of rowTags(t, r)) {
-        const v = value(c, t, r, col);
+        const v = value(c, t, r, col), edited = `${r},${col}` in c.edits;  // 편집 레이어 값은 원본 공시와 구분
         out.push({ tag, company: t.company, label: t.rows[r].label, value: v == null ? null : +(v * UNIT_TO_BIL[t.unit]).toFixed(1), unit: "십억원",
-          period: t.cols[col], cite: cellId(t, r, col), card_id: c.card_id, source: "공시" });
+          period: t.cols[col], cite: cellId(t, r, col), card_id: c.card_id, source: "공시", edited });
       }
     } else if (c.kind === "doc" && docs.has(c.doc_id!)) {
       const d = docs.get(c.doc_id!)!;

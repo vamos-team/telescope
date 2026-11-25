@@ -17,14 +17,17 @@ const task = computed(() => `${del.value.name} 초안을 작성하세요. 목적
   + "섹션마다 캔버스 근거를 인용하고, 근거가 없는 항목은 \"근거 부족\"으로 적습니다." + (extra.value.trim() ? `\n추가 요청: ${extra.value.trim()}` : ""));
 
 const ctx = ref<Context | null>(null), dr = ref<Draft | null>(null), qs = ref<Question[] | null>(null);
-const at = ref({ ctx: -1, dr: -1, qs: -1 });  // 생성 당시 활동 수. 캔버스가 바뀌면 다시 만들라고 알림
-const stale = (k: "ctx" | "dr" | "qs") => at.value[k] >= 0 && at.value[k] !== cv.activity.length;
+// 생성 당시의 근거 버전(cv.rev: 기간 선택·행 제거 등 근거에 닿는 조작마다 오름)과 요청 조건. 달라지면 다시 만들라고 알림
+// 프롬프트는 결과물 유형·추가 요청(task), 초안은 결과물 유형까지 조건에 넣음
+const sig = { ctx: () => `${cv.rev}|${task.value}`, dr: () => `${cv.rev}|${kind.value}`, qs: () => `${cv.rev}` };
+const at = ref({ ctx: "", dr: "", qs: "" });
+const stale = (k: "ctx" | "dr" | "qs") => !!at.value[k] && at.value[k] !== sig[k]();
 const copied = ref("");
 
-async function extract() { await cv.flush(); ctx.value = await api.context(cv.sessionId, task.value); at.value.ctx = cv.activity.length; }
+async function extract() { await cv.flush(); ctx.value = await api.context(cv.sessionId, task.value); at.value.ctx = sig.ctx(); }
 async function ev(): Promise<Evidence[]> { await cv.flush(); return api.evidence(cv.sessionId); }
-async function genDraft() { dr.value = makeDraft(A, await ev(), kind.value); at.value.dr = cv.activity.length; }
-async function genQs() { qs.value = makeQuestions(A, await ev()); at.value.qs = cv.activity.length; }
+async function genDraft() { dr.value = makeDraft(A, await ev(), kind.value); at.value.dr = sig.dr(); }
+async function genQs() { qs.value = makeQuestions(A, await ev()); at.value.qs = sig.qs(); }
 const result = computed(() => qs.value ? evaluate(A, qs.value, dr.value) : null);
 
 async function copy(what: "text" | "json" | "md") {

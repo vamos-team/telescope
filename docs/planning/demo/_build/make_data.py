@@ -1,15 +1,21 @@
 """정적 HTML용 데이터 생성: ../data (manifest.json + DART XML + CSV) + 개념 사전 → src/local/data.json.
 
-파싱은 _template/backend의 parse_filing / table_from_csv를 그대로 쓴다.
-실행: ../../_template/backend/.venv/bin/python make_data.py
+파싱은 Python 백엔드 템플릿(_template/backend)의 parse_filing / table_from_csv를 그대로 쓴다.
+이 템플릿은 telescope 저장소에 없으므로 경로를 TEMPLATE_BACKEND로 넘긴다 (README 7장).
+실행: TEMPLATE_BACKEND=<템플릿>/backend <템플릿>/backend/.venv/bin/python make_data.py
 """
 import json
+import os
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
 DATA = HERE.parent / "data"
-BACK = HERE.parents[1] / "_template/backend"
+BACK = Path(os.environ.get("TEMPLATE_BACKEND", HERE.parents[1] / "_template/backend"))
+if not (BACK / "app/ingest/dart_xml.py").exists():
+    sys.exit(f"Python 백엔드 템플릿을 찾지 못했습니다: {BACK}\n"
+             "TEMPLATE_BACKEND에 템플릿의 backend 폴더 경로를 넣어 실행하세요 (README 7장). "
+             "화면만 고쳤다면 이 단계 없이 npm run build만 하면 됩니다.")
 sys.path.insert(0, str(BACK))
 
 import yaml  # noqa: E402

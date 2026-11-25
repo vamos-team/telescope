@@ -12,6 +12,7 @@ const sel = ref(new Set<number>()); const cols = ref(new Set<number>());
 let anchor: number | null = null, dragging = false, mode = true, base = new Set<number>();
 
 watch(() => props.tableId, async (id) => {
+  anchor = null;  // 이전 표의 Shift+클릭 기준 행이 남지 않게
   if (!id) { t.value = null; return; }
   t.value = await api.table(id);
   const card = props.cardId ? cv.cards.find((c) => c.id === props.cardId) as TableCard : null;

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 캔버스 위 원본 슬라이스 카드. 원본 값은 store의 SourceTable, 편집은 card.edits 레이어.
 import { Handle, Position } from "@vue-flow/core";
-import { computed, ref, onMounted } from "vue";
+import { computed, ref, watch } from "vue";
 import { api, UNIT_TO_BIL, type SourceTable } from "../../api";
 import { useCanvas, type TableCard } from "../../stores/canvas";
 
@@ -9,7 +9,13 @@ const props = defineProps<{ data: { cardId: string } }>();
 const cv = useCanvas();
 const card = computed(() => cv.cards.find((c) => c.id === props.data.cardId) as TableCard);
 const t = ref<SourceTable | null>(null);
-onMounted(async () => { t.value = await api.table(card.value.tableId); });
+// 캔버스를 바꾸면 같은 카드 ID에 다른 표가 올 수 있어 tableId를 감시해 다시 읽음. 늦게 온 이전 응답은 버림
+watch(() => card.value?.tableId, async (id) => {
+  t.value = null;
+  if (!id) return;
+  const loaded = await api.table(id);
+  if (card.value?.tableId === id) t.value = loaded;
+}, { immediate: true });
 
 const val = (r: number, c: number) => {
   const k = `${r},${c}`;
@@ -38,6 +44,7 @@ const fmt = (v: number | null | undefined) => {
 const noteId = (n: string) => api.noteTable(t.value!.rcept_no, n);
 function edit(r: number, c: number, e: Event) {
   const s = (e.target as HTMLElement).innerText.trim();
+  if (s === fmt(val(r, c))) return;  // 포커스만 두었다 벗어나면 저장하지 않음 (표시용 반올림이 원본을 바꾸지 않게)
   const neg = /^\(.*\)$/.test(s) || s.startsWith("-");
   const n = s ? parseFloat(s.replace(/[(),\s-]/g, "")) : null;
   if (n === null || !Number.isNaN(n)) cv.editCell(card.value.id, r, c, n === null ? null : (neg ? -n : n) / factor.value);

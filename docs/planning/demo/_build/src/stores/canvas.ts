@@ -1,7 +1,7 @@
 // 캔버스 상태 + 이벤트 큐. 화면은 로컬 상태로 즉시 갱신하고, 이벤트는 묶어서 서버로 보낸다.
 // 서버가 이벤트 로그의 원본(source of truth)이며, 컨텍스트 층 해시를 돌려준다.
 import { defineStore } from "pinia";
-import { api, type CanvasEvent } from "../api";
+import { api, type CanvasEvent, type Doc } from "../api";
 
 export interface TableCard { id: string; kind: "table"; tableId: string; rows: number[]; cols: number[];
   vcol: number; edits: Record<string, number | null>; sort: { key: string | number; desc: boolean } | null;
@@ -33,7 +33,8 @@ export const who = (name: string) => { const m = memberOf(name); return m ? `${m
 // 캔버스(세션) 저장: 카드·연결 스냅숏 + 서버로 보낸 이벤트 로그. 다시 열면 이벤트를 새 세션에 재생한다
 // ponytail: localStorage(같은 브라우저 안에서만 공유). 실제 서비스는 서버 이벤트 저장소
 export interface CanvasMeta { id: string; name: string; dept: string; owner: string; updated: string; updatedBy: string; count: number }
-interface Saved { meta: CanvasMeta; cards: Card[]; links: Link[]; seq: number; activity: { author: string; text: string; time: string }[]; log: CanvasEvent[] }
+// uploads: 이 캔버스 카드가 쓰는 업로드 문서(파서 요약본). 새로고침 뒤 같은 ID로 다시 등록해 카드가 사라지지 않게 함
+interface Saved { meta: CanvasMeta; cards: Card[]; links: Link[]; seq: number; activity: { author: string; text: string; time: string }[]; log: CanvasEvent[]; uploads?: Doc[] }
 const KEY = "telescope-canvas:v1";
 const readAll = (): Record<string, Saved> => { try { return JSON.parse(localStorage.getItem(KEY) ?? "{}"); } catch { return {}; } };
 const writeAll = (all: Record<string, Saved>) => { try { localStorage.setItem(KEY, JSON.stringify(all)); } catch { /* 저장 불가(사생활 보호 모드 등): 화면에서만 유지 */ } };
@@ -61,6 +62,8 @@ export const useCanvas = defineStore("canvas", {
     canvasId: "", canvasName: "",
     log: [] as CanvasEvent[],  // 이 캔버스에서 서버로 보낸 이벤트 전체 (저장·재생용)
     saved: 0,  // 저장할 때마다 올려 목록을 다시 읽게 함
+    rev: 0,  // 근거에 영향을 주는 조작마다 오름 (결과 패널의 "다시 생성" 안내 기준)
+    error: "",  // 이벤트 반영·캔버스 복원 실패 안내
   }),
   getters: {
     members: (s) => ALL_MEMBERS.filter((m) => m.dept === s.user?.dept),
@@ -71,18 +74,27 @@ export const useCanvas = defineStore("canvas", {
   actions: {
     emit(e: CanvasEvent) {
       this.queue.push({ author: this.author, ...e });  // 예시 메모처럼 작성자를 지정한 이벤트는 그대로
+      if (e.type !== "move_card") this.rev++;
       if (ACT[e.type]) this.activity.unshift({ author: this.author, text: ACT[e.type] + (e.card_id ? ` (${e.card_id})` : ""),
         time: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) });
       clearTimeout(this.timer);
-      this.timer = window.setTimeout(() => this.flush(), 150); // 드래그 등 연속 조작은 묶어서 전송
+      this.timer = window.setTimeout(() => { this.flush().catch((err) => console.error(err)); }, 150); // 드래그 등 연속 조작은 묶어서 전송
     },
     async flush() {
       if (!this.queue.length) return;
       const batch = this.queue.splice(0);
-      this.log.push(...batch.filter((e) => e.type !== "move_card"));
-      const res = await api.postEvents(this.sessionId, batch);
+      let res;
+      try {
+        res = await api.postEvents(this.sessionId, batch);
+      } catch (err) {  // 반영 못 한 조작은 저장 로그에 넣지 않고 큐 앞에 되돌려 다음 전송 때 다시 보냄
+        console.error("이벤트 반영 실패", err);
+        this.queue.unshift(...batch);
+        this.error = "조작을 반영하지 못했습니다. 새로고침 후 다시 시도하세요.";
+        return;
+      }
+      this.log.push(...batch.filter((e) => e.type !== "move_card"));  // 서버가 받은 조작만 저장·재생 로그로
+      this.tags = await api.cardTags(this.sessionId).catch(() => this.tags);
       this.lastChangedLayer = res.first_changed_layer;
-      this.tags = await api.cardTags(this.sessionId);
       // 비교 카드는 서버 계산 결과를 다시 받아야 하므로 버전을 올린다
       for (const c of this.cards) if (c.kind === "compare") c.version++;
       // 카드 구성이 바뀌었으면 다음 질문에 대비해 prefix를 미리 채운다
@@ -96,18 +108,23 @@ export const useCanvas = defineStore("canvas", {
       const first = this.canvases[0];
       return first ? this.open(first.id) : this.newCanvas();
     },
-    logout() { this.save(); this.user = null; try { sessionStorage.removeItem(KEY + ":user"); } catch { /* 무시 */ } },
+    async logout() {  // 대기 중인 조작을 지금 사용자 이름으로 저장한 뒤 캔버스 상태를 비움 (다음 사용자가 이전 캔버스를 덮어쓰지 않게)
+      await this.flush(); this.save();
+      this.reset(); this.canvasId = ""; this.canvasName = ""; this.user = null;
+      try { sessionStorage.removeItem(KEY + ":user"); } catch { /* 무시 */ }
+    },
     restoreUser() { try { const u = JSON.parse(sessionStorage.getItem(KEY + ":user") ?? "null"); if (u?.id) return this.login(u.id); } catch { /* 무시 */ } },
     save() {
       if (!this.canvasId || !this.user) return;
       const all = readAll(), prev = all[this.canvasId]?.meta;
       all[this.canvasId] = { meta: { id: this.canvasId, name: this.canvasName, dept: prev?.dept ?? this.user.dept, owner: prev?.owner ?? this.author,
         updated: now(), updatedBy: this.author, count: this.cards.length },
-        cards: JSON.parse(JSON.stringify(this.cards)), links: this.links, seq: this.seq, activity: this.activity.slice(0, 200), log: this.log };
+        cards: JSON.parse(JSON.stringify(this.cards)), links: this.links, seq: this.seq, activity: this.activity.slice(0, 200), log: this.log,
+        uploads: this.cards.flatMap((c) => { const d = c.kind === "doc" ? api.docs.get(c.docId) : undefined; return d?.uploaded ? [d] : []; }) };
       writeAll(all); this.saved++;
     },
     reset() {
-      clearTimeout(this.timer); this.queue = [];
+      clearTimeout(this.timer); this.queue = []; this.error = "";
       Object.assign(this, { sessionId: crypto.randomUUID(), cards: [], links: [], tags: {}, activity: [], log: [], seq: 0, lastChangedLayer: null, focus: null });
       this.overlay = { tableId: null, match: [], cardId: null };
     },
@@ -123,9 +140,15 @@ export const useCanvas = defineStore("canvas", {
       const x = readAll()[id]; if (!x) return;
       this.reset();
       this.canvasId = id; this.canvasName = x.meta.name;
+      for (const d of x.uploads ?? []) if (!api.docs.has(d.id)) api.registerDoc(d);  // 업로드 문서를 같은 ID로 다시 등록 (카드보다 먼저)
       Object.assign(this, { cards: x.cards, links: x.links, seq: x.seq, activity: x.activity, log: x.log });
-      if (x.log.length) await api.postEvents(this.sessionId, x.log);  // 새 세션에 이벤트 재생 → 서버 상태 복원
-      this.tags = await api.cardTags(this.sessionId);
+      try {
+        if (x.log.length) await api.postEvents(this.sessionId, x.log);  // 새 세션에 이벤트 재생 → 서버 상태 복원
+        this.tags = await api.cardTags(this.sessionId);
+      } catch (err) {
+        console.error("캔버스 복원 실패", err);
+        this.error = `'${x.meta.name}' 캔버스 일부를 복원하지 못했습니다. 자료가 바뀌었을 수 있습니다.`;
+      }
       for (const c of this.cards) if (c.kind === "compare") c.version++;
     },
     rename(name: string) { this.canvasName = name.trim() || "제목 없는 캔버스"; this.save(); },

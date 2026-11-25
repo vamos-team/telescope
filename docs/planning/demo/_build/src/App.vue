@@ -62,7 +62,8 @@ const edges = computed<Edge[]>(() => allEdges.value.flatMap((e) => {
 const nodes = computed<Node[]>(() => cv.cards.map((c) => ({ id: c.id, type: c.kind, position: { x: c.x, y: c.y },
   data: { cardId: c.id }, dragHandle: ".drag-handle",
   class: !related.value ? "" : c.id === active.value ? "act" : related.value.has(c.id) ? "rel" : "dim" })));
-const onDragStop = (e: NodeDragEvent) => cv.move(e.node.id, e.node.position.x, e.node.position.y);
+// 여러 카드를 함께 끌어도 모든 카드의 좌표를 저장 (e.nodes에 끈 카드 전부)
+const onDragStop = (e: NodeDragEvent) => { for (const n of e.nodes) cv.move(n.id, n.position.x, n.position.y); };
 flow.onConnect((c) => cv.addLink(c.source, c.target));
 const onEdgeClick = ({ edge }: EdgeMouseEvent) => { if (cv.links.some((l) => l.id === edge.id)) selLink.value = edge.id; };
 const link = computed(() => cv.links.find((l) => l.id === selLink.value) ?? null);
@@ -208,7 +209,7 @@ onUnmounted(() => window.removeEventListener("keydown", key));
   <div class="main">
     <LeftPanel @focus="focusCard" />
     <div class="flow-wrap" @dragover.prevent @drop.prevent="onDrop">
-      <VueFlow id="canvas" class="flow" :nodes="nodes" :edges="edges" :min-zoom="0.2" :max-zoom="2" :default-edge-options="{ type: 'default' }"
+      <VueFlow id="canvas" class="flow" :nodes="nodes" :edges="edges" :min-zoom="0.2" :max-zoom="2" :default-edge-options="{ type: 'default' }" :delete-key-code="null"
         @node-drag-stop="onDragStop" @edge-click="onEdgeClick" @node-click="({ node }) => (active = node.id)" @pane-click="selLink = null; active = null">
         <template #node-table="p"><TableNode v-bind="p" /></template>
         <template #node-compare="p"><CompareNode v-bind="p" /></template>
@@ -219,6 +220,9 @@ onUnmounted(() => window.removeEventListener("keydown", key));
           <b>자료를 캔버스에 올리세요</b>
           <span>상단 + 자료 추가(⌘K)에서 공시 표, IR·뉴스 인사이트, 사내 자료를 찾아 올리고, 카드 오른쪽 점을 다른 카드로 끌어 관계를 잇습니다. 예시도 거기서 불러옵니다.</span>
           <button class="line" @click="srcOpen = true">+ 자료 추가</button>
+        </Panel>
+        <Panel v-if="cv.error" position="top-center" class="linkbar err-bar" role="alert">
+          <span>{{ cv.error }}</span><button @click="cv.error = ''">닫기</button>
         </Panel>
         <Panel v-if="link" position="top-center" class="linkbar">
           <span>{{ cardName(link.source) }} → {{ cardName(link.target) }}</span>
@@ -248,7 +252,8 @@ onUnmounted(() => window.removeEventListener("keydown", key));
         </Panel>
       </VueFlow>
     </div>
-    <ResultPanel v-if="rpOpen" :tab="rp" @tab="(t) => (rp = t)" @cite="focusCite" />
+    <!-- 닫아도 결과·입력이 남도록 v-show, 캔버스가 바뀌면 key로 새로 만들어 다른 캔버스 결과가 섞이지 않게 -->
+    <ResultPanel v-show="rpOpen" :key="cv.canvasId" :tab="rp" @tab="(t) => (rp = t)" @cite="focusCite" />
   </div>
   <SourceModal :open="srcOpen" @close="srcOpen = false" @pick="onPick" @add-table="addFound"
     @add-doc="(id) => cv.addDocCard(id, nextPos())" @add-compare="addCompare"

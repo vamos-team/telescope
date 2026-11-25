@@ -26,4 +26,12 @@ const KIND = { ir: "IR", news: "뉴스", internal: "사내 자료" };
     <footer><span class="tags"><span v-for="t in d.tags" :key="t" class="tag">{{ api.analysis.tag_names[t] ?? t }}</span></span>
       <a v-if="d.url" class="nodrag" :href="d.url" target="_blank" rel="noopener">출처 열기</a><span v-else>사내 보관</span></footer>
   </section>
+  <!-- 문서를 찾을 수 없을 때(예: 지난 데이터의 자료)도 카드를 숨기지 않고 상태를 보여 줌 -->
+  <section v-else-if="card" class="card doc missing" :class="{ focus: cv.focus === card.id }">
+    <Handle type="target" :position="Position.Left" /><Handle type="source" :position="Position.Right" />
+    <header class="drag-handle"><span class="kind">자료 없음</span>
+      <div class="t"><b>자료를 찾을 수 없습니다</b><small>{{ card.docId }}</small></div>
+      <button class="nodrag" @click="cv.remove(card.id)" aria-label="카드 닫기">✕</button></header>
+    <p class="sum">이 카드가 가리키는 자료가 지금 데이터에 없습니다. 자료를 다시 올리거나 카드를 지우세요.</p>
+  </section>
 </template>

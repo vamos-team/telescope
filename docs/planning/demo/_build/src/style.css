@@ -655,4 +655,7 @@ table.g.facts tr.b td{font-weight:700;color:var(--t-strong);background:var(--pri
 .legend button[aria-pressed="false"]{opacity:.4}
 .legend i.src{background:var(--line-2)}
 
+.card.doc.missing{border-top-color:var(--red)}
+.card.doc.missing .sum{color:var(--t-sub)}
+
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
