@@ -8,6 +8,8 @@
 flowchart LR
   subgraph FE["화면 (Vue)"]
     L[로그인]
+    H[캔버스 홈]
+    SH[공유 창]
     T[탭 줄 · 왼쪽 사이드바]
     C[캔버스 카드]
     S[자료 추가]
@@ -15,8 +17,9 @@ flowchart LR
   end
 
   subgraph API["backend /api/v1"]
-    AU["/auth · /users · /departments"]
+    AU["/auth · /users"]
     CV["/canvases"]
+    SHR["/canvases/{id}/shares"]
     EV["/canvases/{id}/events"]
     CMP["/canvases/{id}/compares · card-tags"]
     FL["/filings · /insights"]
@@ -28,6 +31,9 @@ flowchart LR
   AI["ai 서비스<br/>/internal/v1/jobs"]
 
   L --> AU
+  H --> CV
+  SH --> AU
+  SH --> SHR
   T --> CV
   C --> EV
   C --> CMP
@@ -41,7 +47,7 @@ flowchart LR
   JB -- 상태 조회 --> AI
 ```
 
-## 2. 로그인과 캔버스 열기
+## 2. 로그인, 캔버스 홈, 캔버스 열기
 
 ```mermaid
 sequenceDiagram
@@ -52,18 +58,43 @@ sequenceDiagram
   U->>F: 사번 · 비밀번호
   F->>B: POST /auth/login
   B-->>F: accessToken, user
-  F->>B: GET /departments/{dept}/members
-  F->>B: GET /canvases
-  B-->>F: 부서 캔버스 목록 (최근 수정 순)
-  alt 캔버스가 있음
-    F->>B: GET /canvases/{id}
-    B-->>F: meta, cards, links, lastSeq
-  else 없음
+  F->>B: GET /canvases?filter=all
+  B-->>F: 볼 수 있는 캔버스 목록 (myRole, access, 미리보기)
+  Note over F: 캔버스 홈 (C00)
+  alt 타일 클릭
+    U->>F: 캔버스 고르기
+  else + 새 캔버스
     F->>B: POST /canvases
-    B-->>F: 새 캔버스
+    B-->>F: 새 캔버스 (소유자 = 나)
   end
+  F->>B: GET /canvases/{id}
+  B-->>F: meta(myRole), cards, links, lastSeq
+  Note over F: myRole이 view면 편집 도구를 숨김
   F->>B: GET /canvases/{id}/card-tags
   F->>B: GET /canvases/{id}/activities
+  F->>B: GET /canvases/{id}/shares
+```
+
+## 2-1. 공유 (C13)
+
+```mermaid
+sequenceDiagram
+  actor U as 소유자 · 편집자
+  participant F as 공유 창
+  participant B as backend
+
+  U->>F: 상단 바 공유
+  F->>B: GET /canvases/{id}/shares
+  B-->>F: ownerId, members, access, people
+  U->>F: 사번 · 이름 · 부서 입력
+  F->>B: GET /users?q=
+  B-->>F: 후보 (최대 6명)
+  U->>F: 후보 고르기 (편집 가능 · 보기 가능)
+  F->>B: PUT /canvases/{id}/shares
+  B-->>F: 바뀐 공유 상태
+  U->>F: 일반 액세스 바꾸기
+  F->>B: PUT /canvases/{id}/shares
+  Note over B: 초대받은 사람의 GET /canvases에 바로 나타남
 ```
 
 ## 3. 카드 조작 (이벤트 묶음 전송)
