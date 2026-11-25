@@ -1,24 +1,14 @@
 <script setup lang="ts">
-// 왼쪽 사이드바: 근거 데이터(캔버스에 올라간 자료) / 활동 로그 / 캔버스 목록(맨 위 오른쪽 아이콘, 팝업 없이 사이드바 안에서)
+// 왼쪽 사이드바: 근거 데이터(캔버스에 올라간 자료) / 활동 로그. 캔버스 목록은 캔버스 홈(탭 줄 맨 왼쪽)에서
 import { ref, computed } from "vue";
 import { api, docTitle } from "../api";
-import { useCanvas, memberOf, who } from "../stores/canvas";
+import { useCanvas, memberOf, who, ROLE } from "../stores/canvas";
 
 const emit = defineEmits<{ focus: [id: string] }>();
 const cv = useCanvas();
-const view = ref<"layers" | "log" | "pages">("layers");  // 근거 데이터 / 활동 로그 / 캔버스 목록
-const back = ref<"layers" | "log">("layers");  // 캔버스 목록을 닫으면 돌아갈 보기
+const view = ref<"layers" | "log">("layers");  // 근거 데이터 / 활동 로그
 const folded = ref(new Set<string>());  // 접은 데이터 유형
 function fold(g: string) { const s = new Set(folded.value); s.has(g) ? s.delete(g) : s.add(g); folded.value = s; }
-function togglePages() { if (view.value === "pages") view.value = back.value; else { back.value = view.value; view.value = "pages"; } }
-const editing = ref("");
-const vFocus = { mounted: (el: HTMLInputElement) => el.select() };
-const when = (iso: string) => {
-  const d = new Date(iso), m = Math.round((Date.now() - d.getTime()) / 60000);
-  return m < 1 ? "방금" : m < 60 ? `${m}분 전` : m < 1440 ? `${Math.round(m / 60)}시간 전` : d.toLocaleDateString("ko-KR");
-};
-function done(id: string, v: string) { if (id === cv.canvasId) cv.rename(v); editing.value = ""; }
-function del(id: string, name: string) { if (confirm(`'${name}' 캔버스를 지울까요? 부서원 모두에게서 지워집니다.`)) cv.removeCanvas(id); }
 const KIND = { ir: "IR", news: "뉴스", internal: "사내 자료" };
 const groups = computed(() => {
   const g: Record<string, { id: string; title: string; sub: string; co?: string }[]> = { "공시 표": [], "IR·뉴스": [], "사내 자료": [], "비교·시각화": [], "메모": [] };
@@ -36,36 +26,20 @@ const groups = computed(() => {
 <template>
   <aside class="lp" aria-label="캔버스와 근거 데이터">
     <div class="lphead">
-      <button class="sbx" :aria-pressed="view === 'pages'" title="캔버스 목록" aria-label="캔버스 목록" @click="togglePages">
-        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 5h10M7 10h10M7 15h10M3.5 5h.01M3.5 10h.01M3.5 15h.01" /></svg></button>
       <div class="lptabs tabs" role="tablist">
         <button role="tab" :aria-selected="view === 'layers'" @click="view = 'layers'">근거 데이터</button>
         <button role="tab" :aria-selected="view === 'log'" @click="view = 'log'">활동 로그</button>
       </div>
     </div>
 
-    <!-- 캔버스 목록: 맨 위 오른쪽 아이콘으로 열고 닫음 (팝업 없이 사이드바 안에서) -->
-    <section v-if="view === 'pages'" key="pages" class="pages slidein">
-      <div class="lh"><h2>{{ cv.user!.dept }} 캔버스</h2><small>{{ cv.canvases.length }}</small><button aria-label="새 캔버스" title="새 캔버스" @click="cv.newCanvas()">+</button></div>
-      <ul>
-        <li v-for="m in cv.canvases" :key="m.id" :aria-current="m.id === cv.canvasId">
-          <input v-if="editing === m.id" :value="m.name" aria-label="캔버스 이름" v-focus
-            @keydown.enter="done(m.id, ($event.target as HTMLInputElement).value)" @blur="done(m.id, ($event.target as HTMLInputElement).value)" />
-          <button v-else class="pg" @click="cv.open(m.id)" @dblclick="m.id === cv.canvasId && (editing = m.id)" :title="m.id === cv.canvasId ? '두 번 눌러 이름 바꾸기' : ''">
-            <b>{{ m.name }}</b><small>카드 {{ m.count }} · {{ m.updatedBy }} · {{ when(m.updated) }}</small></button>
-          <button class="x" :aria-label="m.name + ' 지우기'" @click="del(m.id, m.name)">✕</button>
-        </li>
-      </ul>
-    </section>
-
     <!-- 활동 로그: 누르면 사이드바 안에서 옆으로 밀려 들어옴 -->
-    <section v-else-if="view === 'log'" key="log" class="log-pane slidein">
-      <div class="lh"><h2>팀원</h2><small>{{ cv.members.length }}</small></div>
-      <ul class="mem"><li v-for="m in cv.members" :key="m.name"><span class="av" :data-me="m.name === cv.author">{{ m.name[0] }}</span>{{ m.name }}<small>{{ m.dept }} · {{ m.job }}</small></li></ul>
+    <section v-if="view === 'log'" key="log" class="log-pane slidein">
+      <div class="lh"><h2>이 캔버스 사람</h2><small>{{ cv.members.length }}</small></div>
+      <ul class="mem"><li v-for="m in cv.members" :key="m.id"><span class="av" :data-me="m.name === cv.author">{{ m.name[0] }}</span>{{ m.name }}<small>{{ m.dept }} · {{ m.job }} · {{ ROLE[m.role] }}</small></li></ul>
       <div class="lh"><h2>활동 기록</h2><small>{{ cv.activity.length }}</small></div>
       <p v-if="!cv.activity.length" class="none">아직 기록이 없습니다.</p>
       <ul class="log"><li v-for="(a, i) in cv.activity.slice(0, 80)" :key="i"><b :title="who(a.author)">{{ a.author }}</b> {{ a.text }}<small>{{ a.time }}</small></li></ul>
-      <p class="note">데모는 한 브라우저 안에서 작성자만 바꿔 보여 줍니다. 실제 서비스는 서버 이벤트 로그로 팀원 화면을 맞춥니다.</p>
+      <p class="note">데모는 한 브라우저 안에서 다른 사번으로 다시 로그인해 보여 줍니다. 실제 서비스는 서버 이벤트 로그로 화면을 맞춥니다.</p>
     </section>
 
 

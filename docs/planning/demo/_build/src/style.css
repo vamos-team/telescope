@@ -339,7 +339,7 @@ table.g.facts tr.b td{font-weight:700;color:var(--t-strong);background:var(--pri
 .lcard .sso{line-height:1.5}
 
 
-/* 왼쪽 패널: 부서 캔버스 / 근거 데이터 */
+/* 왼쪽 패널: 근거 데이터 / 활동 로그 */
 .lp{width:264px;flex:none;display:flex;flex-direction:column;background:var(--bg);border-right:1px solid var(--line);min-height:0}
 .lp .who{margin-top:auto;display:flex;align-items:center;gap:8px;padding:12px 14px;border-top:1px solid var(--line)}
 .lp .who div{display:grid;flex:1;min-width:0;line-height:1.3} .lp .who b{font-size:13.5px;color:var(--t-strong)}
@@ -347,7 +347,6 @@ table.g.facts tr.b td{font-weight:700;color:var(--t-strong);background:var(--pri
 .lp .lh{display:flex;align-items:center;gap:6px;padding:12px 14px 6px}
 .lp h2{margin:0;font-size:12.5px;font-weight:700;color:var(--t-strong)}
 .lp .lh button{margin-left:auto;width:24px;height:24px;border-radius:6px;font-weight:700;color:var(--t-sub)} .lp .lh button:hover{background:var(--hover)}
-.lp .pages{flex:1;overflow:auto;padding-bottom:8px}
 .lp ul{list-style:none;margin:0;padding:0 6px}
 .lp li{display:flex;align-items:center;border-radius:var(--r-sm)}
 .lp li:hover{background:var(--hover)} .lp li[aria-current="true"]{background:var(--primary-weak)}
@@ -627,11 +626,6 @@ table.g.facts tr.b td{font-weight:700;color:var(--t-strong);background:var(--pri
 /* 왼쪽 사이드바 맨 위: 전환 + 닫기 */
 .lphead{display:flex;align-items:center;gap:6px;margin:12px 10px 4px 12px;flex:none}
 .lphead .lptabs{margin:0;flex:1}
-.sbx{width:32px;height:32px;flex:none;display:grid;place-items:center;border-radius:8px;color:var(--t-sub)}
-.sbx:hover{background:var(--hover);color:var(--t-strong)}
-.sbx[aria-pressed="true"]{background:var(--primary-weak);color:var(--primary-text)}
-.sbx svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}
-.sbx svg path{stroke-linejoin:round}
 
 /* 카드 선택 하이라이트: 고른 카드 + 선 하나로 이어진 카드만 밝게 */
 .vue-flow__node{transition:opacity .15s}
@@ -654,3 +648,70 @@ table.g.facts tr.b td{font-weight:700;color:var(--t-strong);background:var(--pri
 .card.doc.missing .sum{color:var(--t-sub)}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* 캔버스 홈 (C00): 왼쪽 메뉴 + 캔버스 타일 격자 (Figma 파일 목록처럼) */
+.home{flex:1;display:flex;min-height:0;background:var(--bg)}
+.hnav{width:240px;flex:none;display:flex;flex-direction:column;gap:2px;padding:16px 10px 0;background:var(--side);border-right:1px solid var(--line)}
+.hlogo{display:flex;align-items:center;gap:8px;padding:0 8px 14px;font-size:16px;color:var(--t-strong)}
+.hnav>button{display:flex;align-items:center;height:36px;padding:0 10px;border-radius:var(--r-sm);font-size:13.5px;color:var(--t-sub);text-align:left}
+.hnav>button small{margin-left:auto;color:var(--t-cap)}
+.hnav>button:hover{background:var(--hover)}
+.hnav>button[aria-current="page"]{background:var(--primary-weak);color:var(--primary-text);font-weight:700}
+.hnav .who{margin:auto -10px 0;display:flex;align-items:center;gap:8px;padding:12px 14px;border-top:1px solid var(--line)}
+.hnav .who div{display:grid;flex:1;min-width:0;line-height:1.3} .hnav .who b{font-size:13.5px;color:var(--t-strong)}
+.hnav .who small{font-size:12px;color:var(--t-cap)}
+.hnav .lo{font-size:12.5px;color:var(--t-sub);padding:4px 8px;border-radius:6px} .hnav .lo:hover{background:var(--hover)}
+.hmain{flex:1;min-width:0;overflow:auto;padding:24px 32px}
+.hmain header{display:flex;align-items:center;gap:10px;margin-bottom:20px}
+.hmain h1{margin:0 auto 0 0;font-size:20px;color:var(--t-strong)}
+.hmain header input{width:min(280px,40vw);height:36px;border:1px solid var(--line);border-radius:var(--r-md);padding:0 12px;background:var(--surface);font-size:13.5px}
+.hmain header .primary{height:36px;padding:0 14px;border-radius:var(--r-md);background:var(--primary);color:var(--on-primary);font-weight:700;font-size:13.5px;white-space:nowrap}
+.hmain .none{color:var(--t-cap);font-size:13.5px}
+.tiles{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:20px}
+.tiles li{position:relative}
+.tile{width:100%;display:grid;gap:2px;text-align:left;padding:0 0 4px}
+.tile .th{display:grid;place-items:center;aspect-ratio:16/10;margin-bottom:8px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--bg-grey);color:var(--t-cap);font-size:12.5px;overflow:hidden}
+.tile:hover .th{border-color:var(--primary-text)}
+.tile .th svg{width:100%;height:100%}
+.tile .th rect{fill:var(--surface);stroke:var(--line-2);stroke-width:6}
+.tile .th rect[data-kind="table"]{stroke:var(--s1)} .tile .th rect[data-kind="doc"]{stroke:var(--green)}
+.tile .th rect[data-kind="memo"]{stroke:var(--yel)} .tile .th rect[data-kind="compare"],.tile .th rect[data-kind="chart"]{stroke:var(--primary-text)}
+.tile b{font-size:14px;color:var(--t-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile small{font-size:12px;color:var(--t-cap)}
+.tiles .x{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:8px;background:var(--surface);color:var(--t-cap);opacity:0;box-shadow:var(--shadow)}
+.tiles li:hover .x,.tiles .x:focus-visible{opacity:1}
+
+/* 탭 줄 홈 아이콘, 상단 바 로고(홈) */
+.ctabs .hm{align-self:center;flex:none;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--t-sub)}
+.ctabs .hm:hover{background:var(--hover)}
+.ctabs .hm svg,.ctabs .hm path{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round}
+.bar h1 button.home{height:auto;padding:0;background:none}
+.bar .ro-note{font-size:13px;color:var(--t-cap);margin-right:4px}
+
+/* 보기 권한: 카드 안 버튼·입력 막기 (선택·강조는 그대로) */
+.flow-wrap.ro .vue-flow__node button,.flow-wrap.ro .vue-flow__node input,.flow-wrap.ro .vue-flow__node select,.flow-wrap.ro .vue-flow__node textarea,.flow-wrap.ro .vue-flow__node [contenteditable]{pointer-events:none}
+.flow-wrap.ro .vue-flow__handle{display:none}
+
+/* 공유 창 (C13) */
+.share-scrim{display:grid;place-items:start center;padding-top:10vh;background:rgba(0,0,0,.25)}
+.share{width:min(480px,calc(100vw - 32px));max-height:80vh;overflow:auto;display:grid;gap:10px;padding:20px 22px;background:var(--surface);border-radius:16px;box-shadow:var(--shadow-pop)}
+.share header{display:flex;align-items:center}
+.share h2{margin:0 auto 0 0;font-size:17px;color:var(--t-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.share .x{width:30px;height:30px;border-radius:8px;color:var(--t-cap)} .share .x:hover{background:var(--hover)}
+.share h3{margin:8px 0 0;font-size:13px;color:var(--t-sub)}
+.share select,.share input{height:36px;border:1px solid var(--line);border-radius:var(--r-sm);padding:0 8px;background:var(--surface);font-size:13px;color:var(--t)}
+.share .inv{position:relative;display:grid;grid-template-columns:1fr auto;gap:8px}
+.share .found{grid-column:1/-1;list-style:none;margin:0;padding:4px;border:1px solid var(--line);border-radius:var(--r-md);display:grid}
+.share .found button{width:100%;display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;text-align:left;font-size:13px}
+.share .found button:hover{background:var(--hover)}
+.share .found small,.share .gen small,.share .nm small{font-size:12px;color:var(--t-cap)}
+.share .found .none,.share .found .cap{padding:6px 8px;font-size:12.5px;color:var(--t-cap)}
+.share .ppl{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.share .ppl li{display:flex;align-items:center;gap:10px}
+.share .nm{flex:1;display:grid;line-height:1.3;min-width:0} .share .nm b{font-size:13.5px;color:var(--t-strong)}
+.share .rl{font-size:13px;color:var(--t-cap)}
+.share .gen{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.share .gen small{flex-basis:100%}
+.share .note{margin:0;font-size:12.5px;color:var(--t-cap)}
+.share footer{display:flex;justify-content:flex-end;margin-top:6px}
+.share footer .primary{height:36px;padding:0 18px;border-radius:var(--r-md);background:var(--primary);color:var(--on-primary);font-weight:700}
