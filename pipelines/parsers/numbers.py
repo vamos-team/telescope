@@ -181,6 +181,17 @@ def unspace(text: str) -> str:
     return t
 
 
+def _rel_periods(t: str) -> list[tuple[int, str]]:
+    """상대 기간 낱말의 (위치, 라벨) 목록. 뒤에 한글이 이어지면 다른 단어('전기통신설비', '당기손익') — 초/말만 허용."""
+    return [(m.start(), lab) for kw, lab in _REL_PERIOD
+            for m in re.finditer(rf"(?<![가-힣]){kw}(?=$|[^가-힣]|초|말)", t)]
+
+
+def periods_in(text: str) -> set[str]:
+    """글에 나오는 상대 기간 라벨 전부('당기 및 전기 중' → {'current', 'prior'})."""
+    return {lab for _, lab in _rel_periods(unspace(text))}
+
+
 def detect_period(text: str) -> str:
     """머리글·문맥 텍스트에서 기간 라벨. 상대(당기/전기)가 절대보다 우선.
 
@@ -189,14 +200,9 @@ def detect_period(text: str) -> str:
     t = unspace(text)
     if not t:
         return ""
-    best = None
-    for kw, lab in _REL_PERIOD:
-        # 뒤에 한글이 이어지면 다른 단어('전기통신설비', '당기손익') — 초/말만 허용
-        for m in re.finditer(rf"(?<![가-힣]){kw}(?=$|[^가-힣]|초|말)", t):
-            if best is None or m.start() > best[0]:
-                best = (m.start(), lab)
-    if best:
-        return best[1]
+    rel = _rel_periods(t)
+    if rel:
+        return max(rel)[1]
     for pat, fn in _PERIOD_PATTERNS:
         m = pat.search(t)
         if m:
@@ -282,3 +288,48 @@ def normalize_kr_amount(text: str) -> list[dict]:
         tail = re.split(r"[,，;·]", t[d["end"]:d["end"] + 10])[0]   # 같은 구절 안에서만 방향 낱말을 찾음
         d["direction"] = "down" if _DOWN_WORDS.search(tail) else ("up" if re.search(r"(증가|상승|확대|성장|늘|개선|상회)", tail) else "")
     return out
+
+
+# ─── 값 형식 (항목 매칭에서 칸의 성격을 알려주는 데 쓴다) ──────────────
+
+_VT_DATE = [
+    re.compile(r"^(20\d{2})\s*[-./]\s*(\d{1,2})\s*[-./]\s*(\d{1,2})\.?$"),
+    re.compile(r"^(20\d{2})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일$"),
+]
+_VT_TIME = [
+    re.compile(r"^(오전|오후)\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?$"),
+    re.compile(r"^(\d{1,2})\s*:\s*(\d{2})$"),
+    re.compile(r"^(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?$"),
+]
+_VT_DATETIME = re.compile(r"^(.+?)\s+(오전|오후)?\s*(\d{1,2}\s*(?::\s*\d{2}|시(?:\s*\d{1,2}\s*분)?))\s*(.*)$")
+_VT_PERIOD = re.compile(r"^\(?'?(\d{2})\s*[.년]\s*([1-4])\s*(분기|Q)\)?$|^\(?'?(\d{2})\s*[.년]?\s*(반기|상반기|하반기|연간|년)\)?$")
+_VT_NUM = re.compile(r"^[-−△]?\s*\(?\d[\d,]*(\.\d+)?\)?$")
+_VT_EMPTY = {"", "-", "−", "해당사항없음", "해당없음", "N/A"}
+_VT_PCT_LABEL = re.compile(r"율|률|%")
+_VT_NOT_PCT = re.compile(r"배당금|\(원\)|주식수")
+
+
+def value_type(text: str, path: Optional[list[str]] = None) -> str:
+    """칸 값의 형식: empty | date | time | datetime | period | percent | number | text.
+
+    숫자는 라벨 경로에 '율·률·%'가 있으면 percent(단, '배당금·(원)·주식수'가 있으면 number).
+    """
+    s = clean(text)
+    if s in _VT_EMPTY:
+        return "empty"
+    if any(p.match(s) for p in _VT_DATE):
+        return "date"
+    if any(p.match(s) for p in _VT_TIME):
+        return "time"
+    m = _VT_DATETIME.match(s)
+    if m and any(p.match(m.group(1).strip()) for p in _VT_DATE) and \
+            any(p.match(((m.group(2) or "") + " " + m.group(3)).strip()) for p in _VT_TIME):
+        return "datetime"
+    if _VT_PERIOD.match(s):
+        return "period"
+    if _VT_NUM.match(s.replace(" ", "")):
+        labels = path or []
+        if any(_VT_PCT_LABEL.search(p) for p in labels) and not any(_VT_NOT_PCT.search(p) for p in labels):
+            return "percent"
+        return "number"
+    return "text"
