@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * V3 마이그레이션이 적용된 MySQL에서 {@code ddl-auto: validate}를 통과하는지,
+ * V3 마이그레이션이 적용된 PostgreSQL에서 {@code ddl-auto: validate}를 통과하는지,
  * enum(VARCHAR)과 시각이 그대로 저장·조회되는지 확인한다.
  */
 @DataJpaTest
