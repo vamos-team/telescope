@@ -36,17 +36,14 @@ export const who = (name: string) => { const m = memberOf(name); return m ? `${m
 
 // 캔버스(세션) 저장: 카드·연결 스냅숏 + 서버로 보낸 이벤트 로그. 다시 열면 이벤트를 새 세션에 재생한다
 // ponytail: localStorage(같은 브라우저 안에서만 공유). 실제 서비스는 서버 이벤트 저장소
-// 공유(F-08 권한 목업): 소유자, 초대한 사람별 권한, 일반 액세스(초대한 사람만 / 회사 전체 보기)
+// 공유(F-08 권한 목업): 소유자와 직접 초대한 사람별 권한(편집 가능 / 보기 가능)만 둔다.
+// 일반 액세스(회사 전체 보기)는 두지 않는다. 공유 설정은 소유자만 바꾼다 (docs/backend/api-spec.md 4장)
 export type Role = "owner" | "edit" | "view";
-export type Access = "invited" | "company";
 export interface CanvasMeta { id: string; name: string; dept: string; owner: string; updated: string; updatedBy: string; count: number;
-  ownerId?: string; share?: Record<string, "edit" | "view">; access?: Access; quarter?: string }
-// 예전 저장분(공유 필드 없음, 부서 전체)은 초대한 사람만으로 읽음
-export const shareOf = (m: CanvasMeta) => ({ ownerId: m.ownerId ?? memberOf(m.owner)?.id ?? "", share: m.share ?? {},
-  access: (m.access === "company" ? "company" : "invited") as Access });
+  ownerId?: string; share?: Record<string, "edit" | "view">; quarter?: string }
+/** 캔버스의 공유 정보(소유자 ID, 초대한 사람별 권한)를 돌려준다. 예전 저장분(공유 필드 없음)은 소유자만 있는 것으로 읽는다. */
+export const shareOf = (m: CanvasMeta) => ({ ownerId: m.ownerId ?? memberOf(m.owner)?.id ?? "", share: m.share ?? {} });
 export const ROLE: Record<Role, string> = { owner: "소유자", edit: "편집 가능", view: "보기 가능" };
-export const accessText = (m: CanvasMeta) => { const s = shareOf(m);
-  return s.access === "company" ? "회사 전체 보기" : "초대한 사람만"; };
 export const when = (iso: string) => {
   const d = new Date(iso), m = Math.round((Date.now() - d.getTime()) / 60000);
   return m < 1 ? "방금" : m < 60 ? `${m}분 전` : m < 1440 ? `${Math.round(m / 60)}시간 전` : d.toLocaleDateString("ko-KR");
@@ -61,13 +58,12 @@ export function findPeople(q: string, exclude: Set<string>, dept: string) {
   if (!t) return [...rest.filter((m) => m.dept === dept), ...rest.filter((m) => m.dept !== dept)].slice(0, 6);
   return rest.filter((m) => m.id.includes(t) || m.name.includes(t) || m.dept.includes(t)).slice(0, 6);
 }
+/** 사용자 u가 캔버스 m에서 가진 권한을 돌려준다. 소유자 → 직접 초대 권한 순으로 보고, 둘 다 아니면 권한 없음(null). */
 export function roleOf(m: CanvasMeta, u: { id: string; dept: string } | null): Role | null {
   if (!u) return null;
   const s = shareOf(m);
   if (s.ownerId === u.id) return "owner";
-  if (s.share[u.id]) return s.share[u.id];
-  if (s.access === "company") return "view";
-  return null;
+  return s.share[u.id] ?? null;
 }
 // uploads: 이 캔버스 카드가 쓰는 업로드 문서(파서 요약본). 새로고침 뒤 같은 ID로 다시 등록해 카드가 사라지지 않게 함
 interface Saved { meta: CanvasMeta; cards: Card[]; links: Link[]; seq: number; activity: { author: string; text: string; time: string }[]; log: CanvasEvent[]; uploads?: Doc[] }
@@ -189,7 +185,7 @@ export const useCanvas = defineStore("canvas", {
       const all = readAll(), prev = all[this.canvasId]?.meta;
       if (prev && !["owner", "edit"].includes(roleOf(prev, this.user) ?? "")) return;  // 저장된 캔버스는 편집 권한이 있을 때만. 처음 저장(새 캔버스)은 통과
       all[this.canvasId] = { meta: { id: this.canvasId, name: this.canvasName, dept: prev?.dept ?? this.user.dept, owner: prev?.owner ?? this.author,
-        updated: now(), updatedBy: this.author, count: this.cards.length, quarter: prev?.quarter, ...(prev ? shareOf(prev) : { ownerId: this.user.id, share: {}, access: "invited" as Access }) },
+        updated: now(), updatedBy: this.author, count: this.cards.length, quarter: prev?.quarter, ...(prev ? shareOf(prev) : { ownerId: this.user.id, share: {} }) },
         cards: JSON.parse(JSON.stringify(this.cards)), links: this.links, seq: this.seq, activity: this.activity.slice(0, 200), log: this.log,
         uploads: this.cards.flatMap((c) => { const d = c.kind === "doc" ? api.docs.get(c.docId) : undefined; return d?.uploaded ? [d] : []; }) };
       writeAll(all); this.saved++;
@@ -238,9 +234,9 @@ export const useCanvas = defineStore("canvas", {
       if (id === this.canvasId) { this.reset(); this.canvasId = ""; this.canvasName = ""; }
     },
     thumb(id: string) { return (readAll()[id]?.cards ?? []).map((c) => ({ kind: c.kind, x: c.x, y: c.y })); },  // 홈 미리보기
-    // 공유 바꾸기: 소유자·편집 권한만. 지금 캔버스 meta를 고쳐 바로 저장
-    setShare(patch: { share?: Record<string, "edit" | "view">; access?: Access }) {
-      if (this.role !== "owner" && this.role !== "edit") return;
+    /** 지금 캔버스의 초대 명단(사람별 권한)을 바꾸고 바로 저장한다. 소유자만 바꿀 수 있고, 다른 권한이면 아무것도 하지 않는다. */
+    setShare(patch: { share?: Record<string, "edit" | "view"> }) {
+      if (this.role !== "owner") return;
       const all = readAll(), x = all[this.canvasId]; if (!x) return;
       x.meta = { ...x.meta, ...shareOf(x.meta), ...patch }; writeAll(all); this.saved++;
       this.activity.unshift({ author: this.author, text: "공유 권한을 바꿈", time: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) });
