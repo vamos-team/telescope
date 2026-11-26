@@ -21,7 +21,7 @@ import Logo from "./components/Logo.vue";
 import HomeView from "./components/HomeView.vue";
 import PageInfo from "./components/PageInfo.vue";
 import NewCanvasDialog from "./components/NewCanvasDialog.vue";
-import { useCanvas, quarterOf, type Card, type TableCard } from "./stores/canvas";
+import { useCanvas, type Card, type TableCard } from "./stores/canvas";
 import { SYNC_MODE } from "./sync/config";
 import { api } from "./api";
 import { selfCheck } from "./local/ai";
@@ -302,7 +302,7 @@ const staleDot = computed(() => !!cv.latest && cv.latest.sig !== cv.sig);
     <input v-if="renaming" class="ctitle" :value="cv.canvasName" aria-label="페이지 이름" v-focus
       @keydown.enter="($event.target as HTMLInputElement).blur()" @blur="cv.rename(($event.target as HTMLInputElement).value); renaming = false" />
     <b v-else class="ctitle" :title="cv.readOnly ? cv.canvasName : '두 번 눌러 이름 바꾸기'" @dblclick="renaming = !cv.readOnly">{{ cv.canvasName }}</b>
-    <span class="asof" title="기준 시점: 이 시점 이전에 발행된 자료만 예측에 씀">{{ quarterOf(cv.meta) }}</span>
+    <span class="asof" title="기준 시점: 이 시점 이전에 발행된 자료만 예측에 씀">{{ cv.pageQuarter }}</span>
     <div class="acts">
       <span v-if="realtime && cv.present.length" class="presence" :title="cv.present.map((id) => `사용자 ${id}`).join(', ')">
         접속 {{ cv.present.length }}명</span>
@@ -411,7 +411,7 @@ const staleDot = computed(() => !!cv.latest && cv.latest.sig !== cv.sig);
   </div>
   <SourceOverlay :table-id="cv.overlay.tableId" :match="cv.overlay.match" :card-id="cv.overlay.cardId"
     @close="cv.openSource(null)" @add="onAdd" />
-  <PageInfo v-if="infoOpen && cv.meta" @close="infoOpen = false" />
+  <PageInfo v-if="infoOpen" @close="infoOpen = false" />
   </template>
   <NewCanvasDialog v-if="cv.creating" />
   </template>

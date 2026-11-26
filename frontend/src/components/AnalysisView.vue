@@ -2,11 +2,12 @@
 // 분석 화면 (페이지의 두 번째 화면). 캔버스 하단 "분석하기"를 누르면 이 화면으로 바뀌고 분석을 시작
 // 분석 = 검토(검토 내역) → 질문(애널리스트 질문) → 평가(예측 평가, 다음 분기 자료가 들어온 뒤). v01-stella 보고서 모양의 문서 (목차 없음)
 // 분석마다 세션이 하나씩 쌓이고(고치지 않음), 왼쪽 목록에서 지난 세션을 다시 봄. 세션은 요청한 본인만 봄
-import { ref, computed, watch, nextTick } from "vue";
+import { ref, computed, watch, nextTick, onUnmounted } from "vue";
 import { api, docTitle } from "../api";
 import { review as makeReview, questions as makeQuestions, assumptions as makeAssumptions, evaluate, reportMd, topicName, claimPrompt, analysisMd,
   type Session, type Review, type Question } from "../local/ai";
-import { useCanvas, quarterOf } from "../stores/canvas";
+import { useCanvas } from "../stores/canvas";
+import { quarterIndex } from "../local/period";
 
 const props = defineProps<{ run: number; flag: { id: string; n: number } | null }>();  // run: 분석하기 누른 횟수, flag: 캔버스 지적 라벨에서 넘어옴
 const emit = defineEmits<{ cite: [c: string]; card: [id: string]; analyze: [] }>();
@@ -35,23 +36,40 @@ const st = (k: Step) => k === "eval" ? (ev.value && !doing.value ? "done" : "wai
 const fill = computed(() => st("questions") === "done" ? 100 : st("questions") === "doing" ? 50 : 0);  // 검토 → 질문 구간
 
 const tick = () => new Promise((ok) => setTimeout(ok, 600));  // ponytail: 목업 AI는 즉시 끝나 진행이 안 보여 단계마다 짧게 쉼. LLM 연결 뒤 삭제
+let mounted = true;
+onUnmounted(() => { mounted = false; });
 // mode new: 새 세션. update: 보고 있는 세션의 새 버전(이전 버전과 그 평가는 그대로 남음, 새 버전은 평가 대기)
 async function start(mode: "new" | "update" = "new") {
   if (!cv.cards.length || doing.value) return;
   const target = mode === "update" ? cur.value : null;
-  await cv.flush();
-  const sid = cv.sessionId, sig = cv.sig;
+  const sid = cv.sessionId;
+  const staleRun = () => {
+    if (mounted && sid === cv.sessionId) return false;
+    doing.value = null;
+    return true;
+  };
   live.value = { review: null, questions: null }; doing.value = "review"; part.value = "review";
+  await cv.flush();
+  if (staleRun()) return;
+  const sig = cv.sig, quarter = cv.pageQuarter;
   await tick();
-  const evs = await api.evidence(sid);
-  const r = await makeReview(A, { canvas: cv.canvasName, quarter: quarterOf(cv.meta), cards: cv.cards, links: cv.links, memos: cv.memos, notes: cv.notes,
-    sessionId: sid, title: cv.cardTitle, ev: evs, tags: cv.tags });
-  if (sid !== cv.sessionId) { doing.value = null; return; }
+  if (staleRun()) return;
+  const evs = await api.evidence(sid, quarterIndex(quarter));
+  if (staleRun()) return;
+  const tags: Record<string, string[]> = {};
+  for (const { card_id, tag } of evs) {
+    const cardTags = tags[card_id] ??= [];
+    if (!cardTags.includes(tag)) cardTags.push(tag);
+  }
+  const r = await makeReview(A, { canvas: cv.canvasName, quarter, cards: cv.cards, links: cv.links, memos: cv.memos, notes: cv.notes,
+    sessionId: sid, title: cv.cardTitle, ev: evs, tags });
+  if (staleRun()) return;
   live.value.review = r; doing.value = "questions";
   await tick();
+  if (staleRun()) return;
   const q = makeQuestions(A, evs);
   live.value.questions = q;
-  const s: Session = { id: "a" + Date.now().toString(36), base: target ? lineOf(target) : undefined, at: new Date().toISOString(), sig, cards: cv.cards.length, quarter: quarterOf(cv.meta),
+  const s: Session = { id: "a" + Date.now().toString(36), base: target ? lineOf(target) : undefined, at: new Date().toISOString(), sig, cards: cv.cards.length, quarter,
     review: r, questions: q, assume: makeAssumptions(A, evs), eval: null };
   cv.pushAnalysis(s);
   curId.value = s.id; doing.value = null;
@@ -106,7 +124,7 @@ function download(name: string, text: string) {
 // 위 전환: 프롬프트로 추출(주장 · 근거 컨텍스트를 LLM에 물을 프롬프트, 복사) / Markdown으로 내보내기(검토 → 질문 → 평가 한 파일)
 const xmode = ref<"prompt" | "md">("prompt"), copied = ref(false);
 const xtext = computed(() => !rv.value ? "" : xmode.value === "prompt"
-  ? claimPrompt(A, rv.value, cv.canvasName, cur.value?.quarter ?? quarterOf(cv.meta))
+  ? claimPrompt(A, rv.value, cv.canvasName, cur.value?.quarter ?? cv.pageQuarter)
   : cur.value ? analysisMd(A, cur.value, cv.canvasName) : "");
 async function copyX() { try { await navigator.clipboard.writeText(xtext.value); copied.value = true; setTimeout(() => (copied.value = false), 1500); } catch { /* 권한 없음 */ } }
 </script>
@@ -165,7 +183,7 @@ async function copyX() { try { await navigator.clipboard.writeText(xtext.value);
 
           <!-- 검토 -->
           <article v-if="part === 'review'" class="doc">
-            <div class="dtop"><div class="meta top"><h1>검토 내역</h1><span class="when">기준 시점 {{ cur?.quarter ?? quarterOf(cv.meta) }} · 작성 일자 {{ day(cur?.at) }}</span></div></div>
+            <div class="dtop"><div class="meta top"><h1>검토 내역</h1><span class="when">기준 시점 {{ cur?.quarter ?? cv.pageQuarter }} · 작성 일자 {{ day(cur?.at) }}</span></div></div>
             <p v-if="!rv" class="loading">캔버스의 카드 · 연결 · 메모를 읽는 중…</p>
             <template v-else>
               <h2 id="r1">1. 총평</h2>
@@ -212,7 +230,7 @@ async function copyX() { try { await navigator.clipboard.writeText(xtext.value);
           <!-- 예상 질문 보고서 (v01 모양) -->
           <article v-else-if="part === 'questions'" class="doc">
             <div class="dtop"><div class="meta top"><h1>애널리스트 질문</h1>
-              <span class="when">기준 시점 {{ cur?.quarter ?? quarterOf(cv.meta) }} · 작성 일자 {{ day(cur?.at) }}</span>
+              <span class="when">기준 시점 {{ cur?.quarter ?? cv.pageQuarter }} · 작성 일자 {{ day(cur?.at) }}</span>
               <span class="btns"><button v-if="cur" class="btn line" @click="download(fileName('애널리스트질문'), reportMd(A, cur, cv.canvasName))">Markdown</button>
                 <button v-if="cur" class="btn fill" @click="part = 'eval'">평가하기</button></span></div></div>
             <p v-if="!qs" class="loading">애널리스트 관점으로 질문을 만드는 중…</p>

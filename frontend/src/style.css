@@ -1486,9 +1486,14 @@ body.resizing .vue-flow,body.resizing iframe{pointer-events:none}
 /* 메모 입력 완료: 진한 노랑 */
 .medit .done{background:var(--c-memo);color:#1d1d1d}
 .medit .done:hover:not(:disabled){background:color-mix(in srgb,var(--c-memo) 85%,#000)}
-/* 캔버스가 좁으면(사이드바를 넓게 연 경우) 왼쪽 아래 도구를 바닥 줄 위로 올려 하단 도구와 겹치지 않게 */
+/* 좁은 캔버스에서는 양쪽 도구를 가운데 도구 위로 올린다. */
 .flow-wrap{container-type:inline-size}
-@container (max-width:820px){.flow-wrap .vue-flow__panel.bottom.left.tools{margin-bottom:88px}}
+@container (max-width:820px){
+  .flow-wrap .vue-flow__panel.bottom.left.tools,.flow-wrap .vue-flow__panel.bottom.right.zoom{margin-bottom:88px}
+}
+@container (max-width:320px){
+  .flow-wrap .vue-flow__panel.bottom.right.zoom{margin-bottom:140px}
+}
 /* [data-tip]의 position:relative가 절대 위치 버튼을 끌어내리지 않게 */
 .addmemo[data-tip]{position:absolute}
 /* 다중 선택 바 글자 줄바꿈 없음 */
@@ -1501,8 +1506,6 @@ body.resizing .vue-flow,body.resizing iframe{pointer-events:none}
 /* 메모 카드: 얇은 노란 테두리. 왼쪽 사이드바 메모 목록은 테두리 없이 노란 배경만 */
 .card.memo,.vue-flow__node .card.memo{border:1px solid color-mix(in srgb,var(--c-memo) 70%,transparent)}
 .lp .pi{border:0}
-/* 자동 배치 · 비우기: 확대 · 축소와 같은 높이 (좁은 캔버스에서도 올리지 않음) */
-@container (max-width:820px){.flow-wrap .vue-flow__panel.bottom.left.tools{margin-bottom:34px}}
 .flow-wrap .vue-flow__panel.bottom.left.tools>button{height:36px}
 /* 내보내기 팝업: 위 전환 버튼, 설명 · 밑줄 없음 */
 .share.xport header{border:0;padding:0}

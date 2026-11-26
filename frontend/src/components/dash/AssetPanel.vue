@@ -92,11 +92,11 @@ const sel = computed(() => { if (!cell.value) return null; const [k, qs] = cell.
           <tbody v-for="[g, gl] in ([['t', '유형자산'], ['i', '무형자산']] as const)" :key="g">
             <tr class="hg"><td colspan="5">{{ gl }}</td></tr>
             <tr v-for="[, k, n] in grp(g)" :key="k"><td class="hn">{{ n }}</td>
-              <td v-for="i in [1, 2, 3, 4]" :key="i"><button class="hcell" :class="{ sel: cell === `${k}|${i}`, unx: AEV[`${k}|${i}`]?.unx }"
+              <td v-for="i in [1, 2, 3, 4]" :key="i"><button class="hcell" :class="{ sel: cell === `${k}|${i}`, unx: cls(k, i) === 'unx' }"
                 :style="{ background: heat(k, i).bg, color: heat(k, i).dark ? '#fff' : 'var(--t-strong)' }" :title="`${n} ${AQ[i]} · ${sd(delta(k, i))}억 (${pctTxt(heat(k, i).p)})`" @click.stop="pick(k, i)">
-                {{ pctTxt(heat(k, i).p) }}<i v-if="AEV[`${k}|${i}`]?.n">{{ AEV[`${k}|${i}`]!.n }}</i><i v-if="AEV[`${k}|${i}`]?.unx" class="q">?</i></button></td></tr>
+                {{ pctTxt(heat(k, i).p) }}<i v-if="badge(k, i)" :class="badge(k, i)!.c">{{ badge(k, i)!.t }}</i></button></td></tr>
           </tbody></table></div>
-        <div class="hleg"><span>감소</span><i /><span>증가</span><small>색 진하기 = 전분기 대비 증감률 (±15% 이상은 가장 진하게) · 숫자 = 근거 수</small></div>
+        <div class="hleg"><span>감소</span><i /><span>증가</span><small>색 진하기 = 전분기 대비 증감률 (±15% 이상은 가장 진하게)<template v-if="layer === 'str'"> · 숫자 = 근거 수</template></small></div>
       </template>
 
       <template v-else>

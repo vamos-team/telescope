@@ -77,7 +77,7 @@ it("열 때 문서와 본인 분석을 복원하고 권한 거절 시 문서 캐
   let allowed = true;
   const fetch = vi.fn(async (url: string) => {
     if (url === "/api/v1/documents/21") return allowed ? data(doc) : denied();
-    return data({ meta: { name: "예산", myRole: "edit" }, lastSeq: 0, warnings: [], links: [],
+    return data({ meta: { name: "예산", myRole: "edit", quarter: "2025년 4분기" }, lastSeq: 0, warnings: [], links: [],
       cards: [{ id: "a", kind: "doc", docId: 21 }, { id: "b", kind: "doc", docId: 21 }] });
   });
   vi.stubGlobal("fetch", fetch);
@@ -89,6 +89,7 @@ it("열 때 문서와 본인 분석을 복원하고 권한 거절 시 문서 캐
   canvas.user = { id: "1001", name: "이재무", dept: "네트워크센터" };
   try {
     await canvas.restoreCanvas();
+    expect(canvas.pageQuarter).toBe("2025년 4분기");
     expect(api.docs.get("21")).toMatchObject({ title: doc.title });
     expect(canvas.analyses.map((session) => session.id)).toEqual(["mine"]);
     expect(fetch.mock.calls.filter(([url]) => url === "/api/v1/documents/21")).toHaveLength(1);

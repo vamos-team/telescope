@@ -44,7 +44,7 @@ const news = computed(() => (p.value?.news ?? []).map((id) => api.docs.get(id)).
 
     <div v-else-if="c.type === 'table'" class="tbl"><table class="ftbl">
       <thead><tr><th>{{ c.hl }}</th><th v-for="h in c.cols" :key="h" class="n">{{ h }}</th></tr></thead>
-      <tbody><tr v-for="r in c.rows" :key="r.n" :class="{ b: r.b }"><td>{{ r.n }}</td><td v-for="(x, i) in r.v" :key="i" class="n">{{ fmt(x) }}</td></tr></tbody>
+      <tbody><tr v-for="r in c.rows" :key="r.n" :class="{ b: r.b }"><td>{{ r.n }}</td><td v-for="(x, i) in r.v" :key="i" class="n">{{ typeof x === 'number' && c.metrics?.[i].unit === '%' ? x.toFixed(1) + '%' : fmt(x) }}</td></tr></tbody>
     </table></div>
 
     <AssetPanel v-else-if="c.type === 'asset'" :compact="compact" />

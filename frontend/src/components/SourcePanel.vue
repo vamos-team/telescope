@@ -16,7 +16,7 @@ import DataInputDialog from "./DataInputDialog.vue";
 export interface Pick { key: string; label: string; tag: string; src: string; kind: "doc" | "table" | "compare" | "dash";
   id?: string; tableId?: string; rows?: number[]; cols?: number[]; tables?: string[]; panel?: string }
 
-const props = defineProps<{ open: boolean }>();
+defineProps<{ open: boolean }>();
 const emit = defineEmits<{ close: []; add: [items: Pick[]]; example: [] }>();
 defineExpose({ focusSearch: () => nextTick(() => input.value?.focus()) });
 const cv = useCanvas();
@@ -26,18 +26,20 @@ type Tab = typeof TABS[number][0];
 const tab = ref<Tab>("fin"), ftab = ref("pl"), period = ref<"y" | "q">("y");
 const q = ref(""), sq = ref(""), input = ref<HTMLInputElement>(), inputOpen = ref(false);
 const dart = ref<SearchResult[]>([]), irar = ref<Doc[]>([]), found = ref<Doc[]>([]);
-const basis = ref<{ companies: string[]; tags: string[] }>({ companies: [], tags: [] });
 const nf = ref("전체");
 
 // 추천 기준: 캔버스 표·문서 카드의 회사, 카드 개념 태그. 캔버스가 비면 분석 대상 회사(focus)
-async function refreshBasis() {
+const companies = computed(() => {
   const cos = new Set<string>();
   for (const c of cv.cards) {
-    if (c.kind === "table") cos.add((await api.table(c.tableId)).company);
+    if (c.kind === "table") {
+      try { cos.add(api.tableInfo(c.tableId).company); } catch { /* 삭제되거나 오래된 원본 표 */ }
+    }
     if (c.kind === "doc") { const co = api.docs.get(c.docId)?.company; if (co && !/3사|업계/.test(co)) cos.add(co); }
   }
-  basis.value = { companies: cos.size ? [...cos] : [A.focus], tags: [...new Set(Object.values(cv.tags).flat())] };
-}
+  return cos.size ? [...cos] : [A.focus];
+});
+const tags = computed(() => [...new Set(Object.values(cv.tags).flat())]);
 // 통합 검색: 입력하는 즉시(짧게 묶어서) 공시 · IR·AR · 뉴스를 함께 찾음. 입력을 다 지우면 탭 화면으로
 let timer = 0;
 async function search() {
@@ -48,24 +50,22 @@ async function search() {
   dart.value = d; irar.value = ir.map((x) => x.doc); found.value = nw.map((x) => x.doc);
 }
 watch(q, () => { clearTimeout(timer); if (!q.value.trim()) { sq.value = ""; return; } timer = window.setTimeout(search, 150); });
-watch([() => props.open, () => cv.cards.length], async ([open]) => { if (open) await refreshBasis(); }, { immediate: true });
 // Esc: 검색 중이면 지우고 탭 화면으로 (캔버스 Esc 처리로 넘기지 않음)
-// 검색창에서 Tab · Shift+Tab: 회사 재무 → DART → 인사이트 탭 순환 (검색어가 있으면 검색 결과를 그대로 두고 넘어가지 않음)
-function cycleTab(e: KeyboardEvent) {
-  if (e.isComposing || e.altKey || e.metaKey || e.ctrlKey) return;
+function moveTab(e: KeyboardEvent, current: Tab, direction: number) {
   e.preventDefault();
-  if (q.value) return;
-  const i = TABS.findIndex(([k]) => k === tab.value);
-  tab.value = TABS[(i + (e.shiftKey ? TABS.length - 1 : 1)) % TABS.length][0];
+  const i = TABS.findIndex(([k]) => k === current);
+  const next = (i + direction + TABS.length) % TABS.length;
+  tab.value = TABS[next][0];
+  (e.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
 }
 function esc(e: KeyboardEvent) { if (q.value) { e.stopPropagation(); q.value = ""; sq.value = ""; } else (e.target as HTMLElement).blur(); }
 
 // 인사이트 탭: 관련 뉴스는 캔버스 회사 · 개념과 겹치는 순, 회사 필터
 const NF = ["전체", "SKT", "KT", "LGU+", "3사 공통"];
 const coOk = (co: string) => nf.value === "전체" || (nf.value === "3사 공통" ? /3사|업계/.test(co) : co === nf.value);
-const news = computed(() => api.recommend(basis.value.companies, basis.value.tags, ["news"]).map((x) => x.doc).filter((d) => coOk(d.company)));
+const news = computed(() => api.recommend(companies.value, tags.value, ["news"]).map((x) => x.doc).filter((d) => coOk(d.company)));
 // 3사 비교 인사이트(분기, 공시 표 → 비교 카드): 캔버스 개념과 겹치는 수로 정렬
-const insights = computed(() => A.insights.map((i) => ({ i, s: i.concepts.filter((c) => basis.value.tags.includes(c)).length })).sort((a, b) => b.s - a.s).map((x) => x.i));
+const insights = computed(() => A.insights.map((i) => ({ i, s: i.concepts.filter((c) => tags.value.includes(c)).length })).sort((a, b) => b.s - a.s).map((x) => x.i));
 const facts = (i: Insight) => api.peerFacts(i.concepts.slice(0, 2));
 const factsOf = ref<Insight | null>(null);  // 표 보기 팝업에 띄운 3사 비교 인사이트
 const pct = (a: number | null, b: number | null) => a == null || b == null || !a ? "—" : `${b >= a ? "+" : ""}${((b - a) / Math.abs(a) * 100).toFixed(1)}%`;
@@ -103,7 +103,8 @@ const PH = "공시 · IR · AR · 뉴스 통합 검색 (예: SKT 감가상각비
     <header class="sph">
       <button class="pclose" data-tip="사이드바 접기" aria-label="오른쪽 사이드바 접기" @click="emit('close')"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2" /><path d="M12.5 3.5v13" /></svg></button>
       <div v-if="!sq" class="tabs3" role="tablist" aria-label="자료 검색 보기">
-        <button v-for="[k, l] in TABS" :key="k" role="tab" :aria-selected="tab === k" @click="tab = k">{{ l }}</button>
+        <button v-for="[k, l] in TABS" :key="k" role="tab" :aria-selected="tab === k" :tabindex="tab === k ? 0 : -1"
+          @click="tab = k" @keydown.left="moveTab($event, k, -1)" @keydown.right="moveTab($event, k, 1)">{{ l }}</button>
       </div>
       <b v-else class="sqt">검색 결과 <small>Esc로 지우기</small></b>
       <button v-if="api.meta.example && cv.canEdit" class="ex" @click="emit('example')">예시 불러오기</button>
@@ -229,7 +230,7 @@ const PH = "공시 · IR · AR · 뉴스 통합 검색 (예: SKT 감가상각비
     <div class="dock">
       <form class="cin" @submit.prevent="search">
         <button v-if="cv.canEdit" type="button" class="plus" title="데이터 입력 (사내 자료)" aria-label="데이터 입력" @click="inputOpen = true">+</button>
-        <input ref="input" v-model="q" type="search" :placeholder="PH" :aria-label="PH" autocomplete="off" @keydown.esc="esc" @keydown.tab="cycleTab" />
+        <input ref="input" v-model="q" type="search" :placeholder="PH" :aria-label="PH" autocomplete="off" @keydown.esc="esc" />
       </form>
     </div>
     <SourceOverlay v-if="detail" :table-id="detail.table_id" :match="detail.hits.map((h) => h.r)" pick @close="detail = null" @add="picked" />
@@ -240,7 +241,7 @@ const PH = "공시 · IR · AR · 뉴스 통합 검색 (예: SKT 감가상각비
         <div class="lab2">사실 <span class="tag">공시</span><span class="tag">계산</span><small>십억원 · 1Q25 대비 1Q26</small></div>
         <table v-for="f in facts(factsOf).facts" :key="f.concept" class="g facts">
           <thead><tr><th>{{ f.name }}</th><th class="n">1Q25</th><th class="n">1Q26</th><th class="n">증감</th></tr></thead>
-          <tbody><tr v-for="r in f.rows" :key="r.company" :class="{ b: basis.companies.includes(r.company) }">
+          <tbody><tr v-for="r in f.rows" :key="r.company" :class="{ b: companies.includes(r.company) }">
             <td>{{ r.company }}</td><td class="n">{{ num(r.prv) }}</td><td class="n">{{ num(r.cur) }}</td><td class="n">{{ pct(r.prv, r.cur) }}</td></tr></tbody>
         </table>
       </section>

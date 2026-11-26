@@ -2,9 +2,10 @@
 // 여기서는 같은 입력(캔버스 카드 · 연결 · 메모 + data/demo/analysis.json 양식)으로 항상 같은 결과를 만든다.
 // 분석하기 = ① 검토(메모 분류 · 주장 추출 · 근거 충분/부족 · 점검 지적 · AI 인사이트) → ② 예상 질문(애널리스트 리포트) → ③ 평가(다음 분기 자료가 들어온 뒤)
 import { api, docTitle, UNIT_TO_BIL, type Analysis, type Evidence, type Doc } from "../api";
-import { panelOf, tableOf, dashCite, dashColumns } from "./dashboard";
+import { panelOf, tableOf, dashCite, dashColumnIndices, dashColumns, dashPeriod } from "./dashboard";
+import { quarterIndex, withinQuarter } from "./period";
 import { ANNUAL_INSIGHTS } from "./dart";
-import { tagsFor } from "./server";
+import { tableColumnWithinQuarter, tagsFor } from "./server";
 import { checkUpload, COMPANIES4 } from "./validate";
 import type { Card, Link, MemoCard, Note } from "../stores/canvas";
 
@@ -23,7 +24,8 @@ export type Evaluation = ReturnType<typeof evaluate>;
 // base: 업데이트로 만든 버전이면 처음 세션의 ID (같은 세션의 버전끼리 묶음). 결과는 고치지 않고 버전으로 쌓는다
 export interface Session { id: string; base?: string; at: string; sig: string; cards: number; quarter: string; review: Review; questions: Question[]; assume: Assumption[]; eval: Evaluation | null }
 
-const CUR = /1Q26|당분기|제 10 기 1분기/;  // 기준 분기 열 (server.ts peerFacts와 같은 규칙)
+const DEMO_QUARTER = quarterIndex("1Q26");
+const CUR = /^당분기|^제 10 기 1분기/;  // 1Q26 공시 데이터의 상대 기간 표기
 const num = (v: number) => v.toLocaleString("ko-KR", { maximumFractionDigits: 1 });
 const pctTxt = (a: number, b: number) => `${b >= a ? "+" : ""}${((b - a) / Math.abs(a) * 100).toFixed(1)}%`;
 const SRC_OF: Record<Doc["kind"], string> = { ir: "IR", ar: "AR", news: "뉴스", internal: "사내" };
@@ -40,9 +42,10 @@ const tagsOf = (t: string) => [...new Set(t.replace(/[.,·()]/g, " ").split(/\s+
 
 // ---------- 캔버스 정리 글 (검토 화면 아래 접기 섹션, 복사 · Markdown) ----------
 export async function contextNote(x: NoteInput): Promise<string> {
+  const cutoff = quarterIndex(x.quarter);
   const hint = (id: string) => x.notes.filter((n) => n.kind === "card" && n.cardId === id).map((n) => `  - 메모: ${n.text}`);
   const by = (k: Card["kind"]) => x.cards.filter((c) => c.kind === k);
-  const docs = by("doc").flatMap((c) => { const d = c.kind === "doc" ? api.docs.get(c.docId) : undefined; return d ? [{ c, d }] : []; });
+  const docs = by("doc").flatMap((c) => { const d = c.kind === "doc" ? api.docs.get(c.docId) : undefined; return d && withinQuarter(d.date, cutoff) ? [{ c, d }] : []; });
   const count = [["공시 표", by("table").length], ["대시보드", by("dash").length], ["IR·AR", docs.filter(({ d }) => d.kind === "ir" || d.kind === "ar").length],
     ["뉴스", docs.filter(({ d }) => d.kind === "news").length], ["사내 자료", docs.filter(({ d }) => d.kind === "internal").length], ["비교", by("compare").length], ["메모", x.notes.length]]
     .filter(([, n]) => n).map(([l, n]) => `${l} ${n}`).join(", ");
@@ -52,9 +55,12 @@ export async function contextNote(x: NoteInput): Promise<string> {
   const sec = (title: string, body: string[]) => { if (body.length) out.push("", `## ${title}`, ...body); };
 
   const tb: string[] = [];
+  const eligibleTables = new Set<string>();
   for (const c of by("table")) {
     if (c.kind !== "table") continue;
     const t = await api.table(c.tableId), col = c.vcol, k = UNIT_TO_BIL[t.unit] ?? 1;
+    if (!tableColumnWithinQuarter(t, col, cutoff)) continue;
+    eligibleTables.add(c.id);
     tb.push("", `### ${t.company} ${t.title} (${[t.basis, t.cols[col]].filter(Boolean).join(", ")}, 단위 ${t.unit})`);
     for (const r of c.rows) {
       const row = t.rows[r]; if (!row) continue;
@@ -69,13 +75,15 @@ export async function contextNote(x: NoteInput): Promise<string> {
   const db: string[] = [];
   for (const c of by("dash")) {
     const p = c.kind === "dash" ? panelOf(c.panel) : undefined; if (!p) continue;
-    const t = tableOf(p);
-    db.push("", `### ${p.title}${p.sub ? ` (${p.sub})` : ""}`);
-    for (const r of t.rows.slice(0, 12)) for (const i of dashColumns(t, r)) {
-      const v = r.v[i], unit = t.units?.[i] ?? r.unit ?? t.unit;
+    const t = tableOf(p), cols = dashColumnIndices(t, cutoff);
+    if (!cols.length) continue;
+    const title = cols.length < t.cols.length ? p.title.replace(/ \([^)]*\)$/, "") : p.title;
+    db.push("", `### ${title}${p.sub ? ` (${p.sub})` : ""}`);
+    for (const r of t.rows.slice(0, 12)) for (const i of dashColumns(t, r, cols)) {
+      const v = r.v[i], unit = t.metrics?.[i].unit ?? r.unit ?? t.unit;
       if (v == null) continue;
-      const label = t.units ? `${r.n} ${t.cols[i].replace(/\(.*$/, "")}` : r.n;
-      db.push(`- ${label}: ${typeof v === "number" ? num(v) + unit : v}${!t.units && t.cols.length > 1 ? ` (${t.cols[i]})` : ""} [${dashCite(p.id, r.n, i)}]`);
+      const label = t.metrics ? `${r.n} ${t.cols[i]}` : r.n;
+      db.push(`- ${label}: ${typeof v === "number" ? num(v) + unit : v}${t.cols.length > 1 ? ` (${dashPeriod(t, i)})` : ""} [${dashCite(p.id, r.n, i)}]`);
     }
     if (p.ai) db.push(`- AI 해석(사실 아님): ${p.ai}`);
     db.push(...hint(c.id));
@@ -84,6 +92,7 @@ export async function contextNote(x: NoteInput): Promise<string> {
 
   const cb: string[] = [];
   for (const c of by("compare")) {
+    if (c.kind !== "compare" || c.sources.some((id) => !eligibleTables.has(id))) continue;
     try {
       const r = await api.compare(x.sessionId, c.id);
       cb.push("", `### 계정 대응 비교 (${r.groups.map((g) => g.company).join(" · ")})`);
@@ -97,7 +106,7 @@ export async function contextNote(x: NoteInput): Promise<string> {
   const docSec = (title: string, kinds: string[]) => sec(title, docs.filter(({ d }) => kinds.includes(d.kind)).flatMap(({ c, d }) => [
     "", `### ${docTitle(d)} (${d.publisher}, ${d.date})`,
     ...(d.summary && d.summary !== d.title ? [`${d.summary} [doc:${d.id}]`] : [`${d.title} [doc:${d.id}]`]),
-    ...d.figures.map((f, i) => `- ${f.label}: ${num(f.value)}${f.unit} (${f.period}) [doc:${d.id}#f${i}]`), ...hint(c.id)]));
+    ...d.figures.flatMap((f, i) => withinQuarter(f.period, cutoff) ? [`- ${f.label}: ${num(f.value)}${f.unit} (${f.period}) [doc:${d.id}#f${i}]`] : []), ...hint(c.id)]));
   docSec("IR · AR", ["ir", "ar"]); docSec("뉴스", ["news"]); docSec("사내 자료", ["internal"]);
 
   sec("카드 사이 연결", x.links.map((l) => { const n = x.notes.find((y) => y.linkId === l.id);
@@ -109,6 +118,7 @@ export async function contextNote(x: NoteInput): Promise<string> {
 // ---------- 검토 ----------
 export interface ReviewInput extends NoteInput { ev: Evidence[]; tags: Record<string, string[]> }
 export async function review(a: Analysis, x: ReviewInput): Promise<Review> {
+  const cutoff = quarterIndex(x.quarter);
   const name = (t: string) => a.tag_names[t] ?? t;
   const linked = (id: string) => new Set(x.links.filter((l) => l.source === id || l.target === id).map((l) => l.source === id ? l.target : l.source));
 
@@ -151,7 +161,7 @@ export async function review(a: Analysis, x: ReviewInput): Promise<Review> {
   }
   for (const c of x.cards) {
     if (c.kind !== "doc") continue;
-    const d = api.docs.get(c.docId); if (!d) continue;
+    const d = api.docs.get(c.docId); if (!d || !withinQuarter(d.date, cutoff)) continue;
     const summary = d.summary?.trim(), titleOnly = !summary || summary === d.title.trim();
     if (titleOnly && d.kind !== "news") continue;
     const s = sentences(titleOnly ? d.title : summary)[0];
@@ -182,18 +192,19 @@ export async function review(a: Analysis, x: ReviewInput): Promise<Review> {
   // 4. AI 인사이트: 캔버스 개념과 맞는 3사 비교 · 연간 인사이트 + 카드 값 변화(코드 계산)
   const tags = new Set(Object.values(x.tags).flat());
   const insights: InsightItem[] = [];
-  for (const i of a.insights.filter((i) => i.concepts.some((c) => tags.has(c)))) {
+  for (const i of a.insights.filter((i) => withinQuarter("1Q26", cutoff) && i.concepts.some((c) => tags.has(c)))) {
     const f = api.peerFacts(i.concepts.slice(0, 2)).facts;
     insights.push({ id: i.id, title: i.title, ai: i.ai, news: i.news,
       facts: f.flatMap((r) => r.rows.filter((y) => y.cur != null).map((y) => ({ text: `${y.company} ${r.name} ${num(y.cur!)}십억원${y.prv ? ` (전년 동기 대비 ${pctTxt(y.prv, y.cur!)})` : ""}` }))).slice(0, 6) });
   }
   const ANN: Record<string, string> = { ins_op: "opi", ins_capex: "capex", ins_div: "dividend" };
   const hasDash = x.cards.some((c) => c.kind === "dash");
-  for (const i of ANNUAL_INSIGHTS) if (hasDash || tags.has(ANN[i.id])) insights.push({ id: i.id, title: i.t, ai: i.ai, news: [...i.news], facts: [{ text: i.ft }] });
+  for (const i of ANNUAL_INSIGHTS) if (withinQuarter("2025", cutoff) && (hasDash || tags.has(ANN[i.id]))) insights.push({ id: i.id, title: i.t, ai: i.ai, news: [...i.news], facts: [{ text: i.ft }] });
   const moves: { text: string; cite: string; d: number }[] = [];
   for (const c of x.cards) {
     if (c.kind !== "table" || c.cols.length < 2) continue;
     const t = api.tableInfo(c.tableId), other = c.cols.find((k) => k !== c.vcol)!;
+    if (!tableColumnWithinQuarter(t, c.vcol, cutoff) || !tableColumnWithinQuarter(t, other, cutoff)) continue;
     for (const r of c.rows) {
       const row = t.rows[r], cur = row?.values[c.vcol], prv = row?.values[other];
       if (cur == null || prv == null || !prv || !(x.tags[c.id] ?? []).length) continue;
@@ -230,7 +241,8 @@ export function reportMd(a: Analysis, s: Session, canvas: string) {
 export function assumptions(a: Analysis, ev: Evidence[]): Assumption[] {
   const tags = [...new Set(a.deliverables.flatMap((d) => d.assume))];
   return tags.flatMap((tag) => {
-    const e = ev.find((x) => x.tag === tag && x.company === a.focus && x.source === "공시" && x.value != null && !x.edited && CUR.test(x.period));
+    const e = ev.find((x) => x.tag === tag && x.company === a.focus && x.source === "공시" && x.value != null && !x.edited
+      && (quarterIndex(x.period) === DEMO_QUARTER || CUR.test(x.period)));
     return e ? [{ tag, name: a.tag_names[tag] ?? tag, value: e.value!, cite: e.cite, period: e.period }] : [];
   });
 }

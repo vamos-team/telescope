@@ -5,7 +5,8 @@
 import data from "./data.json";
 import NEWS from "./news.json";
 import { shallowReactive } from "vue";
-import { panelOf, tableOf, dashText, dashEvidence } from "./dashboard";
+import { panelOf, tableOf, dashColumnIndices, dashText, dashEvidence } from "./dashboard";
+import { quarterIndex, withinQuarter } from "./period";
 import { UNIT_TO_BIL, type SourceTable, type SearchResult, type CompareResult, type CompareLine, type Part, type CanvasEvent, type Doc, type Evidence, type Context, type Analysis } from "../api";
 
 interface Member { label: string; grp?: string; title?: string; alt?: Member[] }
@@ -199,10 +200,10 @@ export function compare(sid: string, cardId: string): CompareResult {
       return ms.map((m) => find(g, m)).filter((p) => p !== null);
     });
     const vals = picked.map((parts) => parts.length ? parts.map((p) => p.value) : null);
-    if (vals.filter(Boolean).length < (G.length > 1 ? 2 : 1)) continue;
     // 사용자가 거부한 대응: 거부한 회사가 하나라도 있으면 이 개념으로 묶지 않음 → 행은 아래 "대응 없음"으로
     const decided = G.map((g) => w.mappings.get(`${c.id}|${g.company}`)?.accepted);
-    if (decided.some((d) => d === false)) { rejected.push(c.name); hit.forEach((ks, gi) => ks.forEach((k) => rej[gi].set(k, c.id))); continue; }
+    if (decided.includes(false) && hit.some((keys) => keys.length)) { rejected.push(c.name); hit.forEach((ks, gi) => ks.forEach((k) => rej[gi].set(k, c.id))); continue; }
+    if (vals.filter(Boolean).length < (G.length > 1 ? 2 : 1)) continue;
     picked.forEach((parts, gi) => parts.forEach((p) => used[gi].add(p.key)));
     const labels = new Set(vals.filter(Boolean).map((ps) => norm(ps![0].label.split("(")[0])));
     const same = vals.every((ps) => !ps || ps.length === 1) && labels.size === 1;
@@ -261,10 +262,22 @@ const LAYERS = ["L0_system", "L1_sources", "L2_workspace", "L3_edits", "L4_task"
 const fmtN = (v: number | null | undefined) => v == null ? "" : Number.isInteger(v) ? String(v) : v.toFixed(4).replace(/0+$/, "");
 const hash = (s: string) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193); return (h >>> 0).toString(16).padStart(8, "0"); };
 const docKind = { ir: "IR", ar: "AR", news: "뉴스", internal: "사내" } as const;
+export function tableColumnWithinQuarter(t: SourceTable, col: number, cutoff?: number): boolean {
+  if (cutoff === undefined) return true;
+  const filingPeriod = /_(\d{4})Q([1-4])$/.exec(t.rcept_no);
+  const quarter = quarterIndex(t.cols[col]) ?? (filingPeriod ? Number(filingPeriod[1]) * 4 + Number(filingPeriod[2]) : undefined);
+  return quarter === undefined || quarter <= cutoff;
+}
 
-function compile(w: Workspace, task: string) {
+function compile(w: Workspace, task: string, cutoff?: number) {
   const cards = [...w.cards.values()].sort((a, b) => a.seq - b.seq);
-  const tcards = cards.filter((c) => c.kind === "table"), dcards = cards.filter((c) => c.kind === "doc" && docs.has(c.doc_id!));
+  const tcards = cards.filter((c) => {
+    if (c.kind !== "table") return false;
+    if (cutoff === undefined) return true;
+    const t = table(c.table_id!);
+    return c.cols.some((col) => tableColumnWithinQuarter(t, col, cutoff));
+  });
+  const dcards = cards.filter((c) => c.kind === "doc" && docs.has(c.doc_id!) && withinQuarter(docs.get(c.doc_id!)!.date, cutoff));
   const L: Record<string, string> = {};
   L.L0_system = SYSTEM + "\n\n# 개념 사전\n" + CONCEPTS.map((c) => `- ${c.id} ${c.name}: ` + Object.entries(c.members).sort()
     .map(([co, ms]) => `${co}=` + ms.map((m) => m.label + (m.grp ? `(${m.grp})` : "")).join("+")).join("; ")).join("\n");
@@ -276,30 +289,34 @@ function compile(w: Workspace, task: string) {
 
   const blocks = tcards.map((c) => {
     const t = table(c.table_id!);
-    const rows = c.rows.map((r) => { const row = t.rows[r]; return `r${r}\t${row.label}${row.grp ? `(${row.grp})` : ""}\t` + c.cols.map((k) => fmtN(row.values[k])).join("\t"); });
+    const cols = c.cols.filter((col) => tableColumnWithinQuarter(t, col, cutoff));
+    const rows = c.rows.map((r) => { const row = t.rows[r]; return `r${r}\t${row.label}${row.grp ? `(${row.grp})` : ""}\t` + cols.map((k) => fmtN(row.values[k])).join("\t"); });
     return [`## 카드 ${c.card_id} | 공시 | ${t.company} | ${t.title} | ${t.basis} | 단위 ${t.unit} | 표 ${t.table_id}`,
-      `(셀ID 형식: ${t.table_id}#r<행>c<열>, 열 번호 [${c.cols}])`, "셀ID\t계정\t" + c.cols.map((k) => t.cols[k]).join("\t"), ...rows].join("\n");
+      `(셀ID 형식: ${t.table_id}#r<행>c<열>, 열 번호 [${cols}])`, "셀ID\t계정\t" + cols.map((k) => t.cols[k]).join("\t"), ...rows].join("\n");
   });
   for (const c of dcards) {
     const d = docs.get(c.doc_id!)!;
     blocks.push([`## 카드 ${c.card_id} | ${docKind[d.kind]} | ${d.company} | ${d.title} | doc:${d.id}`, `요약: ${d.summary}`,
-      ...d.figures.map((f, i) => `f${i}\t${f.label}\t${fmtN(f.value)} ${f.unit}\t${f.period}`)].join("\n"));
+      ...d.figures.flatMap((f, i) => withinQuarter(f.period, cutoff) ? [`f${i}\t${f.label}\t${fmtN(f.value)} ${f.unit}\t${f.period}`] : [])].join("\n"));
   }
   for (const c of cards.filter((c) => c.kind === "memo" && c.text?.trim())) blocks.push(`## 메모 카드 ${c.card_id} | 작성 ${c.author}\n${c.text}`);
   for (const c of cards) {
     const panel = c.kind === "dash" ? panelOf(c.panel!) : undefined;
     if (!panel) continue;
-    const t = tableOf(panel), unit = t.unit ? ` | 단위 ${t.unit}` : "";
-    blocks.push(`## 카드 ${c.card_id} | 공시 대시보드 | ${panel.title} | ${panel.sub}${unit} | dash:${panel.id}\n${dashText(t)}`);
+    const t = tableOf(panel), cols = dashColumnIndices(t, cutoff);
+    if (!cols.length) continue;
+    const unit = t.unit ? ` | 단위 ${t.unit}` : "";
+    const title = cols.length < t.cols.length ? panel.title.replace(/ \([^)]*\)$/, "") : panel.title;
+    blocks.push(`## 카드 ${c.card_id} | 공시 대시보드 | ${title} | ${panel.sub}${unit} | dash:${panel.id}\n${dashText(t, cols)}`);
   }
   L.L2_workspace = blocks.length ? "# 캔버스 카드\n" + blocks.join("\n\n") : "";
 
   const ed: string[] = [];
   for (const c of tcards) {
     const t = table(c.table_id!);
-    if (c.vcol != null) ed.push(`- 카드 ${c.card_id} 비교 기간: ${t.cols[c.vcol]} (c${c.vcol})`);
+    if (c.vcol != null && tableColumnWithinQuarter(t, c.vcol, cutoff)) ed.push(`- 카드 ${c.card_id} 비교 기간: ${t.cols[c.vcol]} (c${c.vcol})`);
     for (const k of Object.keys(c.edits).sort()) { const [r, col] = k.split(",").map(Number);
-      ed.push(`- 수정 [${cellId(t, r, col)}] ${t.rows[r].label}: ${fmtN(t.rows[r].values[col])} → ${fmtN(c.edits[k])}`); }
+      if (tableColumnWithinQuarter(t, col, cutoff)) ed.push(`- 수정 [${cellId(t, r, col)}] ${t.rows[r].label}: ${fmtN(t.rows[r].values[col])} → ${fmtN(c.edits[k])}`); }
     if (c.sort) ed.push(`- 카드 ${c.card_id} 정렬 기준: ${c.sort[0]} ${c.sort[1] ? "내림차순" : "오름차순"}`);
   }
   for (const m of [...w.mappings.values()].sort((a, b) => (a.concept_id + a.company).localeCompare(b.concept_id + b.company)))
@@ -317,8 +334,8 @@ function compile(w: Workspace, task: string) {
   return { layers: L, hashes: Object.fromEntries(LAYERS.map((k) => [k, hash(L[k] ?? "")])) };
 }
 
-export function context(sid: string, task: string): Context {
-  const { layers: L, hashes } = compile(ws(sid), task);
+export function context(sid: string, task: string, cutoff?: number): Context {
+  const { layers: L, hashes } = compile(ws(sid), task, cutoff);
   const join = (ks: string[]) => ks.map((k) => L[k]).filter(Boolean).join("\n\n");
   return { layers: L, hashes, messages: [{ role: "system", content: join(LAYERS.slice(0, 3)) }, { role: "user", content: join(LAYERS.slice(3)) }] };
 }
@@ -327,24 +344,26 @@ export function context(sid: string, task: string): Context {
 const rowTags = (t: SourceTable, r: number) =>
   CONCEPTS.filter((c) => (c.members[t.company] ?? []).some((m) => alts(m).some((a) => memberMatches(a, t, r)))).map((c) => c.id);
 
-export function evidence(sid: string): Evidence[] {
+export function evidence(sid: string, cutoff?: number): Evidence[] {
   const out: Evidence[] = [];
   for (const c of [...ws(sid).cards.values()].sort((a, b) => a.seq - b.seq)) {
     if (c.kind === "table") {
       const t = table(c.table_id!), col = c.vcol ?? c.cols[0];
+      if (!tableColumnWithinQuarter(t, col, cutoff)) continue;
       for (const r of c.rows) for (const tag of rowTags(t, r)) {
         const v = value(c, t, r, col), edited = `${r},${col}` in c.edits;  // 편집 레이어 값은 원본 공시와 구분
         out.push({ tag, company: t.company, label: t.rows[r].label, value: v == null ? null : +(v * UNIT_TO_BIL[t.unit]).toFixed(1), unit: "십억원",
           period: t.cols[col], cite: cellId(t, r, col), card_id: c.card_id, source: "공시", edited });
       }
     } else if (c.kind === "dash") {
-      for (const e of dashEvidence(c.panel!)) out.push({ ...e, card_id: c.card_id, source: "공시" });
+      for (const e of dashEvidence(c.panel!, cutoff)) out.push({ ...e, card_id: c.card_id, source: "공시" });
     } else if (c.kind === "doc" && docs.has(c.doc_id!)) {
       const d = docs.get(c.doc_id!)!;
+      if (!withinQuarter(d.date, cutoff)) continue;
       for (const tag of d.tags) {
         out.push({ tag, company: d.company, label: d.title, value: null, unit: "", period: d.date, cite: `doc:${d.id}`, card_id: c.card_id, source: docKind[d.kind], text: d.summary });
-        d.figures.forEach((f, i) => out.push({ tag, company: d.company, label: f.label, value: f.value, unit: f.unit, period: f.period,
-          cite: `doc:${d.id}#f${i}`, card_id: c.card_id, source: docKind[d.kind] }));
+        d.figures.forEach((f, i) => { if (withinQuarter(f.period, cutoff)) out.push({ tag, company: d.company, label: f.label, value: f.value, unit: f.unit, period: f.period,
+          cite: `doc:${d.id}#f${i}`, card_id: c.card_id, source: docKind[d.kind] }); });
       }
     }
   }

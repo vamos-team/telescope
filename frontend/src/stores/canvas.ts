@@ -145,6 +145,7 @@ export const useCanvas = defineStore("canvas", {
     error: "",  // 이벤트 반영·캔버스 복원 실패 안내
     // ---- 서버 모드(SYNC_MODE=server)에서만 쓰는 상태 ----
     serverRole: null as Role | null,  // 캔버스 열기 응답·권한 변경 알림의 내 권한
+    serverQuarter: null as string | null,
     myUserId: null as number | null,  // 내 서버 사용자 ID(로그인 #34 후 채움). 내 커서를 걸러낼 때 쓴다
     cursors: {} as Record<string, { x: number; y: number }>,  // 다른 사람 커서(캔버스 좌표), 키는 사용자 ID
     present: [] as number[],  // 지금 이 캔버스에 들어와 있는 사람(사용자 ID)
@@ -154,6 +155,7 @@ export const useCanvas = defineStore("canvas", {
     canvases: (s): CanvasMeta[] => { void s.saved; return Object.values(readAll()).map((x) => x.meta).filter((m) => roleOf(m, s.user))
       .sort((a, b) => b.updated.localeCompare(a.updated)); },
     meta(): CanvasMeta | undefined { return this.canvases.find((m) => m.id === this.canvasId); },
+    pageQuarter(): string { return this.serverQuarter || quarterOf(this.meta); },
     // 서버 모드는 서버가 알려 준 권한, 로컬 모드는 저장된 공유 정보로 계산. 메타가 없으면(권한이 풀림 등) 권한 없음
     role(): Role | null { return SYNC_MODE === "server" ? this.serverRole : this.meta ? roleOf(this.meta, this.user) : null; },
     readOnly(): boolean { return this.role === "view"; },
@@ -275,7 +277,7 @@ export const useCanvas = defineStore("canvas", {
       const docIds = cards.flatMap((c) => c.kind === "doc" ? [c.docId] : []);
       await this.loadServerDocs(docIds);
       if (reload !== serverReload) return;
-      Object.assign(this, { cards, links, canvasName: snapshot.meta.name, serverRole: snapshot.meta.myRole, analyses: this.readAnalyses() });
+      Object.assign(this, { cards, links, canvasName: snapshot.meta.name, serverRole: snapshot.meta.myRole, serverQuarter: snapshot.meta.quarter, analyses: this.readAnalyses() });
       outbox?.updateVersions(versionsOf(snapshot));
       if (snapshot.warnings.length) this.error = `'${snapshot.meta.name}' 캔버스 일부를 복원하지 못했습니다. 자료가 바뀌었을 수 있습니다.`;
       // 비교·태그는 아직 목업이 계산하므로 새 목업 세션에 지금 상태를 넣는다
@@ -370,7 +372,7 @@ export const useCanvas = defineStore("canvas", {
       serverDocIds.clear();
       connection?.close();
       connection = null; outbox = null; tracker = null;
-      Object.assign(this, { serverRole: null, cursors: {}, present: [] });
+      Object.assign(this, { serverRole: null, serverQuarter: null, cursors: {}, present: [] });
     },
     /** 서버 모드: 내 커서 위치(캔버스 좌표)를 다른 사람에게 보낸다. */
     sendCursor(x: number, y: number) { connection?.sendCursor(x, y); },

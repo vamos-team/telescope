@@ -2,6 +2,7 @@
 // 패널 하나 = 자료 검색 화면의 카드 하나 = 캔버스 대시보드 카드 하나. 비율·합계·증감은 모두 여기서 코드로 계산한다 (LLM에 맡기지 않음)
 // 실제 서비스: GET /api/v1/dashboard 가 같은 모양(패널 id · 제목 · 기준 · 차트 데이터)을 돌려준다
 import { YEARS as YR, PEERS, CONS, SEP, CAPEX, PEER, PEER_DEP, QTR, DIV, OPEX_2025, OP_BRIDGE, CASH_BRIDGE, AQ, AAC, ANNUAL_INSIGHTS, type Peer } from "./dart";
+import { withinQuarter } from "./period";
 
 export type Fmt = (v: number) => string;
 export interface Series { name: string; v: number[]; c: string; fade?: boolean; bold?: boolean }
@@ -14,10 +15,10 @@ export type Chart =
   | { type: "hbars"; items: { n: string; v: number; c: string }[]; fmt: Fmt; max: number }
   | { type: "treemap"; items: [string, number][]; colors: string[] }
   | { type: "heat"; cols: string[]; rows: { n: string; v: number[]; pct?: boolean }[] }
-  | { type: "table"; cols: string[]; rows: { n: string; v: (number | string)[]; b?: boolean }[]; hl?: string }
+  | { type: "table"; cols: string[]; rows: { n: string; v: (number | string)[]; b?: boolean }[]; hl?: string; metrics?: { tag: string; unit: string }[]; period?: string }
   | { type: "kpis"; items: { l: string; tag: string; v: string; d: string; s: number[]; raw: number; unit: string }[] }
   | { type: "asset" };
-export interface Panel { id: string; title: string; sub: string; span: number; unit: string; chart: () => Chart; cap?: () => string;
+export interface Panel { id: string; title: string; sub: string; span: number; unit: string; chart: () => Chart; cap?: () => string; evidenceTag?: string;
   ai?: string; news?: readonly string[] }  // ai · news: 인사이트 패널 (AI 해석 목업 + 관련 뉴스)
 
 // ---------- 계산 ----------
@@ -113,7 +114,7 @@ const PANELS: Panel[] = [
     chart: () => ({ type: "stack", labels: YR, W: 560, series: [{ name: "SKT 단독", v: CAPEX.skt, c: "--s1" }, { name: "SKB", v: CAPEX.skb, c: "--s2" }] }) },
   { id: "capex", title: "CapEx·유형자산 감가상각비 (2021–2025)", sub: "SKT+SKB 합산", span: 6, unit: "억원",
     chart: () => ({ type: "bars", labels: YR, bw: 24, series: [{ name: "CapEx", v: CAPEX_SUM, c: "--s1" }, { name: "유형자산 감가상각비", v: CONS.ppeDep, c: "--s2" }] }) },
-  { id: "cx_cum", title: "누적 CapEx 3사 비교 (2021–2025)", sub: "SKT는 SKT+SKB 합산", span: 6, unit: "억원",
+  { id: "cx_cum", title: "누적 CapEx 3사 비교 (2021–2025)", sub: "SKT는 SKT+SKB 합산", span: 6, unit: "억원", evidenceTag: "capex_cumulative",
     chart: () => ({ type: "lines", labels: YR, series: peerSeries((k) => cum(P3[k].cx)) }) },
   { id: "cx_dep3", title: "유형자산 감가상각비 3사 비교 (2021–2025)", sub: "각 사 자회사 포함", span: 6, unit: "억원",
     chart: () => ({ type: "lines", labels: YR, series: peerSeries((k) => PEER_DEP[k]) }) },
@@ -123,15 +124,16 @@ const PANELS: Panel[] = [
 
   // 회사 재무 › 동종사 비교 (opi · peer: 예전 대시보드 패널 id 유지)
   { id: "opi", title: "3사 영업이익 추이 (2021–2025)", sub: "각 사 자회사 포함", span: 6, unit: "억원", chart: () => ({ type: "lines", labels: YR, series: peerSeries((k) => P3[k].op) }) },
-  { id: "peer_rev_idx", title: "매출 지수 3사 비교 (2021=100)", sub: "각 사 자회사 포함", span: 6, unit: "지수",
+  { id: "peer_rev_idx", title: "매출 지수 3사 비교 (2021=100)", sub: "각 사 자회사 포함", span: 6, unit: "지수", evidenceTag: "rev_index",
     chart: () => ({ type: "lines", labels: YR, fmt: f1, ref: 100, refLabel: "100", axfmt: (a) => String(a), series: peerSeries((k) => P3[k].rev.map((v) => (v / P3[k].rev[0]) * 100)) }) },
   { id: "peer_opm", title: "영업이익률 3사 비교 (2025)", sub: "각 사 자회사 포함", span: 6, unit: "%",
     chart: () => ({ type: "hbars", fmt: fp, max: 10, items: PEERS.map((k) => ({ n: k, v: (last(P3[k].op) / last(P3[k].rev)) * 100, c: P3[k].c })).sort((a, b) => b.v - a.v) }) },
   { id: "peer_dr", title: "부채비율 3사 비교 (2021–2025)", sub: "각 사 자회사 포함", span: 6, unit: "%",
     chart: () => ({ type: "lines", labels: YR, fmt: fp, axfmt: (a) => a + "%", series: peerSeries((k) => div(P3[k].L, P3[k].E)) }) },
   { id: "peer_capex", title: "CapEx 3사 비교 (2021–2025)", sub: "SKT는 SKT+SKB 합산", span: 6, unit: "억원", chart: () => ({ type: "lines", labels: YR, series: peerSeries((k) => P3[k].cx) }) },
-  { id: "peer", title: "주요 지표 3사 비교 (2025)", sub: "각 사 자회사 포함", span: 12, unit: "억원", chart: () => ({ type: "table", cols: ["매출", "영업이익", "영업이익률", "부채비율", "CapEx"], hl: "",
-    rows: PEERS.map((k) => { const p = P3[k]; return { n: k, b: k === "SKT", v: [last(p.rev), last(p.op), fp((last(p.op) / last(p.rev)) * 100), fp((last(p.L) / last(p.E)) * 100), last(p.cx)] }; }) }) },
+  { id: "peer", title: "주요 지표 3사 비교 (2025)", sub: "각 사 자회사 포함", span: 12, unit: "", chart: () => ({ type: "table", cols: ["매출", "영업이익", "영업이익률", "부채비율", "CapEx"], hl: "", period: "2025",
+    metrics: [{ tag: "rev", unit: "억원" }, { tag: "opi", unit: "억원" }, { tag: "opm", unit: "%" }, { tag: "debt_ratio", unit: "%" }, { tag: "capex", unit: "억원" }],
+    rows: PEERS.map((k) => { const p = P3[k]; return { n: k, b: k === "SKT", v: [last(p.rev), last(p.op), (last(p.op) / last(p.rev)) * 100, (last(p.L) / last(p.E)) * 100, last(p.cx)] }; }) }) },
 
   // 인사이트 (연간, 사실 표 + AI 해석)
   ...ANNUAL_INSIGHTS.map((x): Panel => ({ id: x.id, title: x.t, sub: x.ft, span: 4, unit: x.id === "ins_div" ? "원" : "억원", ai: x.ai, news: x.news, chart: () => {
@@ -161,33 +163,39 @@ export const LAYOUT = {
 
 // ---------- 패널 → 표 (컨텍스트 글 · 컨텍스트 층 · 근거 줄이 함께 씀) ----------
 interface PanelRow { n: string; v: (number | string)[]; unit?: string }
-export interface PanelTable { cols: string[]; rows: PanelRow[]; unit: string; units?: string[] }
+export interface PanelTable { cols: string[]; rows: PanelRow[]; unit: string; metrics?: { tag: string; unit: string }[]; period?: string }
 export function tableOf(p: Panel): PanelTable {
   const c = p.chart(), u = p.unit;
   switch (c.type) {
     case "bars": case "lines": case "stack": return { cols: c.labels, rows: c.series.map((s) => ({ n: s.name || p.title.replace(/ \(.*$/, ""), v: s.v.map((x) => +x.toFixed(2)) })), unit: u };
-    case "waterfall": return { cols: ["값"], rows: c.steps.map(([n, v]) => ({ n, v: [v] })), unit: u };
-    case "scatter": return { cols: [c.xl + "(%)", c.yl + "(%)", "매출(억원)"], rows: c.points.map((x) => ({ n: x.n, v: [+x.x.toFixed(1), +x.y.toFixed(1), x.r] })), unit: "", units: ["%", "%", "억원"] };
+    case "waterfall": return { cols: ["값"], rows: c.steps.map(([n, v]) => ({ n, v: [v] })), unit: u, period: "2025" };
+    case "scatter": return { cols: [c.xl, c.yl, "매출"], rows: c.points.map((x) => ({ n: x.n, v: [+x.x.toFixed(1), +x.y.toFixed(1), x.r] })),
+      unit: "", period: "2025", metrics: [{ tag: "opm", unit: "%" }, { tag: "debt_ratio", unit: "%" }, { tag: "rev", unit: "억원" }] };
     case "hbars": return { cols: ["2025"], rows: c.items.map((x) => ({ n: x.n, v: [+x.v.toFixed(1)] })), unit: u };
     case "treemap": return { cols: ["2025"], rows: c.items.map(([n, v]) => ({ n, v: [v] })), unit: u };
     case "heat": return { cols: c.cols, rows: c.rows.map((r) => ({ n: r.n, v: r.v, unit: r.pct ? "%" : u })), unit: "" };
-    case "table": return { cols: c.cols, rows: c.rows, unit: u };
-    case "kpis": return { cols: ["2025", "전년 대비"], rows: c.items.map((k) => ({ n: k.l, v: [k.raw, k.d.replace(/^2025 · 전년 대비 /, "")], unit: k.unit })), unit: "" };
+    case "table": return { cols: c.cols, rows: c.rows, unit: u, metrics: c.metrics, period: c.period };
+    case "kpis": return { cols: ["2025", "전년 대비"], rows: c.items.map((k) => ({ n: k.l, v: [k.raw, k.d.replace(/^2025 · 전년 대비 /, "")], unit: k.unit })), unit: "", period: "2025" };
     case "asset": return { cols: AQ, rows: AAC.map(([, , n, v]) => ({ n, v })), unit: u };
   }
 }
 // 인용 ID = 패널#행@열. 카드 이동은 패널만 봄, 같은 행의 다른 열(값 · 증감)을 구분
 export const dashCite = (id: string, row: string, col: number) => `dash:${id}#${encodeURIComponent(row)}@${col}`;
-export function dashText(t: PanelTable) {
-  return [`항목\t${t.cols.join("\t")}`, ...t.rows.map((r) => {
-    const cells = r.v.map((v) => typeof v === "number" && r.unit ? `${v}${r.unit}` : v);
+export const dashPeriod = (t: PanelTable, i: number) => t.period ?? t.cols[i];
+export const dashColumnIndices = (t: PanelTable, cutoff?: number) =>
+  t.cols.map((_, i) => i).filter((i) => withinQuarter(dashPeriod(t, i), cutoff));
+export function dashText(t: PanelTable, cols = dashColumnIndices(t)) {
+  const headings = cols.map((i) => t.metrics ? `${t.cols[i]}(${t.metrics[i].unit})` : t.cols[i]);
+  return [`항목\t${headings.join("\t")}`, ...t.rows.map((r) => {
+    const cells = cols.map((i) => typeof r.v[i] === "number" && r.unit ? `${r.v[i]}${r.unit}` : r.v[i]);
     return `${r.n}\t${cells.join("\t")}`;
   })].join("\n");
 }
-export function dashColumns(t: PanelTable, row: PanelRow) {
-  if (t.units) return t.cols.map((_, i) => i);
-  const latest = row.v.map((v) => typeof v === "number").lastIndexOf(true);
-  return [latest < 0 ? row.v.length - 1 : latest];
+export function dashColumns(t: PanelTable, row: PanelRow, cols: number[]) {
+  const available = cols.filter((i) => row.v[i] != null);
+  if (t.metrics || !available.length) return available;
+  const latest = available.map((i) => typeof row.v[i] === "number").lastIndexOf(true);
+  return [available[latest < 0 ? available.length - 1 : latest]];
 }
 // 패널 → 근거 줄: 행마다 마지막 숫자 열(열마다 단위가 다르면 열마다 한 줄). 억원 → 십억원은 코드로 환산. 개념 태그는 행·열·패널 이름으로 붙임 (질문 생성 입력)
 // 비율은 금액 태그와 따로 둠: 금액 주장의 직접 근거로 쓰이지 않게
@@ -195,16 +203,17 @@ const TAG: [RegExp, string][] = [[/CapEx\/감가상각/i, "capex_ratio"], [/영�
   [/수수료/, "comm"], [/종업원급여|인건비/, "labor"], [/부채/, "debt"], [/매출|수익/, "rev"]];
 const tagOf = (s: string) => TAG.find(([re]) => re.test(s))?.[1];
 const CO = (n: string) => (/^SKT/.test(n) ? "SKT" : /^KT/.test(n) ? "KT" : /^LG/.test(n) ? "LGU+" : null);
-export function dashEvidence(id: string) {
+export function dashEvidence(id: string, cutoff?: number) {
   const p = panelOf(id); if (!p) return [];
   const t = tableOf(p);
-  return t.rows.flatMap((r) => dashColumns(t, r).flatMap((i) => {
+  const cols = dashColumnIndices(t, cutoff);
+  return t.rows.flatMap((r) => dashColumns(t, r, cols).flatMap((i) => {
     const col = t.cols[i], raw = r.v[i];
-    const tag = t.units ? tagOf(col) : tagOf(r.n) ?? tagOf(p.title);
+    const tag = t.metrics?.[i].tag ?? p.evidenceTag ?? tagOf(r.n) ?? tagOf(p.title);
     if (!tag || typeof raw !== "number") return [];
-    const co = CO(r.n), unit = t.units?.[i] ?? r.unit ?? t.unit, bil = unit === "억원";
-    const label = t.units ? `${r.n} ${col.replace(/\(.*$/, "")}` : co ? p.title.replace(/ \(.*$/, "") : r.n;
+    const co = CO(r.n), unit = t.metrics?.[i].unit ?? r.unit ?? t.unit, bil = unit === "억원";
+    const label = t.metrics ? `${r.n} ${col}` : co ? p.title.replace(/ \(.*$/, "") : r.n;
     return [{ tag, company: co ?? "SKT", label, value: bil ? +(raw / 10).toFixed(1) : raw, unit: bil ? "십억원" : unit,
-      period: t.units ? "2025" : col ?? "2025", cite: dashCite(id, r.n, i) }];
+      period: dashPeriod(t, i), cite: dashCite(id, r.n, i) }];
   }));
 }
