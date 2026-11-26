@@ -1,9 +1,10 @@
 import { expect, it } from "vitest";
 import { api } from "../../api";
-import { assumptions, contextNote, review } from "../ai";
+import { assumptions, contextNote, questions, review } from "../ai";
 import { dashColumnIndices, dashEvidence, dashPeriod, panelOf, tableOf } from "../dashboard";
 import { quarterIndex } from "../period";
 import { checkUpload } from "../validate";
+import { DEFAULT_QUARTER } from "../../stores/canvas";
 
 it("KPI 근거 ID가 정리 글의 금액을 가리키고 산점도는 비율과 매출을 구분한다", async () => {
   const sessionId = crypto.randomUUID();
@@ -66,6 +67,22 @@ it("기준 분기까지의 값만 정리 글과 근거에 사용하고 원래 �
   expect(context).toContain("26.1Q");
   expect(context).not.toContain("26.2Q");
   expect(await api.evidence(sessionId, quarterIndex("2023년 4분기"))).toEqual([]);
+});
+
+it("새 캔버스 기본 기준 분기에서는 평가 분기(2Q26) 값이 질문 근거와 검토 입력에 들어가지 않는다", async () => {
+  const sessionId = crypto.randomUUID();
+  const cards = [{ id: "q", kind: "dash" as const, panel: "plq_op", x: 0, y: 0 }];
+  await api.postEvents(sessionId, [{ type: "add_dash", card_id: "q", panel: "plq_op" }]);
+  expect(quarterIndex(DEFAULT_QUARTER)).toBeLessThan(quarterIndex(api.analysis.next_quarter.label)!);
+  const ev = await api.evidence(sessionId, quarterIndex(DEFAULT_QUARTER));
+  expect(ev.length).toBeGreaterThan(0);
+  expect(ev.some((e) => e.period === "26.2Q")).toBe(false);
+  const cited = new Set(ev.map((e) => e.cite));
+  const late = dashEvidence("plq_op").filter((e) => e.period === "26.2Q").map((e) => e.cite);
+  expect(questions(api.analysis, ev).flatMap((q) => q.cite).some((c) => late.includes(c) || !cited.has(c))).toBe(false);
+  const result = await review(api.analysis, { canvas: "예산", quarter: DEFAULT_QUARTER, cards, sessionId, title: (id) => id,
+    links: [], memos: [], notes: [], ev, tags: {} });
+  expect(result.note).not.toContain("26.2Q");
 });
 
 it("동종사 표는 다섯 지표를 근거로 내보내고 지수·누적액은 원계정과 구분한다", () => {

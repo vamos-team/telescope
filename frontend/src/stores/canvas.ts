@@ -71,7 +71,7 @@ export const when = (iso: string) => {
 };
 // 캔버스 분기: 만들 때 고름. 예전 저장분은 기본 분기로 읽음
 export const QUARTERS = ["2025년 1분기", "2025년 2분기", "2025년 3분기", "2025년 4분기", "2026년 1분기", "2026년 2분기", "2026년 3분기", "2026년 4분기"];
-export const DEFAULT_QUARTER = "2026년 2분기";
+export const DEFAULT_QUARTER = "2026년 1분기";
 export const quarterOf = (m?: CanvasMeta) => m?.quarter ?? DEFAULT_QUARTER;
 // 사람 찾기 (공유 창 · 새 캔버스 창): 입력이 비면 추천(같은 부서 먼저), 입력하면 사번 · 이름 · 부서로 찾음. 최대 6명
 export function findPeople(q: string, exclude: Set<string>, dept: string) {
@@ -206,9 +206,10 @@ export const useCanvas = defineStore("canvas", {
       clearTimeout(this.timer);
       this.timer = window.setTimeout(() => { this.flush().catch((err) => console.error(err)); }, 150); // 드래그 등 연속 조작은 묶어서 전송
     },
-    async flush() {
-      await this.flushServer();
-      if (!this.queue.length) return;
+    /** 대기 중인 조작을 보낸다. 남김없이 반영했으면 true (분석은 false면 시작하지 않는다). */
+    async flush(): Promise<boolean> {
+      const serverOk = await this.flushServer();
+      if (!this.queue.length) return serverOk;
       const batch = this.queue.splice(0);
       let res;
       try {
@@ -217,7 +218,7 @@ export const useCanvas = defineStore("canvas", {
         console.error("이벤트 반영 실패", err);
         this.queue.unshift(...batch);
         this.error = "조작을 반영하지 못했습니다. 새로고침 후 다시 시도하세요.";
-        return;
+        return false;
       }
       this.log.push(...batch.filter((e) => e.type !== "move_card"));  // 서버가 받은 조작만 저장·재생 로그로
       this.tags = await api.cardTags(this.sessionId).catch(() => this.tags);
@@ -227,13 +228,15 @@ export const useCanvas = defineStore("canvas", {
       // 카드 구성이 바뀌었으면 다음 질문에 대비해 prefix를 미리 채운다
       if (res.first_changed_layer && res.first_changed_layer <= "L2_workspace") api.warmup(this.sessionId).catch(() => {});
       this.save();
+      return serverOk && !this.queue.length;
     },
     /**
      * 서버 모드: 대기열의 이벤트를 서버에 저장한다. 실패하면 같은 묶음을 다음에 다시 보내고,
      * 글 충돌(409 K003)이면 서버의 최신 글로 바꾸고 안내한다. 로컬 모드에서는 아무것도 하지 않는다.
+     * 남김없이 저장했으면 true, 충돌 · 거부 · 재시도 대기 · 남은 묶음이 있으면 false.
      */
-    async flushServer() {
-      if (!outbox || !this.canvasId) return;
+    async flushServer(): Promise<boolean> {
+      if (!outbox || !this.canvasId) return true;
       const canvasId = this.canvasId;
       const result = await outbox.flush((batch) => {
         tracker?.markMine(batch.requestId);  // 응답보다 메시지가 먼저 올 수 있어 보내기 전에 표시
@@ -251,6 +254,7 @@ export const useCanvas = defineStore("canvas", {
       } else if (result.status === "retry") {
         this.error = "서버에 연결하지 못했습니다. 연결되면 다시 보냅니다.";
       }
+      return (result.status === "ok" || result.status === "idle") && !outbox?.pending;
     },
     /** 서버 모드: 캔버스를 서버에서 다시 읽어 화면을 맞춘다(처음 열 때, 재접속, 번호 누락). 보내지 못한 조작을 먼저 보낸다. */
     async reloadFromServer() {

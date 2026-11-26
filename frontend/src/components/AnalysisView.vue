@@ -46,8 +46,9 @@ async function start(mode: "new" | "update" = "new") {
   const sid = cv.sessionId;
   analysisInterrupted.value = false;
   live.value = { review: null, questions: null }; doing.value = "review"; part.value = "review";
-  await cv.flush();
+  const flushed = await cv.flush();
   if (!mounted || sid !== cv.sessionId) { doing.value = null; return; }
+  if (!flushed) { doing.value = null; return; }  // 보내지 못한 조작이 남으면 sig를 기록하지 않고 멈춤 (안내는 cv.error)
   const sig = cv.sig, quarter = cv.pageQuarter;
   const staleRun = () => {
     const sameSession = mounted && sid === cv.sessionId;
