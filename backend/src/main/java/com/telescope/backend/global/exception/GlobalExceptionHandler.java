@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,6 +31,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 ? ApiResponse.fail(errorCode, e.getMessage())
                 : ApiResponse.fail(errorCode, e.getMessage(), e.getData());
         return ResponseEntity.status(errorCode.getStatus()).body(body);
+    }
+
+    /**
+     * 메서드 보안({@code @PreAuthorize})의 거절. 컨트롤러 안에서 던져지므로 보안 필터의 403 처리 대신 여기서 받는다.
+     * 받지 않으면 아래 {@link #handleUnexpectedException}이 500으로 바꾼다.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException e) {
+        ErrorCode errorCode = ErrorCode.ACCESS_DENIED;
+        return ResponseEntity.status(errorCode.getStatus()).body(ApiResponse.fail(errorCode));
     }
 
     @ExceptionHandler(Exception.class)

@@ -19,6 +19,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.messaging.converter.JacksonJsonMessageConverter;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
@@ -61,7 +62,9 @@ class CanvasRealtimeTest {
 
     @TestConfiguration
     static class TestAuth {
+        // 실제 JWT 검증기(JwtTokenProvider)도 빈이므로, STOMP 인증이 이 테스트용 검증기를 쓰게 우선순위를 준다
         @Bean
+        @Primary
         AccessTokenVerifier testTokenVerifier() {
             return token -> {
                 if (token.startsWith("user-")) {

@@ -31,6 +31,10 @@ infra:
     status-read-timeout: 3s
 
 app:
+  # 액세스 토큰(#34). 서명 키는 환경변수로만 넣는다(32바이트 이상, 없으면 기동 실패). 기본 1시간, refresh 토큰 없음(api-spec 10장)
+  jwt:
+    secret: ${JWT_SECRET:}
+    access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:1h}
   document:
     upload:
       # 업로드 정책이 정해지기 전까지 ai 파서가 읽는 형식으로 임시 제한한다(루트 CLAUDE.md 7장 미정, #111)

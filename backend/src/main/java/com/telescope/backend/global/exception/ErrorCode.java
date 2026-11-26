@@ -13,8 +13,11 @@ public enum ErrorCode {
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "C002", "요청한 리소스를 찾을 수 없습니다."),
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "C003", "지원하지 않는 HTTP 메서드입니다."),
     JOB_INVALID_TRANSITION(HttpStatus.CONFLICT, "J001", "허용되지 않는 작업 상태 전이입니다."),
-    // 인증 전 기본 응답. 나머지 A 코드(A001, A003, A004)는 user 이슈(#34)에서 추가한다
+    // 인증·인가 (docs/backend/api-spec.md 2장, #34)
+    LOGIN_FAILED(HttpStatus.UNAUTHORIZED, "A001", "사번 또는 비밀번호가 올바르지 않습니다."),
     UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "A002", "인증이 필요합니다."),
+    TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "A003", "인증이 만료되었습니다."),
+    ACCESS_DENIED(HttpStatus.FORBIDDEN, "A004", "권한이 없습니다."),
     CANVAS_ACCESS_DENIED(HttpStatus.FORBIDDEN, "K001", "이 캔버스를 볼 권한이 없습니다."),
     CANVAS_EDIT_DENIED(HttpStatus.FORBIDDEN, "K002", "이 캔버스를 수정할 권한이 없습니다."),
     CANVAS_TEXT_CONFLICT(HttpStatus.CONFLICT, "K003", "다른 사람이 먼저 글을 고쳤습니다."),
