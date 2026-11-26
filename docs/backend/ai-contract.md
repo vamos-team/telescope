@@ -297,6 +297,59 @@ backend                                   ai
   `AiCallFailedException`이다. 시작 호출의 `4xx`/`5xx`도 `AiCallFailedException`이며, 미등록 작업의 `501`(#86)은
   "ai 서비스가 아직 지원하지 않는 작업입니다."로 구분한다. 예외 메시지와 로그에는 요청·응답 본문과 비밀키를 넣지 않는다.
 
+### 2.10.1 결정 기록: backend의 실제 HTTP 호출 구현 (#114, PR #118)
+
+출발점: `PythonAiClient`에는 가짜 구현(`PythonAiClientStub`)뿐이라 ai/server가 떠 있어도 backend가 부르지 않았다.
+
+#### H1. HTTP 클라이언트는 Spring `RestClient` + JDK HTTP 클라이언트
+
+| 후보 | 판단 |
+|---|---|
+| **(a) `RestClient` + `JdkClientHttpRequestFactory`** (선택) | Spring Framework에 들어 있어 의존성 추가가 없다. 동기 호출이라 기존 `JobService` 흐름과 맞다 |
+| (b) `WebClient` | 비동기·리액티브 의존성(webflux)이 필요하고, 호출하는 쪽이 모두 동기다 |
+| (c) Boot의 자동 구성 `RestClient.Builder` | Boot 4에서는 별도 모듈(`spring-boot-restclient`)이라 의존성이 늘고, 이 클라이언트에만 쓸 설정이라 직접 만드는 편이 단순하다 |
+
+- **클라이언트를 둘 두는 이유**: 시작 호출(읽기 5초)과 상태 조회(읽기 3초)의 타임아웃이 다르다(2.10). 주소·헤더는 같고 읽기 타임아웃만 다른 클라이언트 두 개를 만든다.
+
+#### H2. 테스트는 `MockRestServiceServer`로 하되, 실제 연결 테스트를 하나 더 둔다
+
+| 후보 | 장점 | 단점 |
+|---|---|---|
+| **(a) `MockRestServiceServer`** (선택, 주 테스트) | spring-test에 들어 있다. 경로·헤더·본문·응답 변환을 짧게 확인한다 | 실제 HTTP 클라이언트(요청 팩토리)를 바꿔 끼우므로 연결 수준의 문제를 보지 못한다 |
+| (b) 로컬 HTTP 서버 | 타임아웃·연결까지 본다 | 테스트 코드가 길어진다 |
+
+- 사용자 결정은 (a)였다. 그런데 (a)의 단점이 실제로 드러났다(H3). 그래서 JDK 내장 HTTP 서버(`com.sun.net.httpserver`, 의존성 추가 없음)로 실제 연결을 보는 테스트 하나(`PythonAiClientWireTest`)를 더 뒀다. 타임아웃은 로컬 확인으로 봤다.
+
+#### H3. JDK HTTP 클라이언트를 HTTP/1.1로 고정한다 (로컬 확인에서 발견)
+
+- **발견 과정**:
+  1. 목 테스트는 모두 통과했다.
+  2. 로컬에서 실제 ai/server(가짜 파이프라인 모드)를 띄우고 backend 구현체로 작업 시작을 불렀다.
+  3. ai/server가 `422`(`body: Field required`)로 거절했다. 요청 본문이 도착하지 않았다.
+  4. 원인: JDK HTTP 클라이언트의 기본 버전은 HTTP/2다. `http://` 주소에는 h2c 업그레이드(`Upgrade: h2c`)를 시도하는데, ai/server(uvicorn)는 그 요청의 본문을 받지 못했다.
+  5. `HttpClient.Version.HTTP_1_1`로 고정하자 같은 확인이 모두 통과했다.
+  6. 회귀 테스트(`PythonAiClientWireTest`)가 수정 전 코드에서 `Upgrade: h2c` 헤더 때문에 실패하는 것을 확인했다.
+- **버린 대안**: ai/server 쪽에서 h2c를 받게 하기. uvicorn 설정을 바꿔야 하고, 내부 호출에 HTTP/2가 필요한 이유도 없다.
+
+#### H4. 오류는 "없는 작업"과 "그 밖의 실패" 둘로만 나눈다
+
+- 상태 조회 `404`만 `AiJobNotFoundException`(작업 `FAILED` 확정)이다. 타임아웃·연결 실패·`5xx`·형식이 틀린 응답은 모두 `AiCallFailedException`(일시 오류, 다음 폴링에서 재시도)이다. 둘을 섞으면 "무한 재시도"나 "성급한 실패 확정"이 생긴다(2.5).
+- 시작 호출의 `4xx`/`5xx`는 모두 `AiCallFailedException`이고 호출한 쪽이 `markFailed`로 끝낸다. 그중 `501`(#86 미등록 작업)만 "ai 서비스가 아직 지원하지 않는 작업입니다."로 문구를 나눴다. 사용자가 "고장"과 "아직 없음"을 구분할 수 있게 하려는 것이다.
+- `AiCallFailedException`을 새로 둔 이유: 기존 `JobService`는 `AiJobNotFoundException`이 아닌 `RuntimeException`을 일시 오류로 본다. 그 규칙을 바꾸지 않으면서, 호출 실패를 다른 런타임 오류(버그 등)와 로그에서 구분하려고 이름 있는 예외를 뒀다.
+- 응답이 `2xx`여도 `jobId`나 `status`가 비어 있으면 실패로 본다.
+
+#### H5. 설정 이름
+
+- `AI_SERVICE_BASE_URL`, `AI_SERVICE_API_KEY`: 2.10의 제안 그대로다. 값은 ai/server의 `INTERNAL_API_KEY`와 같은 Secret에서 읽는다(infra PR #117).
+- `AI_SERVICE_MODE`(`stub`/`http`)는 새로 붙였다. 없으면 배포에서 relaxed binding 이름(`INFRA_PYTHONAICLIENT_MODE`)을 써야 해서 다른 두 값과 이름이 어긋난다.
+- `http`인데 주소나 비밀키가 비어 있으면 기동 시점에 실패한다. 설정이 잘못된 채 떠서 모든 작업이 시작 실패로 쌓이는 것보다 낫다.
+- 모드 기본값은 `stub`이다. 로컬 개발과 테스트는 ai/server 없이 돌아간다.
+
+#### H6. 비밀키와 본문을 남기지 않는다
+
+- 예외 메시지와 로그에는 요청·응답 본문을 넣지 않는다. 상태 코드와 예외 종류만 쓴다. ai의 `422` 응답처럼 본문에 요청 필드 위치가 담길 수 있고, 작업 실패 사유는 사용자에게 그대로 보이기 때문이다.
+- 설정 객체(`PythonAiClientProperties`)의 `toString`은 비밀키를 `****`로 가린다(설정 출력·디버그 로그 대비).
+
 ### 2.11 파일 접근 방식 (`fileStorageKey`) — 결정 (2026-11-26, #86)
 
 | 자료 | 저장 위치 (배포) | 관리 |
