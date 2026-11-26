@@ -152,6 +152,12 @@ table.raw tr.s td.lab{box-shadow:inset 3px 0 0 var(--primary)}
 /* ---------- 레이아웃: 자료 패널 | 캔버스 | 결과 패널 ---------- */
 .main{flex:1;display:flex;min-height:0}
 .flow-wrap{flex:1;min-width:0;position:relative}
+/* 서버 모드: 다른 사람 커서(캔버스 위, 눌리지 않음)와 접속자 수 */
+.cursors{position:absolute;inset:0;pointer-events:none;z-index:6;overflow:hidden}
+.cursor{position:absolute;transform:translate(-1px,-1px);color:var(--c);transition:left .08s linear,top .08s linear}
+.cursor svg path{fill:var(--c);stroke:#fff;stroke-width:1}
+.cursor span{position:absolute;left:14px;top:12px;white-space:nowrap;font-size:11px;font-weight:700;color:#fff;background:var(--c);border-radius:4px;padding:1px 5px}
+.presence{font-size:12px;font-weight:700;color:var(--t-cap);padding:2px 8px;border:1px solid currentColor;border-radius:999px;white-space:nowrap}
 .flow{height:100%}
 .bar .acts{min-width:0;overflow-x:auto}
 .team{display:inline-flex;align-items:center;gap:2px;margin-right:6px}
