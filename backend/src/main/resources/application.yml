@@ -26,6 +26,9 @@ infra:
     status-read-timeout: 3s
 
 app:
+  job:
+    # ai가 끝났다고 알려 준 작업의 결과 저장이 이 횟수만큼 실패하면 FAILED로 끝낸다(#63)
+    result-save-max-attempts: 5
   storage:
     local:
       base-dir: ${FILE_STORAGE_DIR:./data/files}

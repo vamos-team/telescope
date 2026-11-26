@@ -36,6 +36,8 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -50,7 +52,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 서비스가 트랜잭션 경계를 직접 다루므로(ai 호출은 트랜잭션 밖) 테스트 전체를 감싸는
  * 트랜잭션을 끄고, 실제로 커밋되는 상태에서 검증한다. ai 서비스는 고정 응답을 주는 가짜로 대신한다.
  */
-@DataJpaTest
+@DataJpaTest(properties = "app.job.result-save-max-attempts=3")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfig.class, JpaAuditingConfig.class, JobService.class, JobServiceTest.TestBeans.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -67,9 +69,13 @@ class JobServiceTest {
     @Autowired
     JobService jobService;
 
+    @Autowired
+    FakeResultHandler resultHandler;
+
     @BeforeEach
     void setUp() {
         aiClient.reset();
+        resultHandler.reset();
     }
 
     @AfterEach
@@ -210,6 +216,108 @@ class JobServiceTest {
         }
     }
 
+    @Test
+    void 결과를_저장한_뒤에_완료로_확정한다() {
+        Long id = startedJob();
+        aiClient.response = new JobStatusResponse("ext-1", AiJobStatus.SUCCEEDED, Map.of("summary", "요약"), null);
+
+        JobResponse response = jobService.getJob(id);
+
+        assertThat(response.status()).isEqualTo(JobStatus.SUCCEEDED);
+        assertThat(resultHandler.saved).containsExactly(Map.of("summary", "요약"));
+    }
+
+    @Test
+    void 결과_저장이_실패하면_완료하지_않고_다음_조회에서_다시_시도한다() {
+        Long id = startedJob();
+        aiClient.response = new JobStatusResponse("ext-1", AiJobStatus.SUCCEEDED, Map.of("summary", "요약"), null);
+        resultHandler.failuresLeft.set(1);
+
+        JobResponse first = jobService.getJob(id);
+        assertThat(first.status()).isEqualTo(JobStatus.RUNNING);
+        assertThat(jobRepository.findById(id).orElseThrow().getResultSaveFailures()).isEqualTo(1);
+        assertThat(resultHandler.saved).isEmpty();
+
+        JobResponse second = jobService.getJob(id);
+        assertThat(second.status()).isEqualTo(JobStatus.SUCCEEDED);
+        assertThat(resultHandler.saved).containsExactly(Map.of("summary", "요약"));
+        assertThat(aiClient.calls.get()).isEqualTo(2);
+    }
+
+    @Test
+    void 결과_저장이_실패하면_처리기가_쓴_내용도_함께_되돌린다() {
+        Long id = startedJob();
+        long before = jobRepository.count();
+        aiClient.respond(AiJobStatus.SUCCEEDED, null);
+        resultHandler.failuresLeft.set(1);
+        resultHandler.writeBeforeFailing = true;
+
+        jobService.getJob(id);
+
+        assertThat(jobRepository.count()).isEqualTo(before);
+    }
+
+    @Test
+    void 결과_저장이_한도만큼_실패하면_FAILED로_끝낸다() {
+        Long id = startedJob();
+        aiClient.respond(AiJobStatus.SUCCEEDED, null);
+        resultHandler.failuresLeft.set(10);
+
+        jobService.getJob(id);
+        jobService.getJob(id);
+        JobResponse third = jobService.getJob(id);
+
+        assertThat(third.status()).isEqualTo(JobStatus.FAILED);
+        assertThat(third.errorMessage()).isEqualTo(JobService.RESULT_SAVE_FAILED_MESSAGE);
+        // 끝났으므로 더 묻지 않는다
+        jobService.getJob(id);
+        assertThat(aiClient.calls.get()).isEqualTo(3);
+    }
+
+    @Test
+    void 처리기가_없는_작업_종류는_결과를_저장하지_않고_완료한다() {
+        Job job = jobService.create(JobType.DOCUMENT_PREPARATION);
+        jobService.markStarted(job.getId(), "ext-1");
+        aiClient.respond(AiJobStatus.SUCCEEDED, null);
+
+        assertThat(jobService.getJob(job.getId()).status()).isEqualTo(JobStatus.SUCCEEDED);
+        assertThat(resultHandler.saved).isEmpty();
+    }
+
+    @Test
+    void 같은_작업이_동시에_완료돼도_결과는_한_번만_저장된다() throws Exception {
+        Long id = startedJob();
+        aiClient.barrier = new CyclicBarrier(2);
+        aiClient.response = new JobStatusResponse("ext-1", AiJobStatus.SUCCEEDED, Map.of("n", 1), null);
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<JobResponse> first = pool.submit(() -> jobService.getJob(id));
+            Future<JobResponse> second = pool.submit(() -> jobService.getJob(id));
+            assertThat(first.get(10, TimeUnit.SECONDS).status()).isEqualTo(JobStatus.SUCCEEDED);
+            assertThat(second.get(10, TimeUnit.SECONDS).status()).isEqualTo(JobStatus.SUCCEEDED);
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(resultHandler.saved).hasSize(1);
+    }
+
+    @Test
+    void 같은_작업_종류의_처리기가_둘이면_만들_수_없다() {
+        FakeResultHandler a = new FakeResultHandler(null);
+        FakeResultHandler b = new FakeResultHandler(null);
+
+        assertThatThrownBy(() -> new JobService(jobRepository, aiClient, null, null, List.of(a, b), 3))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("ANALYSIS");
+    }
+
+    @Test
+    void 재시도_한도는_1_이상이어야_한다() {
+        assertThatThrownBy(() -> new JobService(jobRepository, aiClient, null, null, List.of(), 0))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
     private Long startedJob() {
         Job job = jobService.create(JobType.ANALYSIS);
         jobService.markStarted(job.getId(), "ext-1");
@@ -226,6 +334,11 @@ class JobServiceTest {
         }
 
         @Bean
+        FakeResultHandler fakeResultHandler(JobRepository jobRepository) {
+            return new FakeResultHandler(jobRepository);
+        }
+
+        @Bean
         Clock clock() {
             return Clock.fixed(NOW.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
         }
@@ -233,6 +346,44 @@ class JobServiceTest {
         @Bean
         TransactionTemplate transactionTemplate(PlatformTransactionManager transactionManager) {
             return new TransactionTemplate(transactionManager);
+        }
+    }
+
+    /**
+     * 분석 작업의 결과 처리기 대역. 저장한 결과를 모으고, 정한 횟수만큼 실패한다.
+     * {@code writeBeforeFailing}이면 실패하기 전에 DB에 한 줄을 써서, 실패 시 함께 되돌려지는지 확인한다.
+     */
+    static class FakeResultHandler implements JobResultHandler {
+
+        final List<Object> saved = new CopyOnWriteArrayList<>();
+        final AtomicInteger failuresLeft = new AtomicInteger();
+        volatile boolean writeBeforeFailing;
+        private final JobRepository jobRepository;
+
+        FakeResultHandler(JobRepository jobRepository) {
+            this.jobRepository = jobRepository;
+        }
+
+        void reset() {
+            saved.clear();
+            failuresLeft.set(0);
+            writeBeforeFailing = false;
+        }
+
+        @Override
+        public JobType jobType() {
+            return JobType.ANALYSIS;
+        }
+
+        @Override
+        public void saveResult(Long jobId, Object result) {
+            if (failuresLeft.getAndUpdate(n -> Math.max(0, n - 1)) > 0) {
+                if (writeBeforeFailing) {
+                    jobRepository.saveAndFlush(Job.create(JobType.PREDICTION));
+                }
+                throw new IllegalStateException("결과 저장 실패(테스트)");
+            }
+            saved.add(result == null ? "null" : result);
         }
     }
 

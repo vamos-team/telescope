@@ -11,14 +11,17 @@ import com.telescope.backend.job.entity.Job;
 import com.telescope.backend.job.entity.JobStatus;
 import com.telescope.backend.job.entity.JobType;
 import com.telescope.backend.job.repository.JobRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
 
@@ -31,16 +34,43 @@ import java.util.function.Supplier;
  *   <li>트랜잭션 밖에서 ai 서비스 시작 요청</li>
  *   <li>성공하면 {@link #markStarted}, 실패하면 {@link #markFailed}</li>
  * </ol>
+ *
+ * <p>작업이 끝나면 결과는 대상 도메인의 {@link JobResultHandler}가 저장한다. 결과 저장과 완료 확정은 한 트랜잭션이다(#63).
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class JobService {
+
+    /** 결과 저장이 한도만큼 실패해 포기할 때 남기는 사유. 사용자에게 보인다. */
+    static final String RESULT_SAVE_FAILED_MESSAGE = "작업 결과를 저장하지 못했습니다.";
 
     private final JobRepository jobRepository;
     private final PythonAiClient aiClient;
     private final TransactionTemplate tx;
     private final Clock clock;
+    private final Map<JobType, JobResultHandler> resultHandlers;
+    private final int resultSaveMaxAttempts;
+
+    /**
+     * 의존성과 작업 종류별 결과 처리기를 받는다.
+     *
+     * @param resultHandlers        대상 도메인이 등록한 처리기. 아직 없는 작업 종류도 있다
+     * @param resultSaveMaxAttempts 결과 저장 실패를 몇 번까지 다시 시도할지({@code app.job.result-save-max-attempts})
+     * @throws IllegalStateException 같은 작업 종류의 처리기가 둘 이상이거나 한도가 1보다 작을 때
+     */
+    public JobService(JobRepository jobRepository, PythonAiClient aiClient, TransactionTemplate tx, Clock clock,
+                      List<JobResultHandler> resultHandlers,
+                      @Value("${app.job.result-save-max-attempts:5}") int resultSaveMaxAttempts) {
+        if (resultSaveMaxAttempts < 1) {
+            throw new IllegalStateException("app.job.result-save-max-attempts는 1 이상이어야 합니다.");
+        }
+        this.jobRepository = jobRepository;
+        this.aiClient = aiClient;
+        this.tx = tx;
+        this.clock = clock;
+        this.resultHandlers = indexByJobType(resultHandlers);
+        this.resultSaveMaxAttempts = resultSaveMaxAttempts;
+    }
 
     @Transactional
     public Job create(JobType jobType) {
@@ -84,12 +114,61 @@ public class JobService {
             log.warn("ai 작업 상태 조회 실패: jobId={}, reason={}", jobId, e.getMessage());
             return JobResponse.from(job);
         }
+        if (ai.status() == AiJobStatus.SUCCEEDED) {
+            return completeWithResult(jobId, ai.result());
+        }
         return applyAiStatus(jobId, toJobStatus(ai.status()), ai.errorMessage());
     }
 
+    /**
+     * ai가 끝났다고 알려 준 작업의 결과를 저장하고 완료로 확정한다.
+     *
+     * <p>작업 행을 잠근 한 트랜잭션에서 처리기 저장과 완료 확정을 함께 한다. 잠근 뒤 다시 읽었을 때 이미 끝났으면
+     * (다른 요청이 먼저 처리) 처리기를 부르지 않아 결과가 두 번 저장되지 않는다. 저장이 실패하면 둘 다 되돌리고,
+     * 실패 횟수만 따로 기록해 다음 조회에서 다시 시도한다. 한도에 닿으면 FAILED로 끝낸다.
+     * 처리기가 없는 작업 종류는 경고만 남기고 완료한다(대상 도메인이 처리기를 붙이기 전까지의 동작).
+     */
+    private JobResponse completeWithResult(Long jobId, Object result) {
+        try {
+            return inTx(() -> {
+                Job job = lockOrThrow(jobId);
+                if (job.isTerminal()) {
+                    return JobResponse.from(job);
+                }
+                JobResultHandler handler = resultHandlers.get(job.getJobType());
+                if (handler == null) {
+                    // TODO(#63 후속): 대상 도메인(#111 등)이 처리기를 붙이면 결과가 저장된다. 그 전까지 결과는 버려진다
+                    log.warn("결과 처리기가 없어 결과를 저장하지 않고 완료한다: jobId={}, jobType={}", jobId, job.getJobType());
+                } else {
+                    handler.saveResult(jobId, result);
+                }
+                job.syncFrom(JobStatus.SUCCEEDED, null, now());
+                return JobResponse.from(job);
+            });
+        } catch (BusinessException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            // 결과 본문이 섞일 수 있어 예외 종류만 남긴다
+            log.warn("작업 결과 저장 실패, 다음 조회에서 다시 시도한다: jobId={}, reason={}", jobId, e.getClass().getSimpleName());
+            return recordResultSaveFailure(jobId);
+        }
+    }
+
+    /** 결과 저장 실패를 새 트랜잭션에서 기록한다(저장 트랜잭션은 이미 되돌려졌다). 한도에 닿으면 FAILED가 된다. */
+    private JobResponse recordResultSaveFailure(Long jobId) {
+        return inTx(() -> {
+            Job job = lockOrThrow(jobId);
+            if (job.recordResultSaveFailure(resultSaveMaxAttempts, RESULT_SAVE_FAILED_MESSAGE, now())) {
+                log.error("결과 저장이 {}번 실패해 작업을 FAILED로 끝냈다: jobId={}", resultSaveMaxAttempts, jobId);
+            }
+            return JobResponse.from(job);
+        });
+    }
+
+    /** ai가 알려 준 진행 중·실패 상태를 행을 잠근 뒤 반영한다. 완료는 {@link #completeWithResult}가 맡는다. */
     private JobResponse applyAiStatus(Long jobId, JobStatus aiStatus, String errorMessage) {
         return inTx(() -> {
-            Job job = jobRepository.findByIdForUpdate(jobId).orElseThrow(() -> notFound(jobId));
+            Job job = lockOrThrow(jobId);
             job.syncFrom(aiStatus, errorMessage, now());
             return JobResponse.from(job);
         });
@@ -102,6 +181,23 @@ public class JobService {
             case SUCCEEDED -> JobStatus.SUCCEEDED;
             case FAILED -> JobStatus.FAILED;
         };
+    }
+
+    /** 작업 행을 잠가 다시 읽는다. 같은 작업의 동시 갱신을 한 줄로 세운다. */
+    private Job lockOrThrow(Long jobId) {
+        return jobRepository.findByIdForUpdate(jobId).orElseThrow(() -> notFound(jobId));
+    }
+
+    /** 처리기를 작업 종류로 찾을 수 있게 모은다. 같은 종류가 둘이면 어느 쪽이 저장할지 모호하므로 기동을 멈춘다. */
+    private static Map<JobType, JobResultHandler> indexByJobType(List<JobResultHandler> handlers) {
+        Map<JobType, JobResultHandler> byType = new EnumMap<>(JobType.class);
+        for (JobResultHandler handler : handlers) {
+            JobResultHandler previous = byType.putIfAbsent(handler.jobType(), handler);
+            if (previous != null) {
+                throw new IllegalStateException("작업 종류 " + handler.jobType() + "의 결과 처리기가 둘 이상입니다.");
+            }
+        }
+        return byType;
     }
 
     private Job findOrThrow(Long jobId) {

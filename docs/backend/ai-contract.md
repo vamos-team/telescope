@@ -214,6 +214,10 @@ backend                                   ai
   없다. 이 재구성(`getJob`을 어떻게 나눌지, 대상 도메인과의 연결 지점을 어디에 둘지)은 공통
   `job` 도메인과 각 대상 도메인(분석/예측/자료 준비)이 함께 정할 몫이라 **후속 이슈로 올린다
   (4번).**
+- **반영 (#63)**: `getJob`은 ai가 `SUCCEEDED`를 주면 작업 행을 잠근 한 트랜잭션에서 대상 도메인의
+  `JobResultHandler`가 결과를 저장하고 완료를 확정한다. 저장이 실패하면 둘 다 되돌리고 다음 조회에서
+  같은 `jobId`로 다시 받아 재시도한다(실패 횟수 한도 기본 5회, 넘으면 `FAILED`). ai/server는 끝난 작업의
+  결과를 SQLite에 계속 보관하므로(#48) 재시도할 수 있다. 세부는 `job.md` 3.3.
 
 ### 2.8 중복 요청 처리, 동시 실행 개수 — 제안
 
@@ -350,7 +354,7 @@ backend                                   ai
 | backend | ~~`PythonAiClient` 실제 HTTP 구현체 추가~~ → #114에서 완료(`mode=http`) |
 | backend | `PredictionRequest`에 `allowedDocumentVersionIds` 추가, `AnalysisRequest`의 `profileSnapshotJson`은 profile 패키지 확정 후 정리 |
 | backend | 예측 평가, 재무 데이터 적재용 `PythonAiClient` 메서드 추가 (결과 보관·폴링 패턴 적용 여부는 각 작업별 이슈에서 먼저 확정) |
-| backend | `job` 도메인 재구성: `getJob`이 상태 동기화와 결과 저장(대상 도메인 호출)을 묶어서, 저장 성공 후에만 종료 확정하도록 변경 (2.7) |
+| backend | ~~`job` 도메인 재구성: 결과 저장 성공 후에만 종료 확정~~ → #63에서 완료 |
 | backend | 시작 요청 멱등키 설계: 재요청에도 유지되는 키 선정, ai가 기존 jobId를 돌려줬을 때 새 `Job`에 `markStarted`로 연결하는 처리 추가 (2.8) |
 | infra | ai/server K8s 매니페스트, S3 읽기 권한(IRSA)·`S3_BUCKET`·`AWS_REGION` 전달 — backend/ai 양쪽과 협의 |
 | backend/ai 공통 | `AI_SERVICE_API_KEY`/`INTERNAL_API_KEY` 환경변수를 `.env.example`에 추가 |
