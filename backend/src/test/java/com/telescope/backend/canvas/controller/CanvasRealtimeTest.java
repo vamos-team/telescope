@@ -180,6 +180,18 @@ class CanvasRealtimeTest {
     }
 
     @Test
+    void 구독하지_않은_캔버스로_보낸_커서는_버려지고_연결은_유지된다() throws Exception {
+        BlockingQueue<Map<String, Object>> toViewer = subscribe(connect(viewer), cursors());
+        awaitSubscribers(cursors(), 1);
+        StompSession strangerSession = connect(stranger);  // 권한도 구독도 없음
+
+        strangerSession.send("/app/canvases/" + canvasId + "/cursor", Map.of("x", 1.0, "y", 1.0));
+
+        assertThat(toViewer.poll(1, TimeUnit.SECONDS)).isNull();
+        assertThat(strangerSession.isConnected()).isTrue();
+    }
+
+    @Test
     void 공유가_풀리면_개인_알림을_받고_이후_변경은_받지_못한다() throws Exception {
         StompSession editorSession = connect(editor);
         BlockingQueue<Map<String, Object>> notices = subscribe(editorSession, "/user/queue/canvases");
