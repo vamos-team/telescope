@@ -71,7 +71,7 @@ export const when = (iso: string) => {
 };
 // 캔버스 분기: 만들 때 고름. 예전 저장분은 기본 분기로 읽음
 export const QUARTERS = ["2025년 1분기", "2025년 2분기", "2025년 3분기", "2025년 4분기", "2026년 1분기", "2026년 2분기", "2026년 3분기", "2026년 4분기"];
-export const DEFAULT_QUARTER = "2026년 1분기";
+export const DEFAULT_QUARTER = "2026년 2분기";
 export const quarterOf = (m?: CanvasMeta) => m?.quarter ?? DEFAULT_QUARTER;
 // 사람 찾기 (공유 창 · 새 캔버스 창): 입력이 비면 추천(같은 부서 먼저), 입력하면 사번 · 이름 · 부서로 찾음. 최대 6명
 export function findPeople(q: string, exclude: Set<string>, dept: string) {
