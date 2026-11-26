@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { api } from "../../api";
 import { assumptions, contextNote, review } from "../ai";
-import { dashEvidence } from "../dashboard";
+import { dashColumnIndices, dashEvidence, dashPeriod, panelOf, tableOf } from "../dashboard";
 import { quarterIndex } from "../period";
 import { checkUpload } from "../validate";
 
@@ -79,6 +79,43 @@ it("동종사 표는 다섯 지표를 근거로 내보내고 지수·누적액�
   expect(dashEvidence("cx_cum").map((e) => e.tag)).toEqual(["capex_cumulative", "capex_cumulative", "capex_cumulative"]);
   expect(dashEvidence("pl_rev")[0].tag).toBe("rev");
   expect(dashEvidence("peer_capex")[0].tag).toBe("capex");
+});
+
+it("2024년 정리 글은 연간 인사이트의 2025년 증감과 해석을 숨긴다", async () => {
+  const quarter = "2024년 4분기", cutoff = quarterIndex(quarter), sid = crypto.randomUUID();
+  const panels = ["ins_op", "ins_capex"];
+  const cards = panels.map((panel) => ({ id: panel, panel, kind: "dash" as const, x: 0, y: 0 }));
+  const [op, capex] = panels.map((id) => tableOf(panelOf(id)!));
+  expect(op.cols.map((_, i) => dashPeriod(op, i))).toEqual(["2024", "2025", "2025"]);
+  expect(capex.cols.map((_, i) => dashPeriod(capex, i))).toEqual(["2023", "2025", "2025"]);
+  expect(dashColumnIndices(op, cutoff)).toEqual([0]);
+  expect(dashColumnIndices(capex, cutoff)).toEqual([0]);
+  await api.postEvents(sid, cards.map((c) => ({ type: "add_dash", card_id: c.id, panel: c.panel })));
+  const context = (await api.context(sid, "", cutoff)).layers.L2_workspace;
+  expect(context).toContain("항목\t2024\n");
+  expect(context).toContain("항목\t2023\n");
+  expect(context).not.toMatch(/2025|증감/);
+  const note = await contextNote({ canvas: "예산", quarter, sessionId: sid, cards, links: [], memos: [], notes: [], title: (id) => id });
+  expect(note).toMatch(/\(2024\).*\[dash:ins_op#/);
+  expect(note).toMatch(/\(2023\).*\[dash:ins_capex#/);
+  expect(note).not.toMatch(/2025|AI 해석|2년째/);
+});
+
+it("과거 실적 열도 해당 공시가 공개된 분기부터 근거에 포함한다", async () => {
+  const sid = crypto.randomUUID(), tableId = "SKT_2026Q1:1:1";
+  const cards = [{ id: "s", kind: "table" as const, tableId, rows: [5], cols: [0], vcol: 0,
+    edits: {}, sort: null, checked: false, x: 0, y: 0 }];
+  await api.postEvents(sid, [{ type: "add_card", card_id: "s", table_id: tableId, rows: [5], cols: [0] }]);
+  const before = quarterIndex("2026년 1분기"), after = quarterIndex("2026년 2분기");
+  expect(await api.evidence(sid, before)).toEqual([]);
+  expect(await api.evidence(sid, after)).toContainEqual(expect.objectContaining({ period: "1Q25", source: "공시" }));
+  expect(api.peerFacts(["da"], before).tables).toEqual([]);
+  expect(api.peerFacts(["da"], after).tables).toContain(tableId);
+  expect((await api.context(sid, "", before)).messages.every(({ content }) => !content.includes(tableId))).toBe(true);
+  const note = await contextNote({ canvas: "예산", quarter: "2026년 1분기", sessionId: sid, cards,
+    links: [], memos: [], notes: [], title: (id) => id });
+  expect(note).not.toContain(tableId);
+  expect(note).not.toContain("1Q25");
 });
 
 it("비교 상대 행을 뺀 뒤에도 거부 상태를 유지하고 되돌릴 수 있다", async () => {

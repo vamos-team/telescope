@@ -77,15 +77,16 @@ export async function contextNote(x: NoteInput): Promise<string> {
     const p = c.kind === "dash" ? panelOf(c.panel) : undefined; if (!p) continue;
     const t = tableOf(p), cols = dashColumnIndices(t, cutoff);
     if (!cols.length) continue;
+    const hideInsight = !!p.ai && !withinQuarter("2025", cutoff);
     const title = cols.length < t.cols.length ? p.title.replace(/ \([^)]*\)$/, "") : p.title;
-    db.push("", `### ${title}${p.sub ? ` (${p.sub})` : ""}`);
+    db.push("", hideInsight ? `### ${p.sub}` : `### ${title}${p.sub ? ` (${p.sub})` : ""}`);
     for (const r of t.rows.slice(0, 12)) for (const i of dashColumns(t, r, cols)) {
       const v = r.v[i], unit = t.metrics?.[i].unit ?? r.unit ?? t.unit;
       if (v == null) continue;
       const label = t.metrics ? `${r.n} ${t.cols[i]}` : r.n;
       db.push(`- ${label}: ${typeof v === "number" ? num(v) + unit : v}${t.cols.length > 1 ? ` (${dashPeriod(t, i)})` : ""} [${dashCite(p.id, r.n, i)}]`);
     }
-    if (p.ai) db.push(`- AI 해석(사실 아님): ${p.ai}`);
+    if (p.ai && !hideInsight) db.push(`- AI 해석(사실 아님): ${p.ai}`);
     db.push(...hint(c.id));
   }
   sec("DART 대시보드", db);
@@ -193,9 +194,9 @@ export async function review(a: Analysis, x: ReviewInput): Promise<Review> {
   const tags = new Set(Object.values(x.tags).flat());
   const insights: InsightItem[] = [];
   for (const i of a.insights.filter((i) => withinQuarter("1Q26", cutoff) && i.concepts.some((c) => tags.has(c)))) {
-    const f = api.peerFacts(i.concepts.slice(0, 2)).facts;
-    insights.push({ id: i.id, title: i.title, ai: i.ai, news: i.news,
-      facts: f.flatMap((r) => r.rows.filter((y) => y.cur != null).map((y) => ({ text: `${y.company} ${r.name} ${num(y.cur!)}십억원${y.prv ? ` (전년 동기 대비 ${pctTxt(y.prv, y.cur!)})` : ""}` }))).slice(0, 6) });
+    const f = api.peerFacts(i.concepts.slice(0, 2), cutoff).facts;
+    const facts = f.flatMap((r) => r.rows.filter((y) => y.cur != null).map((y) => ({ text: `${y.company} ${r.name} ${num(y.cur!)}십억원${y.prv ? ` (전년 동기 대비 ${pctTxt(y.prv, y.cur!)})` : ""}` }))).slice(0, 6);
+    if (facts.length) insights.push({ id: i.id, title: i.title, ai: i.ai, news: i.news, facts });
   }
   const ANN: Record<string, string> = { ins_op: "opi", ins_capex: "capex", ins_div: "dividend" };
   const hasDash = x.cards.some((c) => c.kind === "dash");

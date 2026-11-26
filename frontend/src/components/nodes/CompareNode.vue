@@ -19,7 +19,7 @@ watch([() => cv.sessionId, () => card.value?.id, () => card.value?.version], asy
   onCleanup(() => { current = false; });
   if (sid !== previous?.[0] || id !== previous?.[1]) res.value = null;
   if (!id) return;
-  const result = await api.compare(sid, id).catch(() => null);
+  const result = await api.compare(sid, id).catch(() => res.value);
   if (current) res.value = result;
 }, { immediate: true, flush: "sync" });
 

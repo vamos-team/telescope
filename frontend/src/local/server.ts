@@ -262,8 +262,20 @@ const LAYERS = ["L0_system", "L1_sources", "L2_workspace", "L3_edits", "L4_task"
 const fmtN = (v: number | null | undefined) => v == null ? "" : Number.isInteger(v) ? String(v) : v.toFixed(4).replace(/0+$/, "");
 const hash = (s: string) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193); return (h >>> 0).toString(16).padStart(8, "0"); };
 const docKind = { ir: "IR", ar: "AR", news: "뉴스", internal: "사내" } as const;
+// 데모 접수 ID별 원자료 공개일. KT 특수관계자 표도 같은 분기보고서 주석을 참조한다.
+const filingDates = new Map([
+  // https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260515002674
+  ["KT_2026Q1", "2026-05-15"],
+  ["KT_RP_2026Q1", "2026-05-15"],
+  // https://www.sktelecom.com/img/eng/qua/20260507/1Q26InvestorBriefingENG.pdf
+  ["SKT_2026Q1", "2026-05-07"],
+  // https://news.lguplus.com/?p=21797
+  ["LGU_2026Q1", "2026-05-07"],
+]);
 export function tableColumnWithinQuarter(t: SourceTable, col: number, cutoff?: number): boolean {
   if (cutoff === undefined) return true;
+  const publishedDate = filingDates.get(t.rcept_no);
+  if (!publishedDate || !withinQuarter(publishedDate, cutoff)) return false;
   const filingPeriod = /_(\d{4})Q([1-4])$/.exec(t.rcept_no);
   const quarter = quarterIndex(t.cols[col]) ?? (filingPeriod ? Number(filingPeriod[1]) * 4 + Number(filingPeriod[2]) : undefined);
   return quarter === undefined || quarter <= cutoff;
@@ -307,7 +319,8 @@ function compile(w: Workspace, task: string, cutoff?: number) {
     if (!cols.length) continue;
     const unit = t.unit ? ` | 단위 ${t.unit}` : "";
     const title = cols.length < t.cols.length ? panel.title.replace(/ \([^)]*\)$/, "") : panel.title;
-    blocks.push(`## 카드 ${c.card_id} | 공시 대시보드 | ${title} | ${panel.sub}${unit} | dash:${panel.id}\n${dashText(t, cols)}`);
+    const heading = panel.ai && !withinQuarter("2025", cutoff) ? panel.sub : [title, panel.sub].filter(Boolean).join(" | ");
+    blocks.push(`## 카드 ${c.card_id} | 공시 대시보드 | ${heading}${unit} | dash:${panel.id}\n${dashText(t, cols)}`);
   }
   L.L2_workspace = blocks.length ? "# 캔버스 카드\n" + blocks.join("\n\n") : "";
 
@@ -439,7 +452,7 @@ export function recommend(companies: string[], tags: string[], kinds: Doc["kind"
 // 3사 비교 사실 표: 개념마다 회사별 1Q26·1Q25 값(십억원). 열 이름으로 기간을 맞춘다 (CSV 1Q26, KT XML 당분기·제 10 기 1분기)
 const CUR = /1Q26|당분기|제 10 기 1분기/, PRV = /1Q25|전분기|제 9 기 1분기/;
 export const PEERS = ["SKT", "KT", "LGU+"];
-export function peerFacts(conceptIds: string[]) {
+export function peerFacts(conceptIds: string[], cutoff?: number) {
   const tables = new Set<string>();
   // 공시 표에 없는 개념(설비투자 등 문서 태그)은 건너뜀
   const facts = conceptIds.flatMap((id) => CONCEPTS.filter((x) => x.id === id)).map((c) => {
@@ -449,7 +462,8 @@ export function peerFacts(conceptIds: string[]) {
         let tot: number | null = null;
         for (const m of c.members[co] ?? []) for (const t of TABLES.values()) {
           if (t.company !== co) continue;
-          const col = t.cols.findIndex((x) => re.test(x)); if (col < 0) continue;
+          const col = t.cols.findIndex((x, i) => re.test(x) && tableColumnWithinQuarter(t, i, cutoff));
+          if (col < 0) continue;
           const r = t.rows.findIndex((_, i) => alts(m).some((a) => memberMatches(a, t, i))); if (r < 0) continue;
           const v = t.rows[r].values[col]; if (v == null) continue;
           tot = (tot ?? 0) + v * UNIT_TO_BIL[t.unit]; if (re === CUR) tables.add(t.table_id); break;

@@ -2,7 +2,7 @@
 // 패널 하나 = 자료 검색 화면의 카드 하나 = 캔버스 대시보드 카드 하나. 비율·합계·증감은 모두 여기서 코드로 계산한다 (LLM에 맡기지 않음)
 // 실제 서비스: GET /api/v1/dashboard 가 같은 모양(패널 id · 제목 · 기준 · 차트 데이터)을 돌려준다
 import { YEARS as YR, PEERS, CONS, SEP, CAPEX, PEER, PEER_DEP, QTR, DIV, OPEX_2025, OP_BRIDGE, CASH_BRIDGE, AQ, AAC, ANNUAL_INSIGHTS, type Peer } from "./dart";
-import { withinQuarter } from "./period";
+import { quarterIndex, withinQuarter } from "./period";
 
 export type Fmt = (v: number) => string;
 export interface Series { name: string; v: number[]; c: string; fade?: boolean; bold?: boolean }
@@ -175,13 +175,17 @@ export function tableOf(p: Panel): PanelTable {
     case "treemap": return { cols: ["2025"], rows: c.items.map(([n, v]) => ({ n, v: [v] })), unit: u };
     case "heat": return { cols: c.cols, rows: c.rows.map((r) => ({ n: r.n, v: r.v, unit: r.pct ? "%" : u })), unit: "" };
     case "table": return { cols: c.cols, rows: c.rows, unit: u, metrics: c.metrics, period: c.period };
-    case "kpis": return { cols: ["2025", "전년 대비"], rows: c.items.map((k) => ({ n: k.l, v: [k.raw, k.d.replace(/^2025 · 전년 대비 /, "")], unit: k.unit })), unit: "", period: "2025" };
+    case "kpis": return { cols: ["2025", "전년 대비"], rows: c.items.map((k) => ({ n: k.l, v: [k.raw, k.d.replace(/^2025 · 전년 대비 /, "")], unit: k.unit })), unit: "" };
     case "asset": return { cols: AQ, rows: AAC.map(([, , n, v]) => ({ n, v })), unit: u };
   }
 }
 // 인용 ID = 패널#행@열. 카드 이동은 패널만 봄, 같은 행의 다른 열(값 · 증감)을 구분
 export const dashCite = (id: string, row: string, col: number) => `dash:${id}#${encodeURIComponent(row)}@${col}`;
-export const dashPeriod = (t: PanelTable, i: number) => t.period ?? t.cols[i];
+export function dashPeriod(t: PanelTable, i: number): string {
+  const col = t.cols[i];
+  if (col === "증감" || col === "전년 대비") return t.cols[i - 1];
+  return quarterIndex(col) === undefined ? t.period ?? col : col;
+}
 export const dashColumnIndices = (t: PanelTable, cutoff?: number) =>
   t.cols.map((_, i) => i).filter((i) => withinQuarter(dashPeriod(t, i), cutoff));
 export function dashText(t: PanelTable, cols = dashColumnIndices(t)) {

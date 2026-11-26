@@ -16,6 +16,7 @@ const A = api.analysis;
 type Step = "review" | "questions" | "eval";
 const part = ref<Step>("review"), alOpen = ref(true), exportOpen = ref(false);
 const doing = ref<Step | null>(null), live = ref<{ review: Review | null; questions: Question[] | null }>({ review: null, questions: null });
+const analysisInterrupted = ref(false);
 const curId = ref<string | null>(cv.analyses[0]?.id ?? null);
 const cur = computed<Session | null>(() => cv.analyses.find((s) => s.id === curId.value) ?? null);
 const rv = computed(() => doing.value ? live.value.review : cur.value?.review ?? null);
@@ -43,15 +44,18 @@ async function start(mode: "new" | "update" = "new") {
   if (!cv.cards.length || doing.value) return;
   const target = mode === "update" ? cur.value : null;
   const sid = cv.sessionId;
+  analysisInterrupted.value = false;
+  live.value = { review: null, questions: null }; doing.value = "review"; part.value = "review";
+  await cv.flush();
+  if (!mounted || sid !== cv.sessionId) { doing.value = null; return; }
+  const sig = cv.sig, quarter = cv.pageQuarter;
   const staleRun = () => {
-    if (mounted && sid === cv.sessionId) return false;
+    const sameSession = mounted && sid === cv.sessionId;
+    if (sameSession && sig === cv.sig && quarter === cv.pageQuarter) return false;
+    analysisInterrupted.value = sameSession;
     doing.value = null;
     return true;
   };
-  live.value = { review: null, questions: null }; doing.value = "review"; part.value = "review";
-  await cv.flush();
-  if (staleRun()) return;
-  const sig = cv.sig, quarter = cv.pageQuarter;
   await tick();
   if (staleRun()) return;
   const evs = await api.evidence(sid, quarterIndex(quarter));
@@ -71,6 +75,7 @@ async function start(mode: "new" | "update" = "new") {
   live.value.questions = q;
   const s: Session = { id: "a" + Date.now().toString(36), base: target ? lineOf(target) : undefined, at: new Date().toISOString(), sig, cards: cv.cards.length, quarter,
     review: r, questions: q, assume: makeAssumptions(A, evs), eval: null };
+  if (staleRun()) return;
   cv.pushAnalysis(s);
   curId.value = s.id; doing.value = null;
 }
@@ -152,7 +157,11 @@ async function copyX() { try { await navigator.clipboard.writeText(xtext.value);
       <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2" /><path d="M7.5 3.5v13" /></svg></button>
 
     <main class="abody">
-      <div v-if="stale" class="stalebar" role="status">캔버스가 변경되었습니다.<button data-tip="이 세션을 지금 캔버스로 다시 분석" @click="start('update')">업데이트</button><button data-tip="새 세션으로 분석" @click="start('new')">새로 분석하기</button></div>
+      <div v-if="stale || analysisInterrupted" class="stalebar" role="status">
+        {{ analysisInterrupted ? '분석 중 캔버스가 변경되었습니다. 다시 분석해 주세요.' : '캔버스가 변경되었습니다.' }}
+        <button v-if="cur" data-tip="이 세션을 지금 캔버스로 다시 분석" @click="start('update')">업데이트</button>
+        <button :disabled="!cv.cards.length" data-tip="새 세션으로 분석" @click="start('new')">새로 분석하기</button>
+      </div>
 
       <div v-if="!cur && !doing" class="aempty">
         <h2>캔버스를 분석합니다</h2>
