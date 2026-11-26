@@ -69,10 +69,10 @@ class CanvasControllerTest {
         UUID card = UUID.randomUUID();
         when(eventService.apply(eq(1L), eq(7L), any(CanvasEventsRequest.class)))
                 .thenThrow(new BusinessException(ErrorCode.CANVAS_TEXT_CONFLICT, "다른 사람이 먼저 글을 고쳤습니다.",
-                        new TextConflict(card, "prompt", "먼저 고친 글", 3)));
+                        new TextConflict(card, "memo", "먼저 고친 글", 3)));
 
         loggedIn().perform(post("/api/v1/canvases/1/events").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"requestId\":\"" + UUID.randomUUID() + "\",\"events\":[{\"type\":\"set_card_prompt\"}]}"))
+                        .content("{\"requestId\":\"" + UUID.randomUUID() + "\",\"events\":[{\"type\":\"set_card_memo\"}]}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("K003"))
                 .andExpect(jsonPath("$.data.targetId").value(card.toString()))

@@ -13,21 +13,17 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.data.domain.Persistable;
 
-import java.util.Set;
 import java.util.UUID;
 
 /**
  * 카드 사이 연결선. ID는 화면이 만든 UUID다. 양 끝 카드가 지워지면 DB가 함께 지운다.
- * 선 프롬프트({@code prompt})는 버전을 갖고, 기준 버전이 다르면 서비스가 충돌(409)로 거절한다.
+ * 선 메모({@code memo})는 버전을 갖고, 기준 버전이 다르면 서비스가 충돌(409)로 거절한다.
  */
 @Getter
 @Entity
 @Table(name = "canvas_link")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CanvasLink extends BaseTimeEntity implements Persistable<UUID> {
-
-    /** 연결 관계로 쓸 수 있는 값. */
-    public static final Set<String> RELATIONS = Set.of("근거", "설명", "반박", "관련");
 
     @Id
     private UUID id;
@@ -41,13 +37,14 @@ public class CanvasLink extends BaseTimeEntity implements Persistable<UUID> {
     @Column(nullable = false)
     private UUID targetCardId;
 
-    @Column(nullable = false, length = 10)
-    private String rel;
-
-    private String prompt;
+    /** 선 메모. 비어 있으면 없음. 관계 종류(근거·설명·반박)는 저장하지 않고 분석에서 판단한다(#123). */
+    private String memo;
 
     @Column(nullable = false)
-    private int promptVersion;
+    private int memoVersion;
+
+    /** 선 메모를 마지막으로 고친 사람. 메모를 지우면 비운다. */
+    private Long memoBy;
 
     @Column(nullable = false)
     private Long createdBy;
@@ -55,30 +52,28 @@ public class CanvasLink extends BaseTimeEntity implements Persistable<UUID> {
     @Transient
     private boolean isNew = true;
 
-    private CanvasLink(UUID id, Long canvasId, UUID sourceCardId, UUID targetCardId, String rel, Long createdBy) {
+    private CanvasLink(UUID id, Long canvasId, UUID sourceCardId, UUID targetCardId, Long createdBy) {
         this.id = id;
         this.canvasId = canvasId;
         this.sourceCardId = sourceCardId;
         this.targetCardId = targetCardId;
-        this.rel = requireRelation(rel);
         this.createdBy = createdBy;
     }
 
-    /** 새 연결을 만든다. 관계는 {@link #RELATIONS} 중 하나여야 한다. */
-    public static CanvasLink create(UUID id, Long canvasId, UUID sourceCardId, UUID targetCardId,
-                                    String rel, Long createdBy) {
-        return new CanvasLink(id, canvasId, sourceCardId, targetCardId, rel, createdBy);
+    /** 새 연결을 만든다. 선 메모는 비어 있고 버전은 0이다. */
+    public static CanvasLink create(UUID id, Long canvasId, UUID sourceCardId, UUID targetCardId, Long createdBy) {
+        return new CanvasLink(id, canvasId, sourceCardId, targetCardId, createdBy);
     }
 
-    /** 연결 관계를 바꾼다. 선 프롬프트는 건드리지 않는다. */
-    public void changeRelation(String rel) {
-        this.rel = requireRelation(rel);
-    }
-
-    /** 선 프롬프트를 바꾸고 버전을 1 올린다. 빈 값이면 지운다. 기준 버전 확인은 부르는 쪽이 먼저 한다. */
-    public int changePrompt(String prompt) {
-        this.prompt = prompt == null || prompt.isBlank() ? null : prompt;
-        return ++promptVersion;
+    /**
+     * 선 메모를 바꾸고 버전을 1 올린다. 고친 사람을 작성자로 남기고, 빈 값이면 메모와 작성자를 지운다.
+     * 기준 버전 확인은 부르는 쪽이 먼저 한다.
+     */
+    public int changeMemo(String memo, Long editedBy) {
+        boolean blank = memo == null || memo.isBlank();
+        this.memo = blank ? null : memo;
+        this.memoBy = blank ? null : editedBy;
+        return ++memoVersion;
     }
 
     /** 이 연결이 주어진 카드에 닿는지. 카드를 지울 때 같이 지울 연결을 고른다. */
@@ -96,12 +91,5 @@ public class CanvasLink extends BaseTimeEntity implements Persistable<UUID> {
     @PostPersist
     void markNotNew() {
         this.isNew = false;
-    }
-
-    private static String requireRelation(String rel) {
-        if (!RELATIONS.contains(rel)) {
-            throw new IllegalArgumentException("알 수 없는 연결 관계입니다: " + rel);
-        }
-        return rel;
     }
 }

@@ -54,15 +54,15 @@ public class CanvasEventService {
     private static final String LAYER_EDITS = "L3_edits";
     private static final List<String> LAYER_ORDER = List.of(LAYER_SOURCES, LAYER_WORKSPACE, LAYER_EDITS);
 
-    /** 이벤트 종류별로 바뀌는 컨텍스트 층. 없는 종류(이동, 시각화)는 컨텍스트에 영향이 없다. */
+    /** 이벤트 종류별로 바뀌는 컨텍스트 층. 없는 종류(이동)는 컨텍스트에 영향이 없다. */
     private static final Map<String, String> LAYER_OF = Map.ofEntries(
             Map.entry("add_card", LAYER_SOURCES), Map.entry("add_doc", LAYER_SOURCES),
             Map.entry("add_dash", LAYER_SOURCES), Map.entry("remove_card", LAYER_SOURCES),
-            Map.entry("add_prompt", LAYER_WORKSPACE), Map.entry("edit_prompt", LAYER_WORKSPACE),
-            Map.entry("set_card_prompt", LAYER_WORKSPACE), Map.entry("set_link_prompt", LAYER_WORKSPACE),
+            Map.entry("add_memo", LAYER_WORKSPACE), Map.entry("edit_memo", LAYER_WORKSPACE),
+            Map.entry("set_card_memo", LAYER_WORKSPACE), Map.entry("set_link_memo", LAYER_WORKSPACE),
             Map.entry("add_rows", LAYER_WORKSPACE), Map.entry("remove_row", LAYER_WORKSPACE),
             Map.entry("create_compare", LAYER_WORKSPACE), Map.entry("add_link", LAYER_WORKSPACE),
-            Map.entry("set_link", LAYER_WORKSPACE), Map.entry("remove_link", LAYER_WORKSPACE),
+            Map.entry("remove_link", LAYER_WORKSPACE),
             Map.entry("edit_cell", LAYER_EDITS), Map.entry("revert_card", LAYER_EDITS),
             Map.entry("select_period", LAYER_EDITS), Map.entry("sort_card", LAYER_EDITS),
             Map.entry("confirm_mapping", LAYER_EDITS));
@@ -139,21 +139,19 @@ public class CanvasEventService {
             case "add_card" -> addCard(b, f, CardKind.TABLE, tableProps(f));
             case "add_doc" -> addCard(b, f, CardKind.DOC, props("docId", f.string("docId")));
             case "add_dash" -> addCard(b, f, CardKind.DASH, props("panel", f.string("panel")));
-            case "add_chart" -> addChart(b, f);
             case "create_compare" -> addCompare(b, f);
-            case "add_prompt" -> addPrompt(b, f);
+            case "add_memo" -> addMemo(b, f);
             case "add_rows" -> updateTable(b, f, p -> p.put("rows", union(p.get("rows"), f.integers("rows"))));
             case "remove_row" -> updateTable(b, f, p -> p.put("rows", without(p.get("rows"), f.integer("r"))));
             case "select_period" -> updateTable(b, f, p -> p.put("vcol", f.integer("c")));
             case "sort_card" -> updateTable(b, f, p -> p.put("sort", sortValue(f)));
             case "edit_cell" -> updateTable(b, f, p -> editCell(p, f));
             case "revert_card" -> updateTable(b, f, p -> p.put("edits", new LinkedHashMap<>()));
-            case "edit_prompt" -> editPromptText(b, f);
-            case "set_card_prompt" -> setCardPrompt(b, f);
-            case "set_link_prompt" -> setLinkPrompt(b, f);
+            case "edit_memo" -> editMemoText(b, f);
+            case "set_card_memo" -> setCardMemo(b, f);
+            case "set_link_memo" -> setLinkMemo(b, f);
             case "confirm_mapping" -> confirmMapping(b, f);
             case "add_link" -> addLink(b, f);
-            case "set_link" -> setLink(b, f);
             case "remove_link" -> removeLink(b, f);
             case "remove_card" -> removeCard(b, f);
             case "move_card" -> moveCard(b, f);
@@ -174,28 +172,33 @@ public class CanvasEventService {
         return true;
     }
 
-    private boolean addChart(Batch b, EventFields f) {
-        UUID compareId = f.uuid("compareId");
-        Optional<CanvasCard> compare = card(b, compareId).filter(c -> c.getKind() == CardKind.COMPARE);
-        if (compare.isEmpty()) {
-            return false;  // 원본 비교 카드가 이미 지워졌다
-        }
-        return addCard(b, f, CardKind.CHART, props("compareId", compareId.toString()));
-    }
-
+    /**
+     * 비교 카드 또는 시각화 카드를 만든다({@code view}: {@code compare} 기본, {@code chart}). 둘 다 원본 표 카드 목록
+     * ({@code sources})을 갖고 같은 비교 계산을 쓴다. 이미 지워졌거나 표가 아닌 원본은 빼고 저장한다.
+     */
     private boolean addCompare(Batch b, EventFields f) {
+        String view = f.optionalString("view");
+        CardKind kind;
+        if (view == null || "compare".equals(view)) {
+            kind = CardKind.COMPARE;
+        } else if ("chart".equals(view)) {
+            kind = CardKind.CHART;
+        } else {
+            throw f.invalid("view", "compare 또는 chart여야 합니다");
+        }
         List<String> sources = new ArrayList<>();
         for (UUID source : f.uuids("sources")) {
             if (card(b, source).filter(c -> c.getKind() == CardKind.TABLE).isPresent()) {
                 sources.add(source.toString());
             }
         }
-        return addCard(b, f, CardKind.COMPARE, props("sources", sources));
+        return addCard(b, f, kind, props("sources", sources));
     }
 
-    private boolean addPrompt(Batch b, EventFields f) {
+    /** 메모 카드를 만든다. 작성자는 요청한 사용자다(화면이 보낸 {@code author}는 쓰지 않는다). */
+    private boolean addMemo(Batch b, EventFields f) {
         String text = f.string("text");
-        addCard(b, f, CardKind.PROMPT, new LinkedHashMap<>());
+        addCard(b, f, CardKind.MEMO, new LinkedHashMap<>());
         UUID id = f.uuid("cardId");
         CanvasCard card = card(b, id).orElseThrow();
         b.textVersion(id, card.changeText(text));
@@ -272,42 +275,45 @@ public class CanvasEventService {
 
     // ---- 글 수정 (버전 비교) ----
 
-    private boolean editPromptText(Batch b, EventFields f) {
+    /** 메모 카드 본문을 고친다. 기준 버전이 다르면 409. */
+    private boolean editMemoText(Batch b, EventFields f) {
         Optional<CanvasCard> found = card(b, f.uuid("cardId"));
         if (found.isEmpty()) {
             return false;
         }
         CanvasCard card = found.get();
-        if (card.getKind() != CardKind.PROMPT) {
-            throw f.invalid("cardId", "프롬프트 카드가 아닙니다");
+        if (card.getKind() != CardKind.MEMO) {
+            throw f.invalid("cardId", "메모 카드가 아닙니다");
         }
         requireVersion(f, card.getId(), "text", card.getText(), card.getTextVersion());
         b.textVersion(card.getId(), card.changeText(f.string("text")));
         return true;
     }
 
-    private boolean setCardPrompt(Batch b, EventFields f) {
+    /** 카드 메모를 고친다(메모 카드 제외). 빈 값이면 지운다. 기준 버전이 다르면 409. */
+    private boolean setCardMemo(Batch b, EventFields f) {
         Optional<CanvasCard> found = card(b, f.uuid("cardId"));
         if (found.isEmpty()) {
             return false;
         }
         CanvasCard card = found.get();
-        if (card.getKind() == CardKind.PROMPT) {
-            throw f.invalid("cardId", "프롬프트 카드에는 카드 프롬프트를 붙이지 않습니다");
+        if (card.getKind() == CardKind.MEMO) {
+            throw f.invalid("cardId", "메모 카드에는 카드 메모를 붙이지 않습니다");
         }
-        requireVersion(f, card.getId(), "prompt", card.getPrompt(), card.getPromptVersion());
-        b.promptVersion(card.getId(), card.changePrompt(f.string("text")));
+        requireVersion(f, card.getId(), "memo", card.getMemo(), card.getMemoVersion());
+        b.memoVersion(card.getId(), card.changeMemo(f.string("text")));
         return true;
     }
 
-    private boolean setLinkPrompt(Batch b, EventFields f) {
+    /** 선 메모를 고친다. 고친 사람이 작성자({@code memoBy})가 되고, 빈 값이면 메모와 작성자를 지운다. 기준 버전이 다르면 409. */
+    private boolean setLinkMemo(Batch b, EventFields f) {
         Optional<CanvasLink> found = link(b, f.uuid("linkId"));
         if (found.isEmpty()) {
             return false;
         }
         CanvasLink link = found.get();
-        requireVersion(f, link.getId(), "prompt", link.getPrompt(), link.getPromptVersion());
-        b.promptVersion(link.getId(), link.changePrompt(f.string("text")));
+        requireVersion(f, link.getId(), "memo", link.getMemo(), link.getMemoVersion());
+        b.memoVersion(link.getId(), link.changeMemo(f.string("text"), b.userId));
         return true;
     }
 
@@ -325,9 +331,19 @@ public class CanvasEventService {
 
     // ---- 계정 대응 ----
 
+    /**
+     * 계정 대응을 확정({@code true})·거부({@code false})하거나 취소({@code null})한다. 같은 개념·회사의 이전 결정을 덮어쓴다.
+     * 취소는 대응 기록을 지운다. 지울 기록이 없으면 반영한 것이 없으므로 기록하지 않는다.
+     */
     private boolean confirmMapping(Batch b, EventFields f) {
         String conceptId = f.string("conceptId");
         String company = f.string("company");
+        if (f.raw("accepted") == null) {
+            Optional<CanvasMapping> existing =
+                    mappingRepository.findByCanvasIdAndConceptIdAndCompany(b.canvasId(), conceptId, company);
+            existing.ifPresent(mappingRepository::delete);
+            return existing.isPresent();
+        }
         String cells = CanvasJson.write(f.list("cells"));
         boolean accepted = f.bool("accepted");
         mappingRepository.findByCanvasIdAndConceptIdAndCompany(b.canvasId(), conceptId, company)
@@ -353,24 +369,8 @@ public class CanvasEventService {
         if (card(b, source).isEmpty() || card(b, target).isEmpty()) {
             return false;  // 양 끝 중 하나가 이미 지워졌다
         }
-        String rel = f.string("rel");
-        if (!CanvasLink.RELATIONS.contains(rel)) {
-            throw f.invalid("rel", "근거, 설명, 반박, 관련 중 하나여야 합니다");
-        }
-        linkRepository.save(CanvasLink.create(id, b.canvasId(), source, target, rel, b.userId));
-        return true;
-    }
-
-    private boolean setLink(Batch b, EventFields f) {
-        Optional<CanvasLink> found = link(b, f.uuid("linkId"));
-        if (found.isEmpty()) {
-            return false;
-        }
-        String rel = f.string("rel");
-        if (!CanvasLink.RELATIONS.contains(rel)) {
-            throw f.invalid("rel", "근거, 설명, 반박, 관련 중 하나여야 합니다");
-        }
-        found.get().changeRelation(rel);
+        // 관계 종류(rel)는 저장하지 않는다. 예전 화면이 보내도 무시한다(#123)
+        linkRepository.save(CanvasLink.create(id, b.canvasId(), source, target, b.userId));
         return true;
     }
 
@@ -382,7 +382,10 @@ public class CanvasEventService {
 
     // ---- 카드 삭제·이동 ----
 
-    /** 카드를 지우고, 그 카드에 닿는 연결과 비교 카드의 원본 목록에서도 뺀다. */
+    /**
+     * 카드를 지우고, 그 카드에 닿는 연결과 비교·시각화 카드의 원본 목록에서도 뺀다.
+     * 비교 카드를 지워도 그 비교로 만든 시각화 카드는 남는다(시각화는 원본 표를 직접 가리킨다).
+     */
     private boolean removeCard(Batch b, EventFields f) {
         UUID id = f.uuid("cardId");
         Optional<CanvasCard> found = card(b, id);
@@ -392,11 +395,13 @@ public class CanvasEventService {
         List<CanvasLink> touching = linkRepository.findByCanvasIdOrderByCreatedAtAsc(b.canvasId()).stream()
                 .filter(l -> l.touches(id)).toList();
         linkRepository.deleteAll(touching);
-        for (CanvasCard compare : cardRepository.findByCanvasIdAndKind(b.canvasId(), CardKind.COMPARE)) {
-            Map<String, Object> props = CanvasJson.readMap(compare.getProps());
-            if (props.get("sources") instanceof List<?> sources && sources.contains(id.toString())) {
-                props.put("sources", sources.stream().filter(s -> !id.toString().equals(s)).toList());
-                compare.replaceProps(CanvasJson.write(props));
+        for (CardKind kind : List.of(CardKind.COMPARE, CardKind.CHART)) {
+            for (CanvasCard derived : cardRepository.findByCanvasIdAndKind(b.canvasId(), kind)) {
+                Map<String, Object> props = CanvasJson.readMap(derived.getProps());
+                if (props.get("sources") instanceof List<?> sources && sources.contains(id.toString())) {
+                    props.put("sources", sources.stream().filter(s -> !id.toString().equals(s)).toList());
+                    derived.replaceProps(CanvasJson.write(props));
+                }
             }
         }
         cardRepository.delete(found.get());
@@ -463,8 +468,8 @@ public class CanvasEventService {
             versions.merge(id.toString(), new TextVersions(version, null), (old, n) -> old.withText(version));
         }
 
-        private void promptVersion(UUID id, int version) {
-            versions.merge(id.toString(), new TextVersions(null, version), (old, n) -> old.withPrompt(version));
+        private void memoVersion(UUID id, int version) {
+            versions.merge(id.toString(), new TextVersions(null, version), (old, n) -> old.withMemo(version));
         }
 
         private String firstChangedLayer() {

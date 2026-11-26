@@ -9,7 +9,10 @@ import com.telescope.backend.canvas.dto.ShareMember;
 import com.telescope.backend.canvas.dto.TextConflict;
 import com.telescope.backend.canvas.entity.CanvasEvent;
 import com.telescope.backend.canvas.entity.CanvasRole;
+import com.telescope.backend.canvas.entity.CardKind;
 import com.telescope.backend.canvas.repository.CanvasEventRepository;
+import com.telescope.backend.canvas.repository.CanvasMappingRepository;
+import com.telescope.backend.canvas.dto.UserRef;
 import com.telescope.backend.global.config.JpaAuditingConfig;
 import com.telescope.backend.global.exception.BusinessException;
 import com.telescope.backend.global.exception.ErrorCode;
@@ -69,6 +72,7 @@ class CanvasEventServiceTest {
     @Autowired CanvasService canvasService;
     @Autowired CanvasEventService eventService;
     @Autowired CanvasEventRepository eventRepository;
+    @Autowired CanvasMappingRepository mappingRepository;
     @Autowired JdbcTemplate jdbc;
     @Autowired ApplicationEvents published;
 
@@ -90,61 +94,61 @@ class CanvasEventServiceTest {
     }
 
     @Test
-    void 한_사람이_카드를_옮기는_동안_다른_사람이_카드_프롬프트를_고쳐도_둘_다_반영된다() {
+    void 한_사람이_카드를_옮기는_동안_다른_사람이_카드_메모를_고쳐도_둘_다_반영된다() {
         UUID card = addTable(owner);
 
         eventService.apply(canvasId, owner, batch(event("move_card", "cardId", card, "x", 300, "y", 120)));
         eventService.apply(canvasId, editor, batch(
-                event("set_card_prompt", "cardId", card, "text", "감가상각비 추이 확인", "baseVersion", 0)));
+                event("set_card_memo", "cardId", card, "text", "감가상각비 추이 확인", "baseVersion", 0)));
 
         Map<String, Object> view = cardView(owner, card);
         assertThat(view.get("x")).isEqualTo(300.0);
         assertThat(view.get("y")).isEqualTo(120.0);
-        assertThat(view.get("prompt")).isEqualTo("감가상각비 추이 확인");
-        assertThat(view.get("promptVersion")).isEqualTo(1);
+        assertThat(view.get("memo")).isEqualTo("감가상각비 추이 확인");
+        assertThat(view.get("memoVersion")).isEqualTo(1);
     }
 
     @Test
     void 같은_글을_오래된_기준_버전으로_고치면_409_K003과_현재_글을_돌려주고_묶음_전체를_반영하지_않는다() {
         UUID card = addTable(owner);
         eventService.apply(canvasId, owner, batch(
-                event("set_card_prompt", "cardId", card, "text", "먼저 고친 글", "baseVersion", 0)));
+                event("set_card_memo", "cardId", card, "text", "먼저 고친 글", "baseVersion", 0)));
         long seqBefore = lastSeq();
 
         CanvasEventsRequest late = batch(
                 event("move_card", "cardId", card, "x", 999, "y", 999),
-                event("set_card_prompt", "cardId", card, "text", "늦게 고친 글", "baseVersion", 0));
+                event("set_card_memo", "cardId", card, "text", "늦게 고친 글", "baseVersion", 0));
 
         assertThatThrownBy(() -> eventService.apply(canvasId, editor, late))
                 .isInstanceOfSatisfying(BusinessException.class, e -> {
                     assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CANVAS_TEXT_CONFLICT);
-                    assertThat(e.getData()).isEqualTo(new TextConflict(card, "prompt", "먼저 고친 글", 1));
+                    assertThat(e.getData()).isEqualTo(new TextConflict(card, "memo", "먼저 고친 글", 1));
                 });
         Map<String, Object> view = cardView(owner, card);
-        assertThat(view.get("prompt")).isEqualTo("먼저 고친 글");
+        assertThat(view.get("memo")).isEqualTo("먼저 고친 글");
         assertThat(view.get("x")).isEqualTo(0.0);  // 같은 묶음의 이동도 반영되지 않음
         assertThat(lastSeq()).isEqualTo(seqBefore);
     }
 
     @Test
-    void 프롬프트_카드_본문과_선_프롬프트도_버전으로_충돌을_막는다() {
-        UUID prompt = UUID.randomUUID();
+    void 메모_카드_본문과_선_메모도_버전으로_충돌을_막는다() {
+        UUID memo = UUID.randomUUID();
         UUID table = addTable(owner);
         UUID link = UUID.randomUUID();
         CanvasEventsResponse created = eventService.apply(canvasId, owner, batch(
-                event("add_prompt", "cardId", prompt, "text", "초안 지시"),
-                event("add_link", "linkId", link, "source", table, "target", prompt, "rel", "근거")));
-        assertThat(created.textVersions().get(prompt.toString()).text()).isEqualTo(1);
+                event("add_memo", "cardId", memo, "text", "초안 지시"),
+                event("add_link", "linkId", link, "source", table, "target", memo)));
+        assertThat(created.textVersions().get(memo.toString()).text()).isEqualTo(1);
 
         eventService.apply(canvasId, owner, batch(
-                event("edit_prompt", "cardId", prompt, "text", "고친 지시", "baseVersion", 1),
-                event("set_link_prompt", "linkId", link, "text", "이 근거로 설명", "baseVersion", 0)));
+                event("edit_memo", "cardId", memo, "text", "고친 지시", "baseVersion", 1),
+                event("set_link_memo", "linkId", link, "text", "이 근거로 설명", "baseVersion", 0)));
 
         assertThatThrownBy(() -> eventService.apply(canvasId, editor, batch(
-                event("edit_prompt", "cardId", prompt, "text", "다른 지시", "baseVersion", 1))))
+                event("edit_memo", "cardId", memo, "text", "다른 지시", "baseVersion", 1))))
                 .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.CANVAS_TEXT_CONFLICT);
         assertThatThrownBy(() -> eventService.apply(canvasId, editor, batch(
-                event("set_link_prompt", "linkId", link, "text", "다른 설명", "baseVersion", 0))))
+                event("set_link_memo", "linkId", link, "text", "다른 설명", "baseVersion", 0))))
                 .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.CANVAS_TEXT_CONFLICT);
     }
 
@@ -198,7 +202,7 @@ class CanvasEventServiceTest {
         UUID link = UUID.randomUUID();
         eventService.apply(canvasId, owner, batch(
                 event("create_compare", "cardId", compare, "sources", ids(a, b)),
-                event("add_link", "linkId", link, "source", a, "target", b, "rel", "근거")));
+                event("add_link", "linkId", link, "source", a, "target", b)));
 
         eventService.apply(canvasId, owner, batch(event("remove_card", "cardId", a)));
 
@@ -266,7 +270,7 @@ class CanvasEventServiceTest {
         eventService.apply(canvasId, owner, batch(
                 event("add_doc", "cardId", doc, "docId", "news-12", "x", 40, "y", 50),
                 event("edit_cell", "cardId", table, "r", 3, "c", 0, "value", 123.4),
-                event("add_link", "linkId", UUID.randomUUID(), "source", table, "target", doc, "rel", "설명")));
+                event("add_link", "linkId", UUID.randomUUID(), "source", table, "target", doc)));
 
         CanvasDetailResponse opened = canvasService.open(canvasId, editor);
 
@@ -296,6 +300,112 @@ class CanvasEventServiceTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT);
         assertThatThrownBy(() -> eventService.apply(canvasId, owner, batch(event("add_card", "cardId", UUID.randomUUID()))))
                 .hasMessageContaining("events[0].");
+    }
+
+    @Test
+    void 선_메모는_마지막으로_고친_사람을_작성자로_남기고_지우면_비운다() {
+        UUID a = addTable(owner);
+        UUID b = addTable(owner);
+        UUID link = UUID.randomUUID();
+        eventService.apply(canvasId, owner, batch(event("add_link", "linkId", link, "source", a, "target", b)));
+
+        eventService.apply(canvasId, editor, batch(event("set_link_memo", "linkId", link, "text", "표 감소를 설명", "baseVersion", 0)));
+        var written = canvasService.open(canvasId, owner).links().getFirst();
+        assertThat(written.memo()).isEqualTo("표 감소를 설명");
+        assertThat(written.memoVersion()).isEqualTo(1);
+        assertThat(written.memoBy()).isEqualTo(new UserRef(editor));
+
+        eventService.apply(canvasId, owner, batch(event("set_link_memo", "linkId", link, "text", "", "baseVersion", 1)));
+        var cleared = canvasService.open(canvasId, owner).links().getFirst();
+        assertThat(cleared.memo()).isNull();
+        assertThat(cleared.memoBy()).isNull();
+    }
+
+    @Test
+    void 연결은_관계_종류_없이_만들고_예전_화면이_보낸_rel은_무시한다() {
+        UUID a = addTable(owner);
+        UUID b = addTable(owner);
+
+        eventService.apply(canvasId, owner, batch(event("add_link", "linkId", UUID.randomUUID(), "source", a, "target", b, "rel", "근거")));
+
+        assertThat(canvasService.open(canvasId, owner).links()).hasSize(1);
+    }
+
+    @Test
+    void 메모_카드는_memo_종류이고_카드_메모를_붙일_수_없다() {
+        UUID memo = UUID.randomUUID();
+        eventService.apply(canvasId, owner, batch(event("add_memo", "cardId", memo, "text", "확인할 것", "author", "무시됨")));
+
+        Map<String, Object> view = cardView(owner, memo);
+        assertThat(view.get("kind")).isEqualTo(CardKind.MEMO);
+        assertThat(view.get("text")).isEqualTo("확인할 것");
+        assertThat(view).doesNotContainKey("memo");
+        assertThatThrownBy(() -> eventService.apply(canvasId, owner, batch(
+                event("set_card_memo", "cardId", memo, "text", "x", "baseVersion", 0))))
+                .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT);
+    }
+
+    @Test
+    void 시각화_카드는_create_compare_view_chart로_원본_표에서_바로_만든다() {
+        UUID a = addTable(owner);
+        UUID b = addTable(owner);
+        UUID chart = UUID.randomUUID();
+
+        eventService.apply(canvasId, owner, batch(
+                event("create_compare", "cardId", chart, "sources", ids(a, b, UUID.randomUUID()), "view", "chart")));
+
+        Map<String, Object> view = cardView(owner, chart);
+        assertThat(view.get("kind")).isEqualTo(CardKind.CHART);
+        assertThat(view.get("sources")).isEqualTo(List.of(a.toString(), b.toString()));  // 없는 원본은 빼고 저장
+        assertThatThrownBy(() -> eventService.apply(canvasId, owner, batch(
+                event("create_compare", "cardId", UUID.randomUUID(), "sources", ids(a), "view", "pie"))))
+                .hasMessageContaining("view");
+    }
+
+    @Test
+    void 비교_카드를_지워도_시각화_카드는_남고_원본_표를_지우면_시각화_원본에서도_빠진다() {
+        UUID a = addTable(owner);
+        UUID b = addTable(owner);
+        UUID compare = UUID.randomUUID();
+        UUID chart = UUID.randomUUID();
+        eventService.apply(canvasId, owner, batch(
+                event("create_compare", "cardId", compare, "sources", ids(a, b)),
+                event("create_compare", "cardId", chart, "sources", ids(a, b), "view", "chart")));
+
+        eventService.apply(canvasId, owner, batch(event("remove_card", "cardId", compare)));
+        assertThat(cardView(owner, chart).get("sources")).isEqualTo(List.of(a.toString(), b.toString()));
+
+        eventService.apply(canvasId, owner, batch(event("remove_card", "cardId", a)));
+        assertThat(cardView(owner, chart).get("sources")).isEqualTo(List.of(b.toString()));
+        assertThat(canvasService.open(canvasId, owner).warnings()).isEmpty();
+    }
+
+    @Test
+    void 예전_이벤트_이름은_더_받지_않는다() {
+        UUID a = addTable(owner);
+        for (String old : List.of("add_prompt", "edit_prompt", "set_card_prompt", "set_link_prompt", "set_link", "add_chart")) {
+            assertThatThrownBy(() -> eventService.apply(canvasId, owner, batch(event(old, "cardId", a))))
+                    .hasMessageContaining("알 수 없는 이벤트입니다: " + old);
+        }
+    }
+
+    @Test
+    void 대응_취소는_대응_기록을_지우고_지울_것이_없으면_기록하지_않는다() {
+        eventService.apply(canvasId, owner, batch(event("confirm_mapping", "conceptId", "da", "company", "SKT",
+                "cells", List.of("t:1"), "accepted", true)));
+        assertThat(mappingRepository.findByCanvasIdAndConceptIdAndCompany(canvasId, "da", "SKT")).isPresent();
+
+        Map<String, Object> cancel = new java.util.LinkedHashMap<>();
+        cancel.put("type", "confirm_mapping");
+        cancel.put("conceptId", "da");
+        cancel.put("company", "SKT");
+        cancel.put("accepted", null);
+        eventService.apply(canvasId, owner, batch(cancel));
+        assertThat(mappingRepository.findByCanvasIdAndConceptIdAndCompany(canvasId, "da", "SKT")).isEmpty();
+
+        int before = events().size();
+        eventService.apply(canvasId, owner, batch(new java.util.LinkedHashMap<>(cancel)));
+        assertThat(events()).hasSize(before);
     }
 
     private UUID addTable(Long who) {

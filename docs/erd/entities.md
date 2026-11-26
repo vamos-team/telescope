@@ -190,8 +190,8 @@ erDiagram
         jsonb props
         string text
         int textVersion
-        string prompt
-        int promptVersion
+        string memo
+        int memoVersion
         bigint createdBy FK
     }
     CANVAS_LINK {
@@ -199,9 +199,9 @@ erDiagram
         bigint canvasId FK
         uuid sourceCardId FK
         uuid targetCardId FK
-        string rel
-        string prompt
-        int promptVersion
+        string memo
+        int memoVersion
+        bigint memoBy FK
         bigint createdBy FK
     }
     CANVAS_MAPPING {
@@ -243,7 +243,7 @@ erDiagram
     CANVAS ||--o{ CANVAS_REQUEST : "dedupes"
 ```
 
-> 캔버스 테이블의 작성자 FK(`lastEditedBy`, `createdBy`, `decidedBy`, `authorId`)도 모두 `User`를 가리킨다.
+> 캔버스 테이블의 작성자 FK(`lastEditedBy`, `createdBy`, `memoBy`, `decidedBy`, `authorId`)도 모두 `User`를 가리킨다.
 > 관계선이 너무 많아져 관계도에서는 소유자·공유만 그렸다.
 
 ## 3. 전체 흐름
@@ -340,7 +340,7 @@ erDiagram
 2. 편집은 이벤트 묶음을 HTTP로 저장한다. 서버는 캔버스 행을 잠가 같은 캔버스의 요청을 한 줄로 세운다.
 3. 같은 `requestId`가 다시 오면 `CanvasRequest`에 저장한 처음 응답을 그대로 돌려준다(중복 저장 없음).
 4. 새 묶음이면 이벤트마다 캔버스 단위 `seq`를 1씩 올려 `CanvasEvent`로 쌓고, 현재 상태 테이블(`CanvasCard`, `CanvasLink`, `CanvasMapping`)을 갱신한 뒤 `Canvas.lastSeq`를 올린다.
-5. 글(프롬프트 카드 본문, 카드·연결 프롬프트)을 고칠 때는 화면이 본 버전(`baseVersion`)과 저장된 버전(`textVersion`, `promptVersion`)을 비교한다. 다르면 `409`로 거절한다.
+5. 글(메모 카드 본문, 카드·선 메모)을 고칠 때는 화면이 본 버전(`baseVersion`)과 저장된 버전(`textVersion`, `memoVersion`)을 비교한다. 다르면 `409`로 거절한다.
 6. 커밋된 뒤 같은 캔버스를 보고 있는 사람에게 WebSocket으로 변경을 보낸다. 커서와 접속자는 저장하지 않는다.
 7. 캔버스 삭제는 `deletedAt`만 표시한다. 그 캔버스로 만든 결과물은 남는다.
 
@@ -363,7 +363,7 @@ erDiagram
 
 - `ADMIN`만 공용 문서(공시 등)를 수집·삭제할 수 있다.
 - 소유자 FK로 참조된다: `DocumentVersion.uploadedBy`, `AnalysisRun.requestedBy`, `PredictionRun.requestedBy`, `ChatSession.userId`, `Canvas.ownerId`.
-- 캔버스 공유 대상(`CanvasShare.userId`)과 캔버스 작성자 FK(`lastEditedBy`, `createdBy`, `decidedBy`, `authorId`)로도 참조된다.
+- 캔버스 공유 대상(`CanvasShare.userId`)과 캔버스 작성자 FK(`lastEditedBy`, `createdBy`, `memoBy`, `decidedBy`, `authorId`)로도 참조된다.
 
 ### 4.2 document
 
@@ -576,14 +576,14 @@ erDiagram
 |---|---|---|
 | `id` | uuid PK | 화면이 만든 UUID |
 | `canvasId` | bigint FK | |
-| `kind` | string | `table` / `compare` / `doc` / `dash` / `chart` / `prompt` |
+| `kind` | string | `table` / `compare` / `doc` / `dash` / `chart` / `memo` |
 | `x` | double | 위치(가로) |
 | `y` | double | 위치(세로) |
 | `props` | jsonb | 종류별 필드(`canvas.md` 2장의 카드 종류 표) |
-| `text` | string | 프롬프트 카드 본문(`prompt` 종류만) |
+| `text` | string | 메모 카드 본문(`memo` 종류만) |
 | `textVersion` | int | `text`의 버전. 동시 수정 비교에 쓴다 |
-| `prompt` | string | 카드 프롬프트 |
-| `promptVersion` | int | `prompt`의 버전 |
+| `memo` | string | 카드 메모(메모 카드 제외) |
+| `memoVersion` | int | `memo`의 버전 |
 | `createdBy` | bigint FK | 만든 사용자 |
 
 **CanvasLink** — 카드 사이 연결선의 현재 상태
@@ -594,9 +594,9 @@ erDiagram
 | `canvasId` | bigint FK | |
 | `sourceCardId` | uuid FK | 시작 카드 |
 | `targetCardId` | uuid FK | 끝 카드 |
-| `rel` | string | 관계 종류 |
-| `prompt` | string | 연결 프롬프트 |
-| `promptVersion` | int | `prompt`의 버전 |
+| `memo` | string | 선 메모. 관계 종류(근거·설명·반박)는 저장하지 않고 분석에서 판단한다(#123) |
+| `memoVersion` | int | `memo`의 버전 |
+| `memoBy` | bigint FK | 선 메모를 마지막으로 고친 사용자. 메모가 없으면 비어 있다 |
 | `createdBy` | bigint FK | 만든 사용자 |
 
 - 양 끝 카드가 지워지면 연결도 DB가 같이 지운다(`ON DELETE CASCADE`).
