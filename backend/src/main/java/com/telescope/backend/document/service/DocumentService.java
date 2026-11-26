@@ -5,6 +5,7 @@ import com.telescope.backend.canvas.service.CanvasAccessService;
 import com.telescope.backend.document.dto.DocumentResponse;
 import com.telescope.backend.document.dto.DocumentUploadCommand;
 import com.telescope.backend.document.dto.DocumentUploadResponse;
+import com.telescope.backend.document.dto.UploadRejection;
 import com.telescope.backend.document.entity.Document;
 import com.telescope.backend.document.entity.DocumentVersion;
 import com.telescope.backend.document.repository.DocumentPreparationResultRepository;
@@ -57,7 +58,6 @@ public class DocumentService {
     static final String UPLOAD_KIND = "internal";
     /** ai 시작이 예상하지 못한 오류로 실패했을 때 작업에 남기는 사유. 사용자에게 보인다. */
     static final String START_FAILED_MESSAGE = "ai 서비스에 작업을 시작하지 못했습니다.";
-    private static final int COMPANY_MAX = 100;
     private static final int TITLE_MAX = 255;
 
     private final DocumentRepository documentRepository;
@@ -80,11 +80,14 @@ public class DocumentService {
      * @param userId  올린 사용자
      * @param command 캔버스·회사·발행일·파일명·크기
      * @param content 파일 내용. 이 메서드가 다 읽는다
-     * @throws BusinessException 입력이 틀리면 {@code C001}, 캔버스가 없으면 {@code C002}, 볼 권한이 없으면 {@code K001},
-     *                           편집 권한이 없으면 {@code K002}
+     * @throws BusinessException 필수 값이 없으면 {@code C001}, 형식·회사가 맞지 않으면 {@code D001}(data.reason),
+     *                           캔버스가 없으면 {@code C002}, 볼 권한이 없으면 {@code K001}, 편집 권한이 없으면 {@code K002}
      */
     public DocumentUploadResponse upload(Long userId, DocumentUploadCommand command, InputStream content) {
         String title = validate(command);
+        String company = properties.company(command.company())
+                .orElseThrow(() -> rejected("업로드할 수 없는 회사입니다. 고를 수 있는 회사: "
+                        + String.join(", ", properties.companies()), UploadRejection.company()));
         Canvas canvas = canvasAccess.loadActive(command.canvasId());
         canvasAccess.requireEdit(canvas, userId);
 
@@ -92,7 +95,7 @@ public class DocumentService {
         LocalDate publishedDate = command.publishedDate() != null ? command.publishedDate() : LocalDate.now(clock);
         Saved saved = saveOrDeleteFile(key, () -> {
             Job job = jobService.create(JobType.DOCUMENT_PREPARATION);
-            Document document = documentRepository.save(Document.upload(command.company().strip(), title));
+            Document document = documentRepository.save(Document.upload(company, title));
             DocumentVersion version = versionRepository.save(DocumentVersion.upload(
                     document, job.getId(), userId, canvas.getId(), publishedDate, key));
             return new Saved(job.getId(), document.getId(), version.getId());
@@ -133,22 +136,26 @@ public class DocumentService {
                 version.isUploaded());
     }
 
-    /** 입력을 확인하고 제목(파일명에서 확장자를 뺀 것)을 돌려준다. */
+    /**
+     * 입력을 확인하고 제목(파일명에서 확장자를 뺀 것)을 돌려준다. 회사 목록 확인은 {@link #upload}가 한다.
+     * 필수 값 누락은 {@code C001}, 빈 파일·형식 불일치는 {@code D001}(FORMAT_MISMATCH).
+     */
     private String validate(DocumentUploadCommand command) {
         if (command.canvasId() == null) {
             throw invalid("canvasId가 필요합니다.");
         }
-        if (!StringUtils.hasText(command.company()) || command.company().strip().length() > COMPANY_MAX) {
-            throw invalid("company는 1~" + COMPANY_MAX + "자여야 합니다.");
+        if (!StringUtils.hasText(command.company())) {
+            throw invalid("company가 필요합니다.");
         }
         if (command.size() <= 0) {
-            throw invalid("빈 파일은 올릴 수 없습니다.");
+            throw rejected("빈 파일은 올릴 수 없습니다.", UploadRejection.format());
         }
         String filename = command.originalFilename();
         int dot = filename == null ? -1 : filename.lastIndexOf('.');
         String extension = dot >= 0 ? filename.substring(dot + 1) : null;
         if (!properties.allows(extension)) {
-            throw invalid("지원하지 않는 형식입니다. 올릴 수 있는 형식: " + String.join(", ", properties.allowedExtensions()));
+            throw rejected("지원하지 않는 형식입니다(." + (extension == null ? "확장자 없음" : extension)
+                    + "). 올릴 수 있는 형식: " + String.join(", ", properties.allowedExtensions()), UploadRejection.format());
         }
         String title = filename.substring(0, dot).strip();
         if (title.isEmpty()) {
@@ -189,6 +196,11 @@ public class DocumentService {
     @SuppressWarnings("unchecked")
     private static List<Object> listOf(Object value) {
         return value instanceof List<?> list ? (List<Object>) list : List.of();
+    }
+
+    /** 업로드 거절. 화면은 {@code data.reason}으로 형식·회사 불일치를 나눈다. */
+    private static BusinessException rejected(String message, UploadRejection reason) {
+        return new BusinessException(ErrorCode.DOCUMENT_UPLOAD_REJECTED, message, reason);
     }
 
     private static BusinessException invalid(String message) {

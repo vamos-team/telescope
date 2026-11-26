@@ -18,6 +18,7 @@ public enum ErrorCode {
     CANVAS_ACCESS_DENIED(HttpStatus.FORBIDDEN, "K001", "이 캔버스를 볼 권한이 없습니다."),
     CANVAS_EDIT_DENIED(HttpStatus.FORBIDDEN, "K002", "이 캔버스를 수정할 권한이 없습니다."),
     CANVAS_TEXT_CONFLICT(HttpStatus.CONFLICT, "K003", "다른 사람이 먼저 글을 고쳤습니다."),
+    DOCUMENT_UPLOAD_REJECTED(HttpStatus.BAD_REQUEST, "D001", "올릴 수 없는 파일입니다."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "C999", "서버 내부 오류가 발생했습니다.");
 
     private final HttpStatus status;
