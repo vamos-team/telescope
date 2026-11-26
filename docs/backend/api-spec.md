@@ -61,7 +61,7 @@
 | `A004` | 403 | 권한이 없습니다. | 관리자 전용 기능을 `USER`가 호출 | [제안] |
 | `K001` | 403 | 이 캔버스를 볼 권한이 없습니다. | 권한 없는 캔버스(공유가 풀림 포함) | [제안] |
 | `K002` | 403 | 이 캔버스를 수정할 권한이 없습니다. | 보기 권한으로 쓰기, 소유자 전용 기능을 다른 사람이 호출 | [제안] |
-| `K003` | 409 | 다른 사람이 먼저 글을 고쳤습니다. | 프롬프트 글의 기준 버전이 현재 버전과 다름 (5.3) | [제안] |
+| `K003` | 409 | 다른 사람이 먼저 글을 고쳤습니다. | 메모 글의 기준 버전이 현재 버전과 다름 (5.3) | [제안] |
 | `S001` | 503 | 조회 서비스를 일시적으로 쓸 수 없습니다. | mcp-server·ai 호출 실패, 타임아웃 | [제안] |
 
 - 코드 형식: 영역 접두사 한 글자 + 번호 세 자리. `C` 공통, `J` 작업, `A` 인증, `K` 캔버스, `S` 외부 서비스.
@@ -103,7 +103,7 @@
 
 | 기능 | 소유자 | 편집 | 보기 | 권한 없음 |
 |---|---|---|---|---|
-| 캔버스 열기, 활동 로그, 비교·근거·프롬프트 조회, 공유 명단 보기 | ○ | ○ | ○ | `K001` |
+| 캔버스 열기, 활동 로그, 비교·근거·메모 조회, 공유 명단 보기 | ○ | ○ | ○ | `K001` |
 | 카드·연결 조작 (`events`) | ○ | ○ | `K002` | `K001` |
 | 초안·질문 생성, 평가 | ○ | ○ | `K002` | `K001` |
 | 초안·질문·평가 결과 보기 (다른 사람이 만든 것 포함) | ○ | ○ | ○ | `K001` |
@@ -149,7 +149,7 @@
 |---|---|
 | `lastSeq` | 반영 후 마지막 이벤트 번호 |
 | `firstChangedLayer` | 처음 바뀐 컨텍스트 층 |
-| `textVersions` | 이번 묶음으로 바뀐 글의 새 버전. 키는 카드·연결 ID, 값은 `{ text?, prompt? }` (5.3) |
+| `textVersions` | 이번 묶음으로 바뀐 글의 새 버전. 키는 카드·연결 ID, 값은 `{ text?, memo? }` (5.3) |
 
 - 한 묶음은 한 트랜잭션이다. 카드 상태 변경과 이벤트 로그를 같이 저장하고, 하나라도 실패하면 묶음 전체를 반영하지 않는다.
 - 이벤트 번호(`seq`)는 캔버스 단위로 1씩 늘어난다. 같은 캔버스의 묶음은 순서대로 저장한다(캔버스 행 잠금).
@@ -157,21 +157,25 @@
 
 ### 5.3 같은 카드를 동시에 고칠 때
 
-- 위치(`move_card`)와 글은 다른 필드라 서로 덮어쓰지 않는다. 한 사람이 카드를 옮기는 동안 다른 사람이 같은 카드의 프롬프트를 고쳐도 둘 다 남는다.
+- 위치(`move_card`)와 글은 다른 필드라 서로 덮어쓰지 않는다. 한 사람이 카드를 옮기는 동안 다른 사람이 같은 카드의 메모를 고쳐도 둘 다 남는다.
 - 위치는 나중에 저장된 값이 이긴다.
 - 여러 사람이 고칠 수 있는 글은 세 가지이고, 글마다 버전을 따로 둔다. 바뀔 때마다 1씩 오른다.
 
   | 글 | 이벤트 | 버전 필드 (캔버스 열기 응답) |
   |---|---|---|
-  | 프롬프트 카드 본문 | `edit_prompt` (`cardId`, `text`, `baseVersion`) | 카드의 `textVersion` |
-  | 카드 프롬프트 (프롬프트 카드 외 모든 카드) | `set_card_prompt` (`cardId`, `text`, `baseVersion`) | 카드의 `promptVersion` |
-  | 선 프롬프트 | `set_link_prompt` (`linkId`, `text`, `baseVersion`) | 연결의 `promptVersion` |
+  | 메모 카드 본문 | `edit_memo` (`cardId`, `text`, `baseVersion`) | 카드의 `textVersion` |
+  | 카드 메모 (메모 카드 외 모든 카드) | `set_card_memo` (`cardId`, `text`, `baseVersion`) | 카드의 `memoVersion` |
+  | 선 메모 | `set_link_memo` (`linkId`, `text`, `baseVersion`) | 연결의 `memoVersion` (마지막으로 고친 사람 `memoBy`) |
 
 - 세 이벤트는 고치기 시작한 시점의 버전을 `baseVersion`으로 보낸다. 현재 버전과 다르면 묶음 전체를 `409 K003`으로 거절하고,
-  `data`에 현재 글 `{ targetId, field, text, version }`(`field`는 `text` 또는 `prompt`)을 담는다.
+  `data`에 현재 글 `{ targetId, field, text, version }`(`field`는 `text` 또는 `memo`)을 담는다.
   화면은 최신 글을 보여 주고 다시 고치게 하며, 나머지 이벤트는 새 `requestId`로 다시 보낸다.
-- 새로 만든 프롬프트 카드(`add_prompt`)의 본문 버전은 1이다. 성공 응답의 `textVersions`로 새 버전을 알려 준다.
-- 시각화 카드도 저장한다: `add_chart`(`cardId`, `compareId`, `x`, `y`). 새로고침 뒤에도 남게 하기 위해서다.
+- 새로 만든 메모 카드(`add_memo`)의 본문 버전은 1이다. 성공 응답의 `textVersions`로 새 버전을 알려 준다. 작성자는 토큰의 사용자다(화면이 보낸 `author`는 쓰지 않는다).
+- 비교 카드와 시각화 카드는 `create_compare`(`cardId`, `sources`, `view?`, `x`, `y`)로 만든다. `view`는 `compare`(기본) 또는 `chart`다.
+  둘 다 원본 표 카드 목록(`sources`)을 갖는다. 비교 카드를 지워도 시각화 카드는 남고, 원본 표를 지우면 두 카드의 `sources`에서 빠진다.
+- 연결(`add_link`)은 `linkId`, `source`, `target`만 받는다. 관계 종류(`rel`)는 저장하지 않고 분석에서 판단한다. 예전 화면이 보낸 `rel`은 무시한다.
+- 계정 대응(`confirm_mapping`)의 `accepted`는 `true`(확정)·`false`(거부)·`null`(취소)이다. 취소는 그 개념·회사의 대응 기록을 지운다.
+- #123에서 이름을 바꿨다(`add_prompt`·`edit_prompt`·`set_card_prompt`·`set_link_prompt` → `*_memo`, 카드 종류 `prompt` → `memo`). `add_chart`, `set_link`는 없앴고, 옛 이름은 `400 C001`로 거절한다.
 - 결정 이유(버전 비교를 고른 이유, 다른 선택지)는 `docs/backend/canvas.md` D3.
 
 ### 5.4 다른 사람의 변경 받기와 복원
@@ -218,7 +222,7 @@
   "requestId": "6f1c2a1e-6c1e-4d0f-9a43-7d3f8a0b9c21",
   "author": { "id": 2, "name": "박망" },
   "events": [ { "type": "move_card", "cardId": "0d9f…", "x": 140, "y": 96 } ],
-  "textVersions": { "7a21…": { "prompt": 4 } }
+  "textVersions": { "7a21…": { "memo": 4 } }
 }
 ```
 
@@ -366,7 +370,7 @@ ai 서비스가 발급한 ID(`externalJobId`)는 화면에 노출하지 않는�
 | 일반 액세스 `company` | 있음 | 없음 (4장) |
 | 사용자 ID | 사번 문자열 | 숫자 `id` + `employeeNo` (3.1) |
 | 캔버스 열기 일부 복원 실패 | 409 | 200 + `warnings` (5.4) |
-| 동시 편집 필드 | 없음 | `requestId`, `baseVersion`, `textVersion`·`promptVersion`, 응답 `textVersions`, UUID 카드 ID, `add_chart` (5장). 이 부분은 backend 담당이 직접 프론트 명세에 추가한다 |
+| 동시 편집 필드 | 없음 | `requestId`, `baseVersion`, `textVersion`·`memoVersion`, 응답 `textVersions`, UUID 카드 ID, `create_compare`의 `view` (5장). 메모 규약(#123)은 화면 PR #122가 기준이며 backend가 맞췄다 |
 | 에러 코드 | HTTP 상태만 | 2장 코드 |
 | 다른 사람 변경 받기 | `events?after={seq}` 폴링 여부 미정 | WebSocket(STOMP) 구독 (5.5). backend 담당이 직접 추가 |
 | 커서 공유·접속자 | 없음 | 5.6. backend 담당이 직접 추가 |
@@ -402,7 +406,7 @@ ai 서비스가 발급한 ID(`externalJobId`)는 화면에 노출하지 않는�
 
 | # | 요구사항 | 근거 |
 |---|---|---|
-| R1 | 다른 사람이 카드를 옮기거나 프롬프트를 고치면 바로 보인다 | 실시간 동시 편집을 MVP에 포함 |
+| R1 | 다른 사람이 카드를 옮기거나 메모를 고치면 바로 보인다 | 실시간 동시 편집을 MVP에 포함 |
 | R2 | 다른 사람의 커서가 바로 보인다. 사람마다 초당 최대 20번 움직임 | 커서 공유를 MVP에 포함 |
 | R3 | 커밋된 변경만 전달하고, 놓친 변경은 `seq`로 알아채 다시 받는다 | 5.2, 5.4 |
 | R4 | 권한(소유자·편집·보기)을 연결할 때와 메시지마다 확인하고, 공유가 풀리면 바로 막는다 | 4장 |

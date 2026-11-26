@@ -17,14 +17,14 @@
 | 권한 확인(HTTP와 실시간 구독이 같은 서비스를 씀) (#82) | 여러 backend 인스턴스 간 실시간 방송 |
 | 실시간 전달: 변경·커서·접속자·개인 알림 (#83, 6장) | |
 
-## 2. 테이블 (`app` 스키마, `V9__create_canvas.sql`)
+## 2. 테이블 (`app` 스키마, `V9__create_canvas.sql`, `V12__rename_canvas_prompt_to_memo.sql`)
 
 | 테이블 | 주요 컬럼 | 설명 |
 |---|---|---|
 | `canvas` | `id`, `name`, `quarter`, `owner_id`, `last_seq`, `last_edited_by`, `last_edited_at`, `deleted_at` | 소유자는 여기에만 둔다. `last_seq`는 마지막 이벤트 번호 |
 | `canvas_share` | `canvas_id`, `user_id`, `role`(`EDIT`/`VIEW`) | (캔버스, 사용자) 고유. 소유자는 넣지 않는다 |
-| `canvas_card` | `id`(UUID), `canvas_id`, `kind`, `x`, `y`, `props`(JSONB), `text`·`text_version`, `prompt`·`prompt_version`, `created_by` | 위치·글을 다른 컬럼에 둔다. 종류별 필드는 `props` |
-| `canvas_link` | `id`(UUID), `canvas_id`, `source_card_id`, `target_card_id`, `rel`, `prompt`·`prompt_version`, `created_by` | 양 끝 카드가 지워지면 DB가 같이 지운다(`ON DELETE CASCADE`) |
+| `canvas_card` | `id`(UUID), `canvas_id`, `kind`, `x`, `y`, `props`(JSONB), `text`·`text_version`, `memo`·`memo_version`, `created_by` | 위치·글을 다른 컬럼에 둔다. 종류별 필드는 `props` |
+| `canvas_link` | `id`(UUID), `canvas_id`, `source_card_id`, `target_card_id`, `memo`·`memo_version`, `memo_by`, `created_by` | 양 끝 카드가 지워지면 DB가 같이 지운다(`ON DELETE CASCADE`) |
 | `canvas_mapping` | `canvas_id`, `concept_id`, `company`, `cells`(JSONB), `accepted`, `decided_by` | 계정 대응 확정. (캔버스, 개념, 회사)마다 마지막 결정 하나 |
 | `canvas_event` | `canvas_id`, `seq`, `request_id`, `author_id`, `type`, `payload`(JSONB) | (캔버스, `seq`) 고유. 고치지 않고 쌓는다 |
 | `canvas_request` | `canvas_id`, `request_id`, `author_id`, `first_seq`, `last_seq`, `response`(JSONB) | (캔버스, `request_id`) 고유. 재전송에 처음 응답을 돌려준다 |
@@ -33,12 +33,12 @@
 
 | `kind` | `props` | 글 컬럼 |
 |---|---|---|
-| `table` | `tableId`, `rows`, `cols`, `vcol`, `edits`(`"r,c": 값`), `sort` | `prompt` |
-| `compare` | `sources`(원본 표 카드 ID) | `prompt` |
-| `doc` | `docId` | `prompt` |
-| `dash` | `panel` | `prompt` |
-| `chart` | `compareId` | `prompt` |
-| `prompt` | — | `text` (프롬프트 카드 본문) |
+| `table` | `tableId`, `rows`, `cols`, `vcol`, `edits`(`"r,c": 값`), `sort` | `memo` |
+| `compare` | `sources`(원본 표 카드 ID) | `memo` |
+| `doc` | `docId` | `memo` |
+| `dash` | `panel` | `memo` |
+| `chart` | `sources`(원본 표 카드 ID) | `memo` |
+| `memo` | — | `text` (메모 카드 본문) |
 
 ## 3. 이벤트 묶음 처리 순서 (`CanvasEventService.apply`)
 
@@ -71,7 +71,7 @@
 ### D2. 위치와 글을 다른 컬럼에 둔다
 
 - **문제**: 한 사람이 카드를 옮기는 동안 다른 사람이 같은 카드의 프롬프트를 고치면, 카드를 통째로 저장하는 방식에서는 한쪽이 다른 쪽을 덮어쓴다.
-- **결정**: 위치(`x`, `y`), 프롬프트 카드 본문(`text`), 카드 프롬프트(`prompt`), 종류별 필드(`props`)를 다른 컬럼에 두고, 이벤트마다 자기 컬럼만 바꾼다.
+- **결정**: 위치(`x`, `y`), 메모 카드 본문(`text`), 카드 메모(`memo`, #123 전에는 프롬프트), 종류별 필드(`props`)를 다른 컬럼에 두고, 이벤트마다 자기 컬럼만 바꾼다.
 - **이유**: 서로 다른 칸을 고치는 동시 편집은 충돌이 아니다. 칸을 나누면 둘 다 남는다.
 
 ### D3. 같은 글을 동시에 고치면 버전 비교로 막는다 (409)
@@ -82,7 +82,7 @@
   A: "… 추이와 CapEx 비교" 저장 → 버전 4
   B: (버전 3을 보고 고침) "… 추이 확인, 출처 표기" 저장 → A의 "CapEx 비교"가 사라짐
   ```
-- **대상**: 동시에 고칠 수 있는 글 3가지 — 프롬프트 카드 본문(`edit_prompt`), 카드 프롬프트(`set_card_prompt`), 선 프롬프트(`set_link_prompt`). 글마다 버전을 따로 둔다.
+- **대상**: 동시에 고칠 수 있는 글 3가지 — 메모 카드 본문(`edit_memo`), 카드 메모(`set_card_memo`), 선 메모(`set_link_memo`). (#123 전 이름은 `*_prompt`) 글마다 버전을 따로 둔다.
 - **선택지**
 
   | 방식 | 장점 | 단점 |
@@ -117,7 +117,7 @@
 - **결정**: 묶음 안에서 같은 카드의 `move_card`는 마지막 것만 저장한다. 다른 이벤트 순서는 그대로 둔다.
 - **이유**: 중간 위치는 다시 쓸 일이 없다. 다른 사람에게 움직이는 모습은 커서 공유(5.6)와 묶음마다 오는 마지막 위치로 충분하다.
 
-### D7. 시각화(`chart`) 카드도 저장한다 (`add_chart` 추가)
+### D7. 시각화(`chart`) 카드도 저장한다 (`add_chart` 추가) — #123에서 D26으로 바뀜
 
 - **문제**: 프론트 명세에는 시각화 카드가 "화면 전용"이고 만드는 이벤트가 없다. 서버에 저장하지 않으면 새로고침·재접속 때 사라진다.
 - **결정**: `add_chart`(`cardId`, `compareId`, `x`, `y`) 이벤트로 저장한다. 프롬프트 컨텍스트에는 넣지 않는다(층 영향 없음).
@@ -169,9 +169,9 @@
 | 층 | 이벤트 |
 |---|---|
 | `L1_sources` | `add_card`, `add_doc`, `add_dash`, `remove_card` |
-| `L2_workspace` | `add_prompt`, `edit_prompt`, `set_card_prompt`, `set_link_prompt`, `add_rows`, `remove_row`, `create_compare`, `add_link`, `set_link`, `remove_link` |
+| `L2_workspace` | `add_memo`, `edit_memo`, `set_card_memo`, `set_link_memo`, `add_rows`, `remove_row`, `create_compare`, `add_link`, `remove_link` |
 | `L3_edits` | `edit_cell`, `revert_card`, `select_period`, `sort_card`, `confirm_mapping` |
-| 영향 없음 | `move_card`, `add_chart` |
+| 영향 없음 | `move_card` |
 
 묶음 안에서 가장 앞 층을 돌려준다. ai의 컨텍스트 층 구성이 정해지면 맞춘다.
 
@@ -253,11 +253,74 @@
 - 공유가 풀리면 개인 알림을 받고 이후 변경은 받지 못한다
 - 접속자 들어옴·나감, 처음 구독 시 지금 목록
 
-## 7. 다시 볼 것
+## 7. 프롬프트를 메모로 (#123)
+
+화면(PR #122, #107)에서 프롬프트를 메모 하나로 통일하고, 선 관계 종류를 없애고, 시각화 카드를 공시 표에서 바로 만들게 바꿨다.
+backend를 화면 규약(`docs/frontend/api-spec.md` 3.5·3.6)에 맞췄다. 바뀐 것은 `api-spec.md` 5.3에 정리했고, 아래는 backend에서 정한 것이다.
+
+전제: 로그인(#34) 전이라 모든 캔버스 API가 `401`이다(D13). 배포·개발 DB 어디에도 실제 캔버스 데이터가 없다. 그래서 옛 데이터 처리는 "안전하게 옮기기"보다 "규약을 한 가지로 정리하기"를 기준으로 골랐다.
+
+#### D23. 이름만 바꾸고 동작은 그대로 둔다
+
+- 프롬프트 카드 → 메모 카드(`kind: memo`), 카드·선 프롬프트 → 카드·선 메모(`memo`, `memoVersion`), 이벤트 `*_prompt` → `*_memo`, 409 `field: memo`.
+- 버전 비교(D3), 위치·글 분리(D2), 지워진 대상 무시(D9)는 그대로다. 글의 의미만 "작성 지시"에서 "사용자가 쓴 글"로 넓어졌고(분석에서 에이전트가 지시·근거·의견으로 가림), 저장 방식은 같다.
+- 옛 이름(`add_prompt` 등)은 `400 C001 "알 수 없는 이벤트"`로 거절한다. 두 이름을 함께 받는 호환 코드는 두지 않았다. 화면이 새 이름만 보내고(PR #122), 서버에 옛 이름으로 저장된 실제 데이터가 없다.
+
+#### D24. 연결 관계 종류(`rel`)는 칼럼째 지운다
+
+| 후보 | 판단 |
+|---|---|
+| **(a) 칼럼 삭제** (선택) | 관계 종류는 분석에서 에이전트가 판단하기로 했으므로 저장할 이유가 없다. 실제 데이터가 없어 잃을 것도 없다. 쓰지 않는 칼럼을 남기지 않는다 |
+| (b) NULL 허용으로 남김 | 다시 쓸 일이 생기면 바로 쓸 수 있지만, 그동안 아무도 쓰지 않는 칼럼이 남고 엔티티·응답에 의미 없는 필드가 생긴다 |
+
+- `set_link` 이벤트도 없앴다. 예전 화면이 `add_link`에 `rel`을 보내면 오류 대신 무시한다(연결 자체는 유효하므로).
+
+#### D25. 이벤트 기록의 옛 이름도 새 이름으로 바꾼다 (불변 원칙의 예외)
+
+| 후보 | 판단 |
+|---|---|
+| (a) 상태 테이블만 바꾸고 이벤트 기록은 그대로 | "이벤트 기록은 고치지 않고 쌓는다"(루트 `CLAUDE.md` 4번)를 지킨다. 대신 활동 로그·변경 받기에서 옛 이름이 그대로 보인다 |
+| **(b) 이벤트 기록도 새 이름으로** (선택, 사용자 결정) | 기록과 규약이 한 가지 이름으로 맞는다. 활동 로그 문구와 컨텍스트 층 대응표가 옛 이름을 몰라도 된다 |
+| (c) 읽을 때 옛 이름을 새 이름으로 변환 | 기록은 그대로 두면서 보이는 이름을 맞추지만, 실제 데이터가 없는데 변환 코드가 계속 남는다 |
+
+- 불변 원칙은 "기록한 사실(누가 언제 무엇을 했는지)을 바꾸지 않는다"는 뜻으로 보고, 이번은 같은 조작의 **이름만** 바꾸는 일이라 예외로 뒀다. 순번(`seq`)·작성자·시각·내용은 그대로다.
+- `type` 칼럼과 `payload` 안의 `type`을 함께 바꾼다(`V12`). `add_chart`·`set_link` 기록은 새 이름에 대응하는 것이 없어 그대로 둔다(활동 로그에는 문구가 없어 보이지 않는다).
+- 저장해 둔 묶음 응답(`canvas_request.response`)의 `textVersions` 키(`prompt`)는 바꾸지 않았다. 같은 `requestId` 재전송에만 쓰이고, 그런 옛 요청이 다시 올 일이 없다.
+
+#### D26. 시각화 카드는 `create_compare`(`view: chart`)로 만들고 원본 표를 직접 가리킨다
+
+- 이전(D7): `add_chart`(`compareId`)로 비교 카드에서만 만들고, 비교 카드를 가리켰다.
+- 지금: 비교 카드와 같은 `create_compare`에 `view: chart`를 붙여 만든다. 카드에 원본 표 목록(`sources`)을 저장하고 비교와 같은 계산을 쓴다. 비교 카드 없이 공시 표에서 바로 만들 수 있다.
+- 결과: 비교 카드를 지워도 시각화 카드는 남는다. 원본 표를 지우면 비교·시각화 카드 모두의 `sources`에서 뺀다. 복원 경고도 두 카드를 같은 규칙(원본 표가 있는지)으로 본다.
+- `V12`는 비교 카드에서 만든 기존 시각화 카드에 그 비교의 `sources`를 옮겨 넣는다(`compareId`는 남겨 둠). 비교 계산 API는 아직 backend에 없어(화면 로컬 계산) 계산 위치는 이번에 정하지 않았다.
+- `view`는 `compare`(기본)·`chart`만 받는다. 다른 값은 `400`.
+
+#### D27. 선 메모 작성자(`memoBy`)는 마지막으로 고친 사람이다
+
+| 후보 | 판단 |
+|---|---|
+| **(a) 마지막으로 고친 사람, 지우면 비움** (선택) | 화면 로컬 동작(`set_link_memo`를 보낸 사람)과 같다. 지금 보이는 글을 쓴 사람이 표시된다 |
+| (b) 처음 쓴 사람 | 다른 사람이 내용을 바꿔도 처음 쓴 사람이 표시되어 글과 이름이 어긋날 수 있다 |
+
+- `canvas_link.memo_by`(FK `users`). 캔버스 열기 응답 `links[].memoBy: { id }`, 메모가 없으면 `null`.
+- 카드 메모에는 작성자를 두지 않았다. 화면이 선 메모에만 작성자를 표시한다.
+
+#### D28. 계정 대응 취소(`accepted: null`)는 대응 기록을 지운다
+
+- 화면은 확정·거부를 되돌릴 때 `accepted: null`을 보낸다(#123 표에는 없었지만 화면 규약 3.6에 있음). 이전에는 `true`/`false`만 받아 서버 모드에서 `400`이 났다.
+- 화면 로컬 동작과 같게 그 (캔버스, 개념, 회사)의 대응 기록을 지운다. `canvas_mapping.accepted`는 그대로 `NOT NULL`이라 스키마 변경이 없다.
+- 지울 기록이 없으면 반영한 것이 없으므로 이벤트를 기록하지 않는다(D9와 같은 기준).
+
+#### 확인
+
+- `CanvasEventServiceTest`: 이름 바뀐 이벤트 전체, 선 메모 작성자(고친 사람·지우면 비움), `rel` 무시, 메모 카드 종류와 카드 메모 거절, `view: chart` 생성(없는 원본 빼기, 잘못된 `view` 거절), 비교 카드 삭제 뒤 시각화 유지·원본 표 삭제 시 `sources`에서 제외, 옛 이벤트 이름 거절, 대응 취소
+- `CanvasMemoMigrationTest`: 임시 스키마를 V11까지 올려 예전 모양의 카드·연결·이벤트를 넣고 V12를 적용 → 카드 종류·칼럼 이름·시각화 `sources`·`rel` 삭제·`memo_by`·이벤트 이름(칼럼과 `payload` 모두) 확인
+
+## 8. 다시 볼 것
 
 | 항목 | 지금 | 다시 볼 시점 |
 |---|---|---|
-| 표·문서 원본이 사라진 카드의 `warnings` | 카드 사이 참조(비교 원본, 시각화의 비교 카드)만 확인 | 공시·문서 조회(mcp-server)가 생길 때 |
+| 표·문서 원본이 사라진 카드의 `warnings` | 카드 사이 참조(비교·시각화 카드의 원본 표)만 확인 | 공시·문서 조회(mcp-server)가 생길 때 |
 | 사람 이름·부서 | ID만 | #34 머지 후 |
 | 이벤트 로그 보관 | 모두 보관 | 로그가 커져 조회가 느려질 때(오래된 이동 이벤트 정리 등) |
 | 여러 backend 인스턴스 | 캔버스 행 잠금은 DB라 그대로 동작. 실시간 구독 기록·접속자는 서버 메모리 | 실시간 전달만 다시 설계(`api-spec.md` 11.5). 구독 기록도 공유 저장소로 |
