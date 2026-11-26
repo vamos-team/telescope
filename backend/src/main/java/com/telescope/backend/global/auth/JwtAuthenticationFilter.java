@@ -27,7 +27,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     /** 토큰 검증 실패 사유({@code ErrorCode})를 담는 요청 속성 이름. */
     static final String AUTH_ERROR_ATTRIBUTE = JwtAuthenticationFilter.class.getName() + ".error";
-    private static final String BEARER = "Bearer ";
 
     private final JwtTokenProvider tokenProvider;
 
@@ -46,12 +45,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private void authenticate(HttpServletRequest request, String header) {
-        if (!header.startsWith(BEARER)) {
+        String token = BearerToken.extract(header);
+        if (token == null) {
             request.setAttribute(AUTH_ERROR_ATTRIBUTE, ErrorCode.UNAUTHENTICATED);
             return;
         }
         try {
-            AuthenticatedUser user = tokenProvider.authenticate(header.substring(BEARER.length()).trim());
+            AuthenticatedUser user = tokenProvider.authenticate(token);
             SecurityContext context = SecurityContextHolder.createEmptyContext();
             context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
                     user, null, List.of(new SimpleGrantedAuthority("ROLE_" + user.role()))));
