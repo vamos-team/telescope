@@ -36,9 +36,11 @@ MVP에서 제외한 것: 팀 단위 프로필(설정), 팀 개념(`Team`), 콜�
 erDiagram
     USER {
         bigint id PK
-        string loginId
+        string employeeNo
         string passwordHash
         string name
+        string dept
+        string job
         string role
     }
 
@@ -250,7 +252,7 @@ erDiagram
 
 ### 3.1 인증
 
-1. 사용자가 `loginId`와 비밀번호로 로그인하면 서버가 JWT를 발급한다.
+1. 사용자가 사번(`employeeNo`)과 비밀번호로 로그인하면 서버가 JWT를 발급한다. 계정 생성은 회원가입(역할 `USER`)과 배포 시 첫 관리자 시드로 할 예정이다(#133, 아직 구현 전).
 2. 이후 요청은 JWT로 사용자와 역할(`role`)을 판별한다. 권한은 서버가 강제한다.
 3. 사내 SSO 연동은 MVP 이후 과제다.
 
@@ -356,9 +358,11 @@ erDiagram
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `id` | bigint PK | |
-| `loginId` | string | 로그인 식별자 |
-| `passwordHash` | string | 비밀번호 해시. 원문은 저장하지 않는다 |
+| `employeeNo` | string | 사번. 로그인 식별자이며 고유하다. 다른 테이블은 사번이 아니라 `id`를 참조한다 |
+| `passwordHash` | string | 비밀번호 해시(BCrypt). 원문은 저장하지 않는다 |
 | `name` | string | 이름 |
+| `dept` | string | 부서. 표시용이며 권한에 쓰지 않는다 |
+| `job` | string | 직무. 표시용 |
 | `role` | string | `ADMIN` / `USER` |
 
 - `ADMIN`만 공용 문서(공시 등)를 수집·삭제할 수 있다.

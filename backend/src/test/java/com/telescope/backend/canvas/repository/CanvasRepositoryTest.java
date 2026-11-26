@@ -124,7 +124,7 @@ class CanvasRepositoryTest {
 
     private Long insertUser(String employeeNo) {
         return jdbc.queryForObject(
-                "insert into app.users (login_id, password_hash, name, role) values (?, 'x', ?, 'USER') returning id",
+                "insert into app.users (employee_no, password_hash, name, role) values (?, 'x', ?, 'USER') returning id",
                 Long.class, employeeNo, "사용자" + employeeNo);
     }
 }

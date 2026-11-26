@@ -19,7 +19,7 @@ final class CanvasTestSupport {
     static Long user(JdbcTemplate jdbc) {
         String employeeNo = "t-" + UUID.randomUUID();
         return jdbc.queryForObject(
-                "insert into app.users (login_id, password_hash, name, role) values (?, 'x', ?, 'USER') returning id",
+                "insert into app.users (employee_no, password_hash, name, role) values (?, 'x', ?, 'USER') returning id",
                 Long.class, employeeNo, employeeNo);
     }
 

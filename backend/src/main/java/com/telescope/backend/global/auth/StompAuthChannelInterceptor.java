@@ -19,8 +19,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
-    private static final String BEARER = "Bearer ";
-
     private final AccessTokenVerifier verifier;
 
     /**
@@ -46,11 +44,12 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
     }
 
     private Long verify(String header) {
-        if (header == null || !header.startsWith(BEARER)) {
+        String token = BearerToken.extract(header);
+        if (token == null) {
             throw new MessageDeliveryException("A002 인증이 필요합니다.");
         }
         try {
-            return verifier.verify(header.substring(BEARER.length()).trim());
+            return verifier.verify(token);
         } catch (BusinessException e) {
             throw new MessageDeliveryException(e.getErrorCode().getCode() + " " + e.getMessage());
         }
