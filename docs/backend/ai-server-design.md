@@ -255,6 +255,8 @@ PipelineFn = Callable[[JobContext, dict], dict]          # (ctx, payload) -> res
 | `PENDING_RETRY_INTERVAL_SECONDS` | | 5.0 | 최종 저장 실패분을 다시 시도하는 주기 |
 | `LOG_LEVEL` | | `INFO` | |
 
+`.env`에서 위 표에 없는 키(ai 파이프라인용 `OPENAI_API_KEY` 등)는 서버 설정이 무시한다. 같은 `.env`를 공유해도 기동이 실패하지 않는다. 표의 키는 그대로 검증한다.
+
 LLM 키(`OPENAI_API_KEY`), 임베딩 모델(`PARSER_EMBED_MODEL`), `HF_TOKEN`은 ai 코드가 직접 읽는다(`.env.example`에 이름만).
 ChromaDB·MCP 주소는 그 값을 쓰는 파이프라인 코드가 붙을 때 추가한다.
 
@@ -265,8 +267,12 @@ cd ai/server
 pip install -r requirements.txt
 INTERNAL_API_KEY=... DB_PATH=../../data/ai-server/jobs.db uvicorn main:app --port 8000
 pytest
+```
 
-# 이미지: 저장소 루트에서 빌드한다(pipelines/, ai/를 함께 넣는다)
+이미지는 저장소 루트에서 빌드한다(`pipelines/`, `ai/`를 함께 넣는다).
+
+```bash
+# 저장소 루트에서
 docker build -f ai/server/Dockerfile -t telescope-ai-server .
 ```
 
