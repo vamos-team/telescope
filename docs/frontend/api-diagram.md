@@ -11,7 +11,7 @@ flowchart LR
     H[캔버스 홈 · 새 캔버스 창]
     SH[메뉴 팝업 · 공유 창]
     T[상단 바 · 왼쪽 사이드바]
-    C[캔버스 카드 · 프롬프트]
+    C[캔버스 카드 · 메모 · 프롬프트]
     S[자료 검색]
     R[오른쪽 결과 패널]
   end
@@ -24,7 +24,7 @@ flowchart LR
     CMP["/canvases/{id}/compares · card-tags"]
     FL["/filings · /insights · /dashboard"]
     DC["/documents"]
-    OUT["/canvases/{id}/context · evidence<br/>drafts · questions · evaluations"]
+    OUT["/canvases/{id}/context · evidence<br/>context-notes · questions · evaluations"]
     JB["/jobs/{id}"]
   end
 
@@ -44,7 +44,7 @@ flowchart LR
   R --> JB
   S -. 업로드 완료 확인 .-> JB
   DC -- 자료 준비 --> AI
-  OUT -- 초안 · 질문 --> AI
+  OUT -- 정리 글 · 질문 --> AI
   JB -- 상태 조회 --> AI
 ```
 
@@ -109,7 +109,7 @@ sequenceDiagram
   participant F as 화면
   participant B as backend
 
-  U->>F: 카드 올리기 · 연결 · 값 수정 · 카드 · 선 프롬프트
+  U->>F: 카드 올리기 · 연결 · 값 수정 · 메모 · 카드 · 선 프롬프트
   F->>F: 로컬 상태 반영, 큐에 이벤트 추가
   Note over F: 150ms 동안 묶음
   F->>B: POST /canvases/{id}/events
@@ -133,21 +133,25 @@ sequenceDiagram
   participant A as ai
 
   rect rgba(128,128,128,0.08)
-  Note over U,B: 검색 탭
-  F->>B: GET /dashboard (입력 없음: 대시보드 3개)
-  U->>F: 검색어 + Enter
-  F->>B: GET /filings/search?q= (재무 데이터 리스트)
-  F->>B: GET /documents?kind=ir,ar&q= (IR·AR 리스트)
-  U->>F: 재무 행 · 행 고르기
-  F->>B: GET /filings/tables/{tableId}
-  Note over F: 고른 행 · 열은 선택 칩에 담음 (아직 이벤트 없음)
+  Note over U,B: 입력 없음: 대시보드 · 회사 재무 · 인사이트 탭 (Tab)
+  F->>B: GET /dashboard (패널 목록 · 배치)
+  F->>B: GET /insights?asOfDate= (3사 비교, 인사이트 탭)
+  F->>B: GET /documents?kind=news&canvasId= (관련 뉴스 추천, 썸네일 img)
   end
 
   rect rgba(128,128,128,0.08)
-  Note over U,B: 인사이트 탭 (Tab)
-  U->>F: 주제 + Enter
-  F->>B: GET /insights?q=&asOfDate=
-  F->>B: GET /documents?kind=news&q= (입력 없으면 캔버스 기준 추천)
+  Note over U,B: 통합 검색 (입력하는 즉시, 150ms 묶음)
+  U->>F: 검색어 입력
+  par 같은 q로 함께
+    F->>B: GET /filings/search?q= (공시 재무 데이터)
+  and
+    F->>B: GET /documents?kind=ir,ar&q= (IR·AR)
+  and
+    F->>B: GET /documents?kind=news&q= (뉴스)
+  end
+  U->>F: 재무 행 · 행 고르기
+  F->>B: GET /filings/tables/{tableId}
+  Note over F: 고른 행 · 열은 선택 칩에 담음 (아직 이벤트 없음)
   end
 
   rect rgba(128,128,128,0.08)
@@ -171,7 +175,7 @@ sequenceDiagram
   F->>B: POST /canvases/{id}/events (add_card · add_doc · add_dash · create_compare)
 ```
 
-## 5. 생성하기 (결과물 → 질문 → 평가)
+## 5. 생성하기 (정리 글 → 질문 → 평가)
 
 ```mermaid
 sequenceDiagram
@@ -180,22 +184,22 @@ sequenceDiagram
   participant B as backend
   participant A as ai
 
-  F->>B: GET /deliverables
-  U->>F: 생성하기 (결과물 종류: 예산서 · 사업기획서)
-  Note over F: 남은 이벤트(프롬프트 포함)를 먼저 보내고 결과 패널을 엶
-  F->>B: GET /canvases/{id}/evidence (근거 ID → 카드 찾기)
+  U->>F: 생성하기
+  Note over F: 남은 이벤트(메모 · 프롬프트 포함)를 먼저 보내고 결과 패널을 엶 (접혀 있으면 펼침)
 
-  Note over F: 프로세스 바 1 결과물
-  F->>B: POST /canvases/{id}/drafts (deliverableId, asOfDate)
-  B->>A: 분석 작업 시작 (컨텍스트 L0~L4, 사용자 프롬프트 포함)
+  Note over F: 프로세스 바 1 생성 (캔버스 → 컨텍스트 글)
+  F->>B: POST /canvases/{id}/context-notes (asOfDate)
+  B->>A: 분석 작업 시작 (컨텍스트 L0~L4: 카드 · 연결 · 메모 · 카드/선 프롬프트)
   B-->>F: 202 jobId
   loop SUCCEEDED · FAILED까지
     F->>B: GET /jobs/{id}
   end
-  F->>B: GET /drafts/{draftId}
+  F->>B: GET /context-notes/{noteId}
+  B-->>F: markdown, cites (근거 ID 검증됨)
 
   Note over F: 프로세스 바 2 질문
-  F->>B: POST /canvases/{id}/questions (asOfDate)
+  F->>B: GET /canvases/{id}/evidence (근거 ID → 카드 찾기)
+  F->>B: POST /canvases/{id}/questions (asOfDate, contextNoteId)
   B->>A: 예측 작업 시작
   B-->>F: 202 jobId
   loop SUCCEEDED · FAILED까지
@@ -204,14 +208,12 @@ sequenceDiagram
   F->>B: GET /question-sets/{id}
 
   Note over F: 프로세스 바 3 평가
-  F->>B: POST /canvases/{id}/evaluations (questionSetId, draftId)
+  F->>B: POST /canvases/{id}/evaluations (questionSetId, canvasId)
   B-->>F: hit, off, missed, checks, precision, recall
 
-  opt 내보내기 · 부가 기능
-    U->>F: 결과물 PDF · Markdown, 질문 Markdown (화면에서 만듦)
-    U->>F: 프롬프트 복사
-    F->>B: POST /canvases/{id}/context
-    B-->>F: layers L0~L4, messages
+  opt 화면에서만
+    U->>F: 정리 글 편집 · 복사 · Markdown, 질문 Markdown
+    U->>F: 결과 패널 접기 · 펴기
   end
 ```
 
