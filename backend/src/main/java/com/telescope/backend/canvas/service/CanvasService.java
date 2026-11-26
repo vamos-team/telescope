@@ -55,12 +55,12 @@ public class CanvasService {
     /** 활동 로그에 보이는 이벤트와 문구. 이동·행 선택처럼 잦고 사소한 조작은 남기지 않는다. */
     static final Map<String, String> ACTIVITY_TEXT = Map.ofEntries(
             Map.entry("add_card", "공시 표를 올림"), Map.entry("add_doc", "자료를 올림"),
-            Map.entry("add_dash", "대시보드를 올림"), Map.entry("add_chart", "시각화 카드를 만듦"),
-            Map.entry("add_prompt", "프롬프트 카드를 만듦"), Map.entry("edit_prompt", "프롬프트를 고침"),
-            Map.entry("set_card_prompt", "카드 프롬프트를 고침"), Map.entry("set_link_prompt", "선 프롬프트를 고침"),
+            Map.entry("add_dash", "대시보드를 올림"),
+            Map.entry("add_memo", "메모를 남김"), Map.entry("edit_memo", "메모를 고침"),
+            Map.entry("set_card_memo", "카드 메모를 고침"), Map.entry("set_link_memo", "선 메모를 고침"),
             Map.entry("edit_cell", "값을 수정함"), Map.entry("create_compare", "비교 카드를 만듦"),
             Map.entry("confirm_mapping", "계정 대응을 확정함"), Map.entry("add_link", "카드를 연결함"),
-            Map.entry("set_link", "연결 관계를 바꿈"), Map.entry("remove_link", "연결을 지움"),
+            Map.entry("remove_link", "연결을 지움"),
             Map.entry("remove_card", "카드를 지움"), Map.entry(SET_SHARE, "공유 권한을 바꿈"));
 
     private static final int ACTIVITY_LIMIT = 200;
@@ -161,7 +161,7 @@ public class CanvasService {
         }
         List<CanvasLinkResponse> links = linkRepository.findByCanvasIdOrderByCreatedAtAsc(canvasId).stream()
                 .map(l -> new CanvasLinkResponse(l.getId(), l.getSourceCardId(), l.getTargetCardId(),
-                        l.getRel(), l.getPrompt(), l.getPromptVersion()))
+                        l.getMemo(), l.getMemoVersion(), l.getMemoBy() == null ? null : new UserRef(l.getMemoBy())))
                 .toList();
         return new CanvasDetailResponse(summary(canvas, role, cards.size()), cardViews, links,
                 canvas.getLastSeq(), warnings);
@@ -292,12 +292,12 @@ public class CanvasService {
         view.put("x", card.getX());
         view.put("y", card.getY());
         view.putAll(CanvasJson.readMap(card.getProps()));
-        if (card.getKind() == CardKind.PROMPT) {
+        if (card.getKind() == CardKind.MEMO) {
             view.put("text", card.getText());
             view.put("textVersion", card.getTextVersion());
         } else {
-            view.put("prompt", card.getPrompt());
-            view.put("promptVersion", card.getPromptVersion());
+            view.put("memo", card.getMemo());
+            view.put("memoVersion", card.getMemoVersion());
         }
         view.put("createdBy", new UserRef(card.getCreatedBy()));
         return view;
@@ -306,14 +306,13 @@ public class CanvasService {
     /** 다른 카드를 가리키는 카드의 대상이 사라졌는지 확인한다. 표·문서 원본이 사라진 경우는 조회 서비스가 생기면 더한다. */
     private static List<String> restoreWarnings(CanvasCard card, Map<String, Object> view, Set<String> cardIds) {
         List<String> warnings = new ArrayList<>();
-        if (card.getKind() == CardKind.CHART && !cardIds.contains(String.valueOf(view.get("compareId")))) {
-            warnings.add("시각화 카드 " + card.getId() + "의 비교 카드가 없습니다.");
-        }
-        if (card.getKind() == CardKind.COMPARE && view.get("sources") instanceof List<?> sources) {
+        boolean derived = card.getKind() == CardKind.COMPARE || card.getKind() == CardKind.CHART;
+        if (derived && view.get("sources") instanceof List<?> sources) {
             Set<Object> missing = new HashSet<>(sources);
             missing.removeAll(cardIds);
             if (!missing.isEmpty()) {
-                warnings.add("비교 카드 " + card.getId() + "의 원본 카드 " + missing.size() + "개가 없습니다.");
+                String name = card.getKind() == CardKind.CHART ? "시각화 카드 " : "비교 카드 ";
+                warnings.add(name + card.getId() + "의 원본 카드 " + missing.size() + "개가 없습니다.");
             }
         }
         return warnings;

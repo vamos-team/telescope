@@ -23,7 +23,7 @@ import java.util.UUID;
  * 캔버스 카드. ID는 화면이 만든 UUID다(여러 사람이 동시에 만들어도 겹치지 않게).
  *
  * <p>여러 사람이 같은 카드를 동시에 고쳐도 서로 덮어쓰지 않도록 위치({@code x}, {@code y}),
- * 프롬프트 카드 본문({@code text}), 카드 프롬프트({@code prompt})를 다른 컬럼에 둔다.
+ * 메모 카드 본문({@code text}), 카드 메모({@code memo})를 다른 컬럼에 둔다.
  * 두 글은 각각 버전을 갖고, 고칠 때 기준 버전이 다르면 서비스가 충돌(409)로 거절한다.
  * 종류별 필드(표 ID, 행·열, 수정값 등)는 {@code props}(JSONB 문자열)에 둔다.
  */
@@ -58,10 +58,11 @@ public class CanvasCard extends BaseTimeEntity implements Persistable<UUID> {
     @Column(nullable = false)
     private int textVersion;
 
-    private String prompt;
+    /** 카드 메모(메모 카드 제외). 비어 있으면 없음. */
+    private String memo;
 
     @Column(nullable = false)
-    private int promptVersion;
+    private int memoVersion;
 
     @Column(nullable = false)
     private Long createdBy;
@@ -97,16 +98,16 @@ public class CanvasCard extends BaseTimeEntity implements Persistable<UUID> {
         this.props = propsJson;
     }
 
-    /** 프롬프트 카드 본문을 바꾸고 버전을 1 올린다. 기준 버전 확인은 부르는 쪽이 먼저 한다. */
+    /** 메모 카드 본문을 바꾸고 버전을 1 올린다. 기준 버전 확인은 부르는 쪽이 먼저 한다. */
     public int changeText(String text) {
         this.text = text;
         return ++textVersion;
     }
 
-    /** 카드 프롬프트를 바꾸고 버전을 1 올린다. 빈 값이면 지운다. 기준 버전 확인은 부르는 쪽이 먼저 한다. */
-    public int changePrompt(String prompt) {
-        this.prompt = prompt == null || prompt.isBlank() ? null : prompt;
-        return ++promptVersion;
+    /** 카드 메모를 바꾸고 버전을 1 올린다. 빈 값이면 지운다. 기준 버전 확인은 부르는 쪽이 먼저 한다. */
+    public int changeMemo(String memo) {
+        this.memo = memo == null || memo.isBlank() ? null : memo;
+        return ++memoVersion;
     }
 
     /** {@link Persistable}: 새로 만든 객체면 true. 저장되거나 조회된 뒤에는 false. */

@@ -7,8 +7,8 @@ public record CanvasLinkResponse(
         UUID id,
         UUID source,
         UUID target,
-        String rel,
-        String prompt,
-        int promptVersion
+        String memo,
+        int memoVersion,
+        UserRef memoBy
 ) {
 }
