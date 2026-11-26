@@ -41,7 +41,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | 자료 검색 · 인사이트 | 3사 비교 인사이트(분기) | `GET /insights` | `api.analysis.insights`, `api.peerFacts` |
 | 자료 검색 · 인사이트 | 연간 인사이트 | `GET /dashboard` (인사이트 패널) | `local/dart.ts` `ANNUAL_INSIGHTS` |
 | 자료 검색 · 인사이트 | 관련 뉴스 추천 (썸네일) | `GET /documents?kind=news` | `api.recommend` |
-| 데이터 입력 (C16) | 사내 자료 업로드 (포맷 · 4사 회사 검증) | `POST /documents/uploads` | `validate.checkUpload`, `api.registerDoc` |
+| 데이터 입력 (C16) | 사내 자료를 파일별로 업로드하고 처리 결과로 카드 추가 | `POST /documents/uploads`, `GET /jobs/{id}`, `GET /documents/{id}` | `DataInputDialog.vue`, `sync/http.ts`, 로컬은 `validate.checkUpload` |
 | 비교·시각화 카드 | 표 비교 결과 (확정 · 거부 반영) | `GET /canvases/{id}/compares/{cardId}` | `api.compare` |
 | 분석 (C20) | 내 분석 세션 목록 | `GET /canvases/{id}/analyses` | `canvas.analyses` (브라우저 저장) |
 | 분석하기 → 검토 (C21) | 메모 분류 · 주장 · 근거 판정 · 지적 · AI 인사이트 + 정리 글 | `POST /canvases/{id}/analyses` → job | `ai.review` (+ `notes`, `api.evidence`) |
@@ -185,7 +185,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 |---|---|---|
 | `lastSeq` | 반영 후 마지막 이벤트 번호 | number |
 | `firstChangedLayer` | 처음 바뀐 컨텍스트 층 (`L1_sources` / `L2_workspace` / `L3_edits` / `null`) | string \| null |
-| `textVersions` | 이번 묶음으로 바뀐 글의 새 버전 `{ 카드·연결 ID: { text?, prompt? } }` | object |
+| `textVersions` | 이번 묶음으로 바뀐 글의 새 버전 `{ 카드·연결 ID: { text?, memo? } }` | object |
 
 이벤트 종류 (`type`과 필드):
 
@@ -353,7 +353,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 `asset` 패널은 자산 계정(SKT 별도 분기 장부금액)이다: `{ quarters[], accounts[{ group: t|i, key, name, values[], note? }], evidence{ "key|분기": { lv, n, unx, later } } }`. `evidence`(근거 칸 상태)는 데모에서 화면 설명용 예시이며, 실제 산출 방식은 ai와 정한다.
 
-캔버스 대시보드 카드(`dash`)의 컨텍스트 · 근거는 패널의 표 형태(행 이름 × 열)에서 만든다. 근거 ID는 `dash:{panelId}#{행 이름}`, 값은 억원을 십억원으로 환산한 마지막 열.
+캔버스 대시보드 카드(`dash`)의 컨텍스트 · 근거는 패널의 표 형태(행 이름 × 열)에서 만든다. 근거 ID는 `dash:{panelId}#{인코딩된 행 이름}@{열 인덱스}`다. 정리 글과 근거 검토는 같은 숫자 열을 사용한다. 산점도는 영업이익률·부채비율·매출을 각각 인용하며, 근거 목록의 억원 값은 십억원으로 환산한다.
 
 ## 5. 문서 (IR·AR·뉴스·사내 자료)
 
@@ -379,26 +379,32 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 ### 5.2 `GET /api/v1/documents/{id}`
 
-문서 하나. 문서 카드, 왼쪽 사이드바 근거 데이터가 쓴다. 응답은 `Doc`.
+문서 카드와 왼쪽 근거 목록에 쓰는 `Doc`을 반환한다. 업로드 문서는 해당 캔버스 권한자만 조회할 수 있다. 서버 모드에서는 캔버스를 다시 열거나 다른 편집자가 문서 카드를 추가할 때 ID로 조회한다.
 
 ### 5.3 `POST /api/v1/documents/uploads`
 
-C16 데이터 입력 창에서 파일을 올린다. `multipart/form-data`, 필드 `file`(여러 개 가능). 서버는 파일마다 아래 두 검증을 하고, 통과한 파일만 파서 모델로 요약 · 수치 · 개념 태그를 뽑는다(자료 준비 작업). 데모는 브라우저에서 같은 규칙(`local/validate.ts` `checkUpload`)으로 검사하고 txt · md · csv · json만 본문을 읽는다.
+C16 데이터 입력 창에서 여러 파일을 고르면 파일마다 `multipart/form-data` 요청을 하나씩 보낸다.
 
-| 검증 (MVP) | 오류 코드 | 규칙 |
+| 필드 | 필수 | 값 |
 |---|---|---|
-| 포맷 불일치 | `FORMAT_MISMATCH` | 확장자가 txt · md · csv · json · pdf · xlsx · docx · hwp가 아님, 텍스트 파일이 비었거나 읽을 수 없음, json 문법 오류 |
-| 회사 불일치 | `COMPANY_MISMATCH` | 파일 이름 · 본문에 대상 4사(SKT · SKB · KT · LGU+, 다른 표기 포함)가 없음 |
+| `file` | 예 | 파일 하나 |
+| `canvasId` | 예 | 현재 캔버스의 숫자 ID |
+| `company` | 예 | 현재 분석 대상 회사 (`analysis.focus`) |
+| `publishedDate` | 아니요 | `yyyy-MM-dd`. 생략하면 업로드한 날 |
 
-| 응답 | 설명 |
-|---|---|
-| `202` + `{ jobId, results: [{ fileName, documentId?, company?, error?: { code, message } }] }` | 파일별 결과. 통과한 파일은 `GET /jobs/{id}`가 `SUCCEEDED`가 되면 `GET /documents/{id}`로 요약본을 받아 카드로 올림. 실패한 파일은 C16 목록에 이유를 표시 |
+허용 확장자는 `pdf, xlsx, xlsm, csv, pptx, html, htm, xml, txt, md, json`이다.
 
-| HTTP | 상황 | 화면 |
+`202` 응답은 `{ "data": { "jobId": 11, "documentIds": [21] } }` 형식이다. `GET /jobs/{jobId}`를 2초 간격으로 조회하고, `RUNNING`이 1분을 넘으면 5초 간격으로 조회한다. `SUCCEEDED`면 `GET /documents/{documentIds[0]}`로 카드 데이터를 받는다. 업로드 문서의 `kind`는 `internal`, `publisher`는 `사내 업로드`, `uploaded`는 `true`, `url`은 빈 문자열이다. `FAILED`면 해당 파일 줄에 `errorMessage`를 표시한다.
+
+| HTTP | 코드 | 상황 |
 |---|---|---|
-| 400 | 모든 파일이 검증 실패 | 파일별 `포맷 불일치` · `회사 불일치`와 이유 |
+| 400 | `C001` | 필수 값 누락, 빈 파일, 지원하지 않는 형식(메시지에 허용 목록 포함) |
+| 401 | `A002` | 로그인 필요 |
+| 403 | `K001` / `K002` | 캔버스 권한 없음 / 보기 권한만 있음. 소유자와 편집자만 업로드 가능 |
+| 404 | `C002` | 캔버스 없음 |
+| 413 | `C001` | 파일이 너무 큽니다 (최대 50MB). |
 
-대상 회사 목록을 설정으로 둘지, 업로드 문서의 소유자·만료·접근 범위는 미정(`CLAUDE.md` 7장)이다.
+로컬 데모는 파일의 형식과 대상 회사를 검사하고, 읽을 수 있는 텍스트의 앞부분을 요약으로 사용한다.
 
 ## 6. 비교
 
@@ -466,7 +472,7 @@ C16 데이터 입력 창에서 파일을 올린다. `multipart/form-data`, 필�
 | `L3_edits` | 수정값, 확정 · 거부 대응, 비교 · 시각화 원본, 연결, `# 메모`(카드 메모 · 선 메모) |
 | `L4_task` | 요청 |
 
-근거 ID 형식: 표 셀 `[{tableId}#r{행}c{열}]`, 대시보드 값 `[dash:{panelId}#{행 이름}]`, 문서 수치 `[doc:{문서ID}#f{번호}]`, 문서 내용 `[doc:{문서ID}]`. 앞 층이 같으면 LLM prefix 캐시를 재사용한다.
+근거 ID 형식: 표 셀 `[{tableId}#r{행}c{열}]`, 대시보드 값 `[dash:{panelId}#{인코딩된 행 이름}@{열 인덱스}]`, 문서 수치 `[doc:{문서ID}#f{번호}]`, 문서 내용 `[doc:{문서ID}]`. 앞 층이 같으면 LLM prefix 캐시를 재사용한다.
 
 ### 7.4 질문 (같은 분석 작업의 두 번째 단계)
 

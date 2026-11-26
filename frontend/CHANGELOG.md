@@ -2,6 +2,7 @@
 
 형식: `- YYYY-MM-DD 무엇을 바꿨는지 (관련 파일)`. 최신이 위로 오게 쌓는다. 규칙은 [AGENTS.md](AGENTS.md).
 
+- 2026-11-26 PR #122 CodeRabbit 주요 리뷰 수정 및 사내 자료 단건 업로드·작업 폴링·캔버스 권한 기반 복원 연결 (src/App.vue, src/components/, src/local/, src/stores/canvas.ts, src/sync/http.ts)
 - 2026-11-26 #107 develop 병합: 동시 편집 연동(#84)을 메모 구조로 맞춤. 서버 이벤트를 add_memo · edit_memo · set_card_memo · set_link_memo로, 글 버전을 memoVersion으로, 시각화 카드는 create_compare(view: chart) + sources로, 선 관계(rel) · set_link · add_chart 삭제. 공유 설정은 소유자만(#100)을 페이지 정보 팝오버에 반영, MenuDrawer 삭제 유지 (src/sync/*, src/stores/canvas.ts, src/App.vue, src/components/PageInfo.vue, docs/frontend/*.md, docs/planning/기획서.md)
 - 2026-11-26 #84 동시 편집 연동: 카드·연결 ID UUID, 시각화 카드 저장(add_chart), 서버 연동 계층(src/sync: 묶음 requestId·재전송, 글 baseVersion·충돌, 번호 확인, 원격 반영, STOMP), 다른 사람 커서·접속자 표시, @stomp/stompjs 7.5.0·vitest 5.1.0 추가 (src/sync/*, src/stores/canvas.ts, src/App.vue, src/style.css, package.json, docs/frontend/*.md, docs/planning/기획서.md)
 - 2026-11-26 #100 공유 설정은 소유자만 바꾸고 일반 액세스(회사 전체 보기) 삭제, 캔버스 홈 · 메뉴의 공유 범위 표기 삭제 (src/stores/canvas.ts, src/components/ShareDialog.vue, src/components/HomeView.vue, src/components/MenuDrawer.vue, src/style.css, docs/frontend/*.md, docs/planning/기획서.md)

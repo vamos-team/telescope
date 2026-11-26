@@ -187,16 +187,25 @@ sequenceDiagram
 
   rect rgba(128,128,128,0.08)
   Note over U,A: 검색창 + → 데이터 입력 (C16)
-  U->>F: 파일 선택
-  F->>B: POST /documents/uploads
-  B->>B: 파일별 검증 (FORMAT_MISMATCH · COMPANY_MISMATCH)
-  B->>A: 통과한 파일만 자료 준비 작업
-  B-->>F: 202 jobId, 파일별 결과 (documentId 또는 error)
-  Note over F: 실패 파일은 이유 표시, 통과 파일만 캔버스에 올리기
-  loop SUCCEEDED · FAILED까지
-    F->>B: GET /jobs/{id}
+  U->>F: 발행일 선택(선택 사항), 파일 여러 개 선택
+  loop 파일마다 한 요청
+    F->>B: POST /documents/uploads (file, canvasId, company, publishedDate?)
+    alt 업로드 접수
+      B->>A: 자료 준비 작업
+      B-->>F: 202 jobId, documentIds
+      loop 완료까지 2초, RUNNING 1분 뒤 5초
+        F->>B: GET /jobs/{jobId}
+      end
+      alt SUCCEEDED
+        F->>B: GET /documents/{documentIds[0]}
+        B-->>F: Doc
+      else FAILED
+        Note over F: 파일 줄에 errorMessage 표시
+      end
+    else 요청 거절
+      B-->>F: 오류 코드와 메시지
+    end
   end
-  F->>B: GET /documents/{id}
   end
 
   U->>F: 패널 · 항목을 캔버스로 끌어 놓기 (또는 두 번 누르기)
