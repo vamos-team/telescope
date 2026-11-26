@@ -69,6 +69,7 @@ erDiagram
         string errorMessage
         datetime startedAt
         datetime finishedAt
+        int resultSaveFailures
     }
     JOB ||--o| DOCUMENT_VERSION : "자료 준비 작업"
 
@@ -398,6 +399,7 @@ erDiagram
 | `errorMessage` | string | 실패 사유 |
 | `startedAt` | datetime | 시작 시각 |
 | `finishedAt` | datetime | 종료 시각 |
+| `resultSaveFailures` | int | 결과 저장 실패 횟수. 한도에 닿으면 `FAILED`로 끝낸다(#63) |
 
 - `Job`은 대상을 가리키지 않는다. `DocumentVersion`/`AnalysisRun`/`PredictionRun`이 각자 `jobId` FK로 `Job`을 가리킨다. 대상은 `Job`을 반드시 하나 가지고, `Job` 하나는 `jobType`에 맞는 대상 정확히 하나에만 연결된다(서버가 검증).
 - 재무 데이터 적재의 상태는 `DataSyncRun`이 따로 가진다.

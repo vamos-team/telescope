@@ -44,7 +44,7 @@ QUEUED ──▶ RUNNING ──▶ SUCCEEDED
 
 ### 3.2 Job 엔티티
 
-컬럼은 `V3__create_job.sql`과 같다: `jobType`, `status`, `externalJobId`, `errorMessage`, `startedAt`, `finishedAt`.
+컬럼은 `V3__create_job.sql`, `V10__add_job_result_save_failures.sql`과 같다: `jobType`, `status`, `externalJobId`, `errorMessage`, `startedAt`, `finishedAt`, `resultSaveFailures`(결과 저장 실패 횟수, #63).
 
 `@Setter`가 없다. 상태가 바뀌는 길을 아래 메서드로만 열어, 모든 변경이 전이 규칙을 지나가게 한다.
 
@@ -57,6 +57,7 @@ QUEUED ──▶ RUNNING ──▶ SUCCEEDED
 | `assignExternalJobId(id)` | ai 서비스가 발급한 작업 ID 저장 |
 | `isTerminal()` | 종료 상태인지 확인 |
 | `syncFrom(status, message, now)` | ai가 알려 준 상태를 반영 |
+| `recordResultSaveFailure(max, message, now)` | 결과 저장 실패를 한 번 센다. 한도에 닿으면 `FAILED`. 이미 끝났으면 무시 |
 | `transitionTo(next)` (private) | 전이를 검사하고 상태를 바꾼다. `start/succeed/fail`이 모두 거친다 |
 
 **`syncFrom`**: `start/succeed/fail`은 허용되지 않은 전이면 예외를 던진다. 폴링으로 받는 ai 상태는 같은 값이 반복되거나 단계를 건너뛰는 것이 정상이라 별도로 처리한다.
@@ -90,7 +91,23 @@ QUEUED ──▶ RUNNING ──▶ SUCCEEDED
 1. 작업 조회 (짧은 트랜잭션)
 2. 종료됐거나 `externalJobId`가 없으면 그대로 반환 (ai 호출 없음)
 3. `PythonAiClient.getJobStatus` 호출 (트랜잭션 밖)
-4. 작업 행을 잠그고(`findByIdForUpdate`) 다시 읽어 `syncFrom`으로 반영한 뒤 반환 (짧은 트랜잭션)
+4. 작업 행을 잠그고(`findByIdForUpdate`) 다시 읽어 반영한 뒤 반환 (짧은 트랜잭션)
+   - ai가 `SUCCEEDED`: 아래 **결과 저장 후 완료**
+   - 그 밖의 상태: `syncFrom`으로 반영
+
+**결과 저장 후 완료 (#63)**
+
+ai가 `SUCCEEDED`를 알려 주면, 대상 도메인이 결과를 저장하는 데 성공했을 때만 작업을 완료로 확정한다.
+
+1. 한 트랜잭션에서 작업 행을 잠그고 다시 읽는다. 이미 끝났으면(다른 요청이 먼저 처리) 아무것도 하지 않는다. 그래서 결과가 두 번 저장되지 않는다.
+2. 작업 종류의 `JobResultHandler`가 `result`를 저장한다.
+3. 같은 트랜잭션에서 `syncFrom(SUCCEEDED)`로 완료한다.
+4. 2~3이 실패하면 전부 되돌린다. 새 트랜잭션에서 `resultSaveFailures`만 1 올리고 작업은 진행 중으로 남긴다. 다음 조회에서 ai에 다시 물어 재시도한다(ai/server는 끝난 작업의 결과를 계속 보관한다).
+5. 실패 횟수가 `app.job.result-save-max-attempts`(기본 5)에 닿으면 "작업 결과를 저장하지 못했습니다."로 `FAILED`를 기록한다.
+
+- **`JobResultHandler`** (`job/service`): 대상 도메인(자료 준비·분석·예측)이 자기 작업 종류에 맞게 구현해 빈으로 등록한다. job은 대상 도메인을 직접 알지 않는다. 작업 종류마다 하나만 둔다(둘이면 기동 실패).
+  처리기는 잠금 트랜잭션 안에서 불리므로 DB 저장만 하고 외부 호출을 하지 않는다. 저장하지 못하면 예외를 던진다.
+- **처리기가 없는 작업 종류**: 경고 로그만 남기고 결과 없이 완료한다(이전 동작 그대로). 대상 도메인이 처리기를 붙이면 그때부터 저장된다. 지금은 세 종류 모두 처리기가 없다.
 
 | ai 호출 결과 | 처리 |
 |---|---|
@@ -176,6 +193,9 @@ QUEUED ──▶ RUNNING ──▶ SUCCEEDED
 | enum을 `AiJobStatus`(ai 쪽)와 `JobStatus`(DB)로 분리 | DB 값은 한번 쌓이면 바꾸기 어렵고, ai 계약은 초안이라 값이 늘 수 있다. 변환 한 곳만 고치면 된다 | 하나의 enum 공유 |
 | "ai에 없는 작업"과 "일시 오류"를 다르게 처리 | 없는 작업은 기다려도 끝나지 않지만, 일시 오류는 다시 시도하면 된다 | 모든 오류를 `FAILED`로 |
 | `Clock` 주입 | `now()`를 직접 찍으면 테스트가 불안정하다 | `LocalDateTime.now()` 직접 호출 |
+| 결과 저장과 완료 확정을 한 트랜잭션으로 (#63) | 둘 중 하나만 되는 일이 없다. 행 잠금 뒤 종료 여부를 다시 보므로 처리기가 중복 저장을 따로 막지 않아도 된다 | 대상 도메인 저장을 먼저 커밋한 뒤 완료(처리기마다 멱등성 필요) |
+| 처리기가 없으면 완료하고 경고 (#63) | 대상 도메인 구현 전까지 화면 흐름을 지금처럼 유지한다 | 진행 중으로 두기(화면이 계속 돎), 실패 처리(모든 작업이 실패로 보임) |
+| 결과 저장 실패는 횟수 제한 (#63) | 계속 실패하는 작업이 영원히 끝나지 않는 것을 막는다. 기본 5회, 설정으로 조정 | 무기한 재시도 |
 | 조회는 로그인한 사용자 전체에 허용 | `Job`에 소유자 컬럼이 없다. 응답에 결과 본문이 없어 MVP에서는 감수한다 | `Job`에 소유자 추가 |
 
 ## 5. 미정
@@ -203,6 +223,8 @@ QUEUED ──▶ RUNNING ──▶ SUCCEEDED
 | ai의 `errorMessage`를 그대로 저장하고 응답한다 | 내부 사정이나 문서 내용이 담기면 클라이언트에 노출된다 | 실제 ai 연동 전에 정제 방식 결정 필요 |
 | "없는 작업" 판단이 ai 구현체에 의존한다 | 실제 구현체가 일시 장애도 이 예외로 던지면 멀쩡한 작업을 `FAILED`로 만든다 | 구현체는 404일 때만 던져야 한다 |
 | 순차 ID와 소유자 미검사 | 남의 작업 상태를 추측해 볼 수 있다 | 인증·소유자 제한 때 해결 |
+| 결과 저장 실패 횟수는 조회할 때만 센다 | 아무도 조회하지 않으면 한도에 닿지 않고 진행 중으로 남는다. 횟수는 조회 빈도에 따라 빨리 찰 수 있다(폴링 2초면 5회는 약 10초) | 갱신 배치가 생기면 배치 주기 기준이 된다 |
+| 처리기가 없는 작업 종류는 결과를 버린다 | 대상 도메인이 처리기를 붙이기 전에 끝난 작업의 결과는 되찾을 수 없다 | 대상 도메인 이슈(#111 등)에서 처리기를 붙인다 |
 | 테스트가 가짜 ai 대역 기준이다 | 실제 Stub·HTTP 구현체와의 통합, 대상 도메인과의 흐름은 검증하지 않았다 | 연동 시 추가 |
 
 ## 7. 확장
@@ -215,7 +237,8 @@ QUEUED ──▶ RUNNING ──▶ SUCCEEDED
 | 타임아웃 정리 | `startedAt`/`createdAt` 기준 N분이 지난 미종료 작업을 `FAILED`로 기록하는 배치 |
 | 작업 종류 추가 | `JobType` 값 추가. 컬럼이 VARCHAR라 마이그레이션은 필요 없고, 대상 도메인이 `jobId`로 연결한다 |
 | 취소 | `CANCELED` 상태 추가: `JobStatus` 전이 표, `AiJobStatus` 변환, 종료 상태 판정을 함께 고친다 |
-| 실제 ai 구현체 | `PythonAiClient` HTTP 구현체를 추가하고, 404만 `AiJobNotFoundException`으로 변환한다 |
+| 실제 ai 구현체 | `PythonAiClientHttp`(#114). 404만 `AiJobNotFoundException`으로 변환한다 |
+| 대상 도메인 결과 저장 | 대상 도메인 서비스가 `JobResultHandler`를 구현해 빈으로 등록한다. DB 저장만 하고 실패하면 예외를 던진다 |
 | 폴링 부하 완화 | 응답에 권장 폴링 간격을 알려 주거나, 짧은 시간 내 같은 작업의 ai 호출을 합친다 |
 
 ## 8. 다시 확인할 시점
@@ -236,5 +259,5 @@ QUEUED ──▶ RUNNING ──▶ SUCCEEDED
 |---|---|
 | `JobTest` | 상태 전이와 `syncFrom`의 모든 분기 (단위) |
 | `JobRepositoryTest` | PostgreSQL에서 `ddl-auto: validate` 통과, enum·시각 저장, 잠금 조회 |
-| `JobServiceTest` | 조회 시 갱신, 종료 작업의 ai 미호출, ai 오류 처리, 동시 조회에서 먼저 종료된 상태 유지(잠금을 빼면 실패함을 확인). 응답을 정할 수 있는 가짜 ai 대역 사용 |
+| `JobServiceTest` | 조회 시 갱신, 종료 작업의 ai 미호출, ai 오류 처리, 동시 조회에서 먼저 종료된 상태 유지(잠금을 빼면 실패함을 확인). 결과 저장 후 완료, 저장 실패 시 진행 중 유지와 재시도, 실패 시 처리기가 쓴 내용도 되돌림, 한도 도달 시 `FAILED`, 처리기 없음, 동시 완료에서 한 번만 저장, 처리기 중복·한도 설정 오류. 가짜 ai 대역과 가짜 결과 처리기 사용 |
 | `JobControllerTest` | 200, 404 응답 형식 |
