@@ -3,6 +3,7 @@ package com.telescope.backend.document.controller;
 import com.telescope.backend.document.dto.DocumentResponse;
 import com.telescope.backend.document.dto.DocumentUploadCommand;
 import com.telescope.backend.document.dto.DocumentUploadResponse;
+import com.telescope.backend.document.dto.UploadRejection;
 import com.telescope.backend.document.service.DocumentService;
 import com.telescope.backend.global.auth.CurrentUserProvider;
 import com.telescope.backend.global.auth.UnauthenticatedCurrentUserProvider;
@@ -98,6 +99,20 @@ class DocumentControllerTest {
                 .andExpect(status().isBadRequest());
         loggedIn().perform(multipart("/api/v1/documents/uploads").file(pdf()).param("company", "SKT"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void 업로드_거절은_400_D001과_data_reason으로_알린다() throws Exception {
+        when(documentService.upload(eq(7L), any(DocumentUploadCommand.class), any(InputStream.class)))
+                .thenThrow(new BusinessException(ErrorCode.DOCUMENT_UPLOAD_REJECTED, "지원하지 않는 형식입니다(.exe).",
+                        UploadRejection.format()));
+
+        loggedIn().perform(multipart("/api/v1/documents/uploads").file(pdf())
+                        .param("canvasId", "3").param("company", "SKT"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("D001"))
+                .andExpect(jsonPath("$.error.message").value("지원하지 않는 형식입니다(.exe)."))
+                .andExpect(jsonPath("$.data.reason").value("FORMAT_MISMATCH"));
     }
 
     @Test
