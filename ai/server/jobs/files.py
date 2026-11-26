@@ -11,7 +11,7 @@ import logging
 import shutil
 import tempfile
 from collections.abc import Iterator
-from contextlib import AbstractContextManager, contextmanager
+from contextlib import AbstractContextManager, closing, contextmanager
 from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
@@ -85,8 +85,9 @@ class S3FileSource:
 
         try:
             response = self._client.get_object(Bucket=self._bucket, Key=key)
-            with target.open("wb") as out:
-                shutil.copyfileobj(response["Body"], out)
+            # 파일 열기·쓰기가 실패해도 S3 응답 스트림(HTTP 연결)을 닫는다
+            with closing(response["Body"]) as body, target.open("wb") as out:
+                shutil.copyfileobj(body, out)
         except ClientError as e:
             code = e.response.get("Error", {}).get("Code")
             if code in {"NoSuchKey", "404"}:

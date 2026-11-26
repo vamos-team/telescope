@@ -5,7 +5,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    # 같은 .env에 ai 파이프라인 코드가 직접 읽는 키(OPENAI_API_KEY, PARSER_EMBED_MODEL, HF_TOKEN 등)가 함께 있을 수 있다.
+    # 서버가 선언하지 않은 키는 무시한다(기본값 forbid면 값이 채워지는 순간 기동이 실패한다).
+    # 선언한 필드의 검증은 그대로다. 대신 서버 키의 오타도 조용히 무시되므로 이름은 .env.example을 따른다.
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # backend가 X-Internal-Api-Key 헤더로 보내는 공유 비밀키
     internal_api_key: str = Field(min_length=1)
