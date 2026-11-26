@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// 공유 창(C13): 사내 사람을 초대하고 권한(편집 가능 / 보기 가능)을 줌, 일반 액세스 범위 설정
-// 닫기는 ✕ · 완료 · Esc만 (빈 곳 클릭으로는 닫지 않음). 보기 권한이면 읽기만
+// 페이지 정보 (헤더 오른쪽 i 아이콘): 내 페이지 정보 + 바로 협업자 편집(초대 · 권한 · 일반 액세스)
+// 헤더 아래 오른쪽에 뜨는 팝오버. 닫기는 ✕ · 바깥 클릭 · Esc(App). 보기 권한이면 읽기만. 홈으로 가는 건 로고
 import { computed, ref } from "vue";
-import { useCanvas, ALL_MEMBERS, shareOf, ROLE, findPeople, type Access } from "../stores/canvas";
+import { useCanvas, ALL_MEMBERS, shareOf, ROLE, findPeople, accessText, when, quarterOf, type Access } from "../stores/canvas";
 
 const emit = defineEmits<{ close: [] }>();
 const cv = useCanvas();
@@ -27,9 +27,16 @@ function setRole(id: string, v: string) {
 </script>
 
 <template>
-  <div class="scrim share-scrim">
-    <section class="share" role="dialog" aria-modal="true" :aria-label="`'${cv.canvasName}' 공유`">
-      <header><h2>'{{ cv.canvasName }}' 공유</h2><button class="x" aria-label="닫기" @click="emit('close')">✕</button></header>
+  <div class="pinfo-bg" @click.self="emit('close')">
+    <section class="share pinfo" role="dialog" aria-label="페이지 정보">
+      <header><h2>페이지 정보</h2><button class="x" aria-label="닫기" @click="emit('close')">✕</button></header>
+      <dl class="pmeta">
+        <dt>이름</dt><dd>{{ cv.canvasName }}</dd>
+        <dt>기준 시점</dt><dd>{{ quarterOf(cv.meta) }}</dd>
+        <dt>내 권한</dt><dd>{{ ROLE[cv.role!] }} · {{ accessText(cv.meta!) }}</dd>
+        <dt>수정</dt><dd>{{ cv.meta!.updatedBy }} · {{ when(cv.meta!.updated) }} · 카드 {{ cv.cards.length }}</dd>
+      </dl>
+      <h3>협업자</h3>
 
       <div v-if="can" class="inv">
         <input v-model="q" placeholder="사번, 이름, 부서로 사내 사람 찾기" aria-label="초대할 사람 찾기" @keydown.enter.prevent="found[0] && invite(found[0].id)" @focus="focused = true" @click="focused = true" @input="focused = true" @blur="blur" />
@@ -60,7 +67,6 @@ function setRole(id: string, v: string) {
           <option value="invited">초대한 사람만</option><option value="company">회사 전체</option></select>
       </div>
 
-      <footer><button class="primary" @click="emit('close')">완료</button></footer>
     </section>
   </div>
 </template>

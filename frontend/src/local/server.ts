@@ -9,11 +9,13 @@ import { UNIT_TO_BIL, type SourceTable, type SearchResult, type CompareResult, t
 
 interface Member { label: string; grp?: string; title?: string; alt?: Member[] }
 interface Concept { id: string; name: string; alias?: string[]; members: Record<string, Member[]>; note?: string }
-interface WCard { card_id: string; kind: "table" | "compare" | "doc" | "memo" | "dash"; seq: number; doc_id?: string; text?: string; author?: string; memo_type?: string; panel?: string; table_id?: string; rows: number[]; cols: number[];
-  vcol: number | null; edits: Record<string, number | null>; sort: [string | number, boolean] | null; sources: string[] }
-interface Link { source: string; target: string; rel: string; prompt?: string }
-// prompts: 카드 프롬프트 (화면 전용 시각화 카드 것도 받으려고 카드와 따로 둠)
-interface Workspace { cards: Map<string, WCard>; links: Map<string, Link>; prompts: Map<string, string>; mappings: CanvasEvent[]; seq: number; layers: string[] }
+// view: 비교 계산을 쓰는 카드가 비교표(compare)인지 시각화(chart)인지
+interface WCard { card_id: string; kind: "table" | "compare" | "doc" | "memo" | "dash"; seq: number; doc_id?: string; text?: string; author?: string; panel?: string; table_id?: string; rows: number[]; cols: number[];
+  vcol: number | null; edits: Record<string, number | null>; sort: [string | number, boolean] | null; sources: string[]; view?: string }
+interface Link { source: string; target: string; memo?: string }
+// memos: 카드 메모 (카드와 따로 둠). mappings: "개념|회사" → 확정(true) · 거부(false)
+interface Mapping { concept_id: string; company: string; cells: string[]; accepted: boolean }
+interface Workspace { cards: Map<string, WCard>; links: Map<string, Link>; memos: Map<string, string>; mappings: Map<string, Mapping>; seq: number; layers: string[] }
 
 const TABLES = new Map((data.tables as unknown as SourceTable[]).map((t) => [t.table_id, t]));
 const CONCEPTS = data.concepts as Concept[];
@@ -26,7 +28,7 @@ const memberMatches = (m: Member, t: SourceTable, r: number) => {
   return norm(row.label) === norm(m.label) && (m.grp == null || row.grp === m.grp) && (m.title == null || t.title.includes(m.title));
 };
 export interface Example { cards: { table_id: string; rows: number[] | null; cols?: number[] | null; vcol?: number }[]; compares: number[][];
-  docs: string[]; charts?: number[]; memos: { author: string; text: string; type?: "memo" | "request" }[]; links: [string, string, string][] }
+  docs: string[]; charts?: number[]; memos: { author: string; text: string }[]; links: [string, string, string?][] }
 export const meta = { subtitle: (data as { subtitle?: string }).subtitle ?? "",
   example: (data as unknown as { example?: Example }).example ?? null };
 export const analysis = (data as unknown as { analysis: Analysis }).analysis;
@@ -95,7 +97,7 @@ export function search(q: string, k = 20): SearchResult[] {
 // ---------- 이벤트 리듀서 ----------
 const sessions = new Map<string, Workspace>();
 const ws = (sid: string) => {
-  if (!sessions.has(sid)) sessions.set(sid, { cards: new Map(), links: new Map(), prompts: new Map(), mappings: [], seq: 0, layers: ["", "", ""] });
+  if (!sessions.has(sid)) sessions.set(sid, { cards: new Map(), links: new Map(), memos: new Map(), mappings: new Map(), seq: 0, layers: ["", "", ""] });
   return sessions.get(sid)!;
 };
 
@@ -113,21 +115,19 @@ function apply(w: Workspace, e: CanvasEvent) {
     case "add_rows": if (c) c.rows = [...new Set([...c.rows, ...ns(e.rows)])].sort((a, b) => a - b); break;
     case "remove_row": if (c) c.rows = c.rows.filter((r) => r !== n(e.r)); break;
     case "remove_card":
-      w.cards.delete(e.card_id as string); w.prompts.delete(e.card_id as string);
+      w.cards.delete(e.card_id as string); w.memos.delete(e.card_id as string);
       for (const o of w.cards.values()) o.sources = o.sources.filter((s) => s !== e.card_id);
       for (const [id, l] of w.links) if (l.source === e.card_id || l.target === e.card_id) w.links.delete(id);
       break;
     case "add_doc": case "add_memo": case "add_dash":
       w.cards.set(e.card_id as string, { card_id: e.card_id as string, kind: e.type === "add_doc" ? "doc" : e.type === "add_dash" ? "dash" : "memo", seq: w.seq,
-        doc_id: e.doc_id as string | undefined, text: e.text as string | undefined, author: e.author as string | undefined, memo_type: e.memo_type as string | undefined, panel: e.panel as string | undefined,
+        doc_id: e.doc_id as string | undefined, text: e.text as string | undefined, author: e.author as string | undefined, panel: e.panel as string | undefined,
         rows: [], cols: [], vcol: null, edits: {}, sort: null, sources: [] });
       break;
     case "edit_memo": if (c) c.text = e.text as string; break;
-    case "set_memo_type": if (c) c.memo_type = e.memo_type as string; break;
-    case "set_card_prompt": { const t = (e.text as string).trim(); if (t) w.prompts.set(e.card_id as string, t); else w.prompts.delete(e.card_id as string); break; }
-    case "set_link_prompt": { const l = w.links.get(e.link_id as string); if (l) l.prompt = (e.text as string).trim(); break; }
-    case "add_link": w.links.set(e.link_id as string, { source: e.source as string, target: e.target as string, rel: e.rel as string }); break;
-    case "set_link": { const l = w.links.get(e.link_id as string); if (l) l.rel = e.rel as string; break; }
+    case "set_card_memo": { const t = (e.text as string).trim(); if (t) w.memos.set(e.card_id as string, t); else w.memos.delete(e.card_id as string); break; }
+    case "set_link_memo": { const l = w.links.get(e.link_id as string); if (l) l.memo = (e.text as string).trim(); break; }
+    case "add_link": w.links.set(e.link_id as string, { source: e.source as string, target: e.target as string }); break;
     case "remove_link": w.links.delete(e.link_id as string); break;
     case "edit_cell": if (c) c.edits[`${e.r},${e.c}`] = e.value as number | null; break;
     case "revert_card": if (c) c.edits = {}; break;
@@ -135,9 +135,14 @@ function apply(w: Workspace, e: CanvasEvent) {
     case "sort_card": if (c) c.sort = e.key == null ? null : [e.key as string | number, !!e.desc]; break;
     case "create_compare":
       w.cards.set(e.card_id as string, { card_id: e.card_id as string, kind: "compare", seq: w.seq, rows: [], cols: [], vcol: null,
-        edits: {}, sort: null, sources: e.sources as string[] });
+        edits: {}, sort: null, sources: e.sources as string[], view: (e.view as string | undefined) ?? "compare" });
       break;
-    case "confirm_mapping": w.mappings.push(e); break;
+    case "confirm_mapping": {
+      const k = `${e.concept_id}|${e.company}`;
+      if (e.accepted == null) w.mappings.delete(k);
+      else w.mappings.set(k, { concept_id: e.concept_id as string, company: e.company as string, cells: e.cells as string[], accepted: !!e.accepted });
+      break;
+    }
     // move_card: 좌표는 화면(store)에만. 컨텍스트에 영향 없음
   }
 }
@@ -182,7 +187,8 @@ export function compare(sid: string, cardId: string): CompareResult {
     g.cards.push([card, t]);
   }
   const used = G.map(() => new Set<string>());
-  const lines: CompareLine[] = [];
+  const lines: CompareLine[] = [], rejected: string[] = [], rej = G.map(() => new Map<string, string>());
+  const unmatched: CompareLine[] = [];
   for (const c of CONCEPTS) {
     const hit = G.map(() => [] as string[]);  // 이 개념에 걸린 행. 대응을 채택했을 때만 used로 확정 (채택 안 하면 "대응 없음"에 남김)
     const vals = G.map((g, gi) => {
@@ -193,27 +199,35 @@ export function compare(sid: string, cardId: string): CompareResult {
       return parts.length ? parts : null;
     });
     if (vals.filter(Boolean).length < (G.length > 1 ? 2 : 1)) continue;
+    // 사용자가 거부한 대응: 거부한 회사가 하나라도 있으면 이 개념으로 묶지 않음 → 행은 아래 "대응 없음"으로
+    const decided = G.map((g) => w.mappings.get(`${c.id}|${g.company}`)?.accepted);
+    if (decided.some((d) => d === false)) { rejected.push(c.name); hit.forEach((ks, gi) => ks.forEach((k) => rej[gi].set(k, c.id))); continue; }
     hit.forEach((ks, gi) => ks.forEach((k) => used[gi].add(k)));
     const labels = new Set(vals.filter(Boolean).map((ps) => norm(ps![0].label.split("(")[0])));
     const same = vals.every((ps) => !ps || ps.length === 1) && labels.size === 1;
-    lines.push({ label: c.name, why: same ? "동일 계정명" : "대응 사전", values: vals, concept_id: c.id, note: c.note ?? null });
+    const confirmed = vals.every((ps, gi) => !ps || decided[gi] === true);
+    lines.push({ label: c.name, why: same ? "동일 계정명" : "대응 사전", values: vals, concept_id: c.id, note: c.note ?? null, confirmed });
   }
   // 사전 밖: 정규화한 계정명 + 구간이 같으면 대응
   const byName = new Map<string, (Part[] | null)[]>();
   G.forEach((g, gi) => { for (const [card, t] of g.cards) for (const r of card.rows) {
     const row = t.rows[r];
     if (used[gi].has(`${card.card_id}|${r}`) || row.values.every((v) => v == null)) continue;
+    if (rej[gi].has(`${card.card_id}|${r}`)) { const vals: (Part[] | null)[] = G.map(() => null); vals[gi] = [part(card, t, r, row.label)];
+      unmatched.push({ label: row.label, why: "거부한 대응", values: vals, concept_id: rej[gi].get(`${card.card_id}|${r}`)!, note: null }); continue; }
     const key = norm(row.label) + "|" + row.grp;
     if (!byName.has(key)) byName.set(key, G.map(() => null));
     const slot = byName.get(key)!;
     if (!slot[gi]) slot[gi] = [part(card, t, r, row.label)];
   } });
-  const unmatched: CompareLine[] = [];
   for (const vals of byName.values()) {
     const label = vals.find(Boolean)![0].label;
     if (G.length > 1 && vals.filter(Boolean).length >= 2) lines.push({ label, why: "동일 계정명", values: vals, concept_id: null, note: null });
     else unmatched.push({ label, why: "대응 없음", values: vals, concept_id: null, note: null });
   }
+  // 계정이 하나도 안 겹치면 비교를 고집하지 않고 고른 표의 행을 그대로 다 보여 준다
+  if (!lines.length) for (let i = unmatched.length - 1; i >= 0; i--)
+    if (unmatched[i].why === "대응 없음") lines.unshift({ ...unmatched.splice(i, 1)[0], why: "표 그대로" });
   const warnings: string[] = [];
   if (new Set(G.map((g) => g.basis)).size > 1) warnings.push("연결과 별도 기준이 섞여 있습니다.");
   const units = new Set(G.flatMap((g) => g.cards.map(([, t]) => t.unit)));
@@ -221,7 +235,7 @@ export function compare(sid: string, cardId: string): CompareResult {
   warnings.push("비교 시점 — " + G.map((g) => `${g.company}: ` + g.cards.map(([c, t]) => t.cols[c.vcol ?? 0]).join(", ")).join(" / "));
   for (const l of lines) if (l.why === "대응 사전" && l.note) warnings.push(`${l.label}: ${l.note}`);
   return { groups: G.map((g) => ({ company: g.company, basis: g.basis })),
-    lines: lines.map((l) => ({ ...l, totals: l.values.map(total) })), unmatched, warnings };
+    lines: lines.map((l) => ({ ...l, totals: l.values.map(total) })), unmatched, warnings, rejected };
 }
 
 
@@ -232,8 +246,9 @@ const SYSTEM = `당신은 SKT 재무기획 담당자(FP&A)가 사업기획서·�
 - 컨텍스트에 없는 숫자는 만들지 않습니다. 근거가 없는 항목은 "근거 부족"으로 적습니다.
 - 값 유형을 나눠 적습니다: 공시(원본 숫자), 계산(코드로 낸 값), AI 해석.
 - 연결/별도, 단위, 기간이 다르면 먼저 밝힙니다. 편집 레이어(L3)의 값은 사용자가 고친 값이므로 원본과 구분합니다.
-- 메모는 팀원 의견입니다. 사실 근거로 쓰지 않습니다.
-- 프롬프트(카드 프롬프트, 선 프롬프트)는 사용자의 작성 지시입니다. 사실 근거로 쓰지 않고, 해당 근거를 어떻게 쓸지에만 반영합니다.
+- 메모(카드 메모, 메모 카드, 선 메모)는 팀원이 남긴 글입니다. 각 메모가 작성 지시인지, 근거(숫자 · 출처가 있는 사실)인지, 의견인지 먼저 가립니다.
+  지시는 해당 근거를 어떻게 쓸지에만 반영하고, 의견은 검토할 주장으로 다루며 사실 근거로 쓰지 않습니다. 근거 메모도 카드의 공시 · 문서와 대조합니다.
+- 카드 사이 선은 관계 종류가 정해져 있지 않습니다. 두 카드 내용을 보고 근거 · 설명 · 반박 중 무엇인지 판단합니다.
 - 회사마다 계정명이 다를 수 있습니다. 아래 개념 사전과 사용자가 확정한 대응을 우선합니다.`;
 const LAYERS = ["L0_system", "L1_sources", "L2_workspace", "L3_edits", "L4_task"];
 const fmtN = (v: number | null | undefined) => v == null ? "" : Number.isInteger(v) ? String(v) : v.toFixed(4).replace(/0+$/, "");
@@ -263,7 +278,7 @@ function compile(w: Workspace, task: string) {
     blocks.push([`## 카드 ${c.card_id} | ${docKind[d.kind]} | ${d.company} | ${d.title} | doc:${d.id}`, `요약: ${d.summary}`,
       ...d.figures.map((f, i) => `f${i}\t${f.label}\t${fmtN(f.value)} ${f.unit}\t${f.period}`)].join("\n"));
   }
-  for (const c of cards.filter((c) => c.kind === "memo" && c.text?.trim())) blocks.push(`## ${c.memo_type === "request" ? "보완 요청" : "메모"} ${c.card_id} | 작성 ${c.author}\n${c.text}`);
+  for (const c of cards.filter((c) => c.kind === "memo" && c.text?.trim())) blocks.push(`## 메모 카드 ${c.card_id} | 작성 ${c.author}\n${c.text}`);
   for (const c of cards.filter((c) => c.kind === "dash" && panelOf(c.panel!)))
     blocks.push(`## 카드 ${c.card_id} | 공시 대시보드 | ${panelOf(c.panel!)!.title} | ${panelOf(c.panel!)!.sub} | 단위 억원 | dash:${c.panel}\n${dashText(c.panel!)}`);
   L.L2_workspace = blocks.length ? "# 캔버스 카드\n" + blocks.join("\n\n") : "";
@@ -276,15 +291,16 @@ function compile(w: Workspace, task: string) {
       ed.push(`- 수정 [${cellId(t, r, col)}] ${t.rows[r].label}: ${fmtN(t.rows[r].values[col])} → ${fmtN(c.edits[k])}`); }
     if (c.sort) ed.push(`- 카드 ${c.card_id} 정렬 기준: ${c.sort[0]} ${c.sort[1] ? "내림차순" : "오름차순"}`);
   }
-  for (const m of w.mappings) ed.push(`- 사용자 ${m.accepted ? "확정" : "거부"} 대응 ${m.concept_id} (${m.company}): ${(m.cells as string[]).join(", ")}`);
-  for (const c of cards.filter((c) => c.kind === "compare")) ed.push(`- 비교 카드 ${c.card_id}: ${c.sources.join(", ")}`);
+  for (const m of [...w.mappings.values()].sort((a, b) => (a.concept_id + a.company).localeCompare(b.concept_id + b.company)))
+    ed.push(`- 사용자 ${m.accepted ? "확정" : "거부"} 대응 ${m.concept_id} (${m.company}): ${m.cells.join(", ")}`);
+  for (const c of cards.filter((c) => c.kind === "compare")) ed.push(`- ${c.view === "chart" ? "시각화" : "비교"} 카드 ${c.card_id}: ${c.sources.join(", ")}`);
   for (const l of [...w.links.values()].sort((a, b) => (a.source + a.target).localeCompare(b.source + b.target)))
-    ed.push(`- 연결 ${l.source} -[${l.rel}]-> ${l.target}`);
-  // 사용자 프롬프트: 카드 프롬프트, 선 프롬프트 (작성 지시)
+    ed.push(`- 연결 ${l.source} — ${l.target}`);
+  // 메모: 카드 메모, 선 메모 (메모 카드는 L2). 지시 · 근거 · 의견 구분은 에이전트가
   const pr: string[] = [];
-  for (const [id, t] of [...w.prompts].sort()) pr.push(`- 카드 ${id}에 대한 지시: ${t}`);
-  for (const l of w.links.values()) if (l.prompt) pr.push(`- 연결 ${l.source} -[${l.rel}]-> ${l.target}에 대한 지시: ${l.prompt}`);
-  if (pr.length) ed.push("", "# 사용자 프롬프트", ...pr);
+  for (const [id, t] of [...w.memos].sort()) pr.push(`- 카드 ${id} 메모: ${t}`);
+  for (const l of w.links.values()) if (l.memo) pr.push(`- 연결 ${l.source} — ${l.target} 메모: ${l.memo}`);
+  if (pr.length) ed.push("", "# 메모", ...pr);
   L.L3_edits = ed.length ? "# 사용자 조작과 연결\n" + ed.join("\n") : "";
   L.L4_task = task ? `# 요청\n${task}` : "";
   return { layers: L, hashes: Object.fromEntries(LAYERS.map((k) => [k, hash(L[k] ?? "")])) };
@@ -355,7 +371,7 @@ export function searchQuestion(q: string): SearchResult[] {
   return [...byTable.values()].filter((r) => !companies.length || companies.includes(r.company)).sort((a, b) => b.score - a.score);
 }
 const COMMON = /3사|업계/;
-const tagsFor = (w: string) => {
+export const tagsFor = (w: string) => {
   const nq = norm(w);
   return new Set([...CONCEPTS.filter((c) => [c.name, ...(c.alias ?? [])].some((a) => { const na = norm(String(a)); return na.length >= 2 && (nq.includes(na) || na.includes(nq)); })).map((c) => c.id),
     ...Object.entries(analysis.tag_names).filter(([, n]) => norm(n).includes(nq) || nq.includes(norm(n))).map(([id]) => id)]);

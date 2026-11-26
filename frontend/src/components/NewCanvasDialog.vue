@@ -16,11 +16,11 @@ async function create() { close(); await cv.newCanvas({ name: name.value, quarte
 
 <template>
   <div class="scrim share-scrim" @keydown.esc="close">
-    <form class="share newcv" role="dialog" aria-modal="true" aria-label="새 캔버스" @submit.prevent="create">
-      <header><h2>새 캔버스</h2><button type="button" class="x" aria-label="닫기" @click="close">✕</button></header>
+    <form class="share newcv" role="dialog" aria-modal="true" aria-label="새 페이지" @submit.prevent="create">
+      <header><h2>새 페이지</h2><button type="button" class="x" aria-label="닫기" @click="close">✕</button></header>
 
-      <label class="fld">이름<input v-model="name" aria-label="캔버스 이름" autofocus /></label>
-      <label class="fld">분기<select v-model="quarter" aria-label="분기"><option v-for="x in QUARTERS" :key="x">{{ x }}</option></select></label>
+      <label class="fld">이름<input v-model="name" aria-label="페이지 이름" autofocus /></label>
+      <label class="fld">기준 시점<select v-model="quarter" aria-label="기준 시점"><option v-for="x in QUARTERS" :key="x">{{ x }}</option></select></label>
 
       <h3>편집할 사람</h3>
       <div class="inv one">

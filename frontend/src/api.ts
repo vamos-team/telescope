@@ -8,9 +8,9 @@ export interface SearchResult { table_id: string; company: string; title: string
   unit: string; score: number; hits: { r: number; label: string; grp: string; why: string }[] }
 export interface Part { card_id: string; cell_id: string; label: string; value_bil: number | null }
 export interface CompareLine { label: string; why: string; values: (Part[] | null)[]; concept_id: string | null;
-  note: string | null; totals?: (number | null)[] }
+  note: string | null; totals?: (number | null)[]; confirmed?: boolean }
 export interface CompareResult { groups: { company: string; basis: string }[]; lines: CompareLine[];
-  unmatched: CompareLine[]; warnings: string[] }
+  unmatched: CompareLine[]; warnings: string[]; rejected?: string[] }
 export const UNIT_TO_BIL: Record<string, number> = { 원: 1e-9, 천원: 1e-6, 백만원: 1e-3, 십억원: 1, 억원: 0.1 };
 export type CanvasEvent = { type: string; [k: string]: unknown };
 // 캔버스에 올리는 비정형 자료 (IR·뉴스·사내 자료). 사내 자료는 파서 모델이 만든 요약본
