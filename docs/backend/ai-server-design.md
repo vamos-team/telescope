@@ -20,15 +20,17 @@ ai/server/
 ├── jobs/
 │   ├── models.py        # JobStatus, JobType, Job
 │   ├── pipeline.py      # ai 담당이 따르는 인터페이스: JobContext, PipelineError, PipelineFn
-│   ├── registry.py      # job_type → 파이프라인 함수 매핑, 가짜 구현
+│   ├── registry.py      # job_type → 파이프라인 함수 매핑, 가짜/실제 등록(PIPELINE_MODE)
+│   ├── files.py         # 자료 준비 원본을 로컬 경로로 준비(S3 내려받기 또는 로컬 폴더)
 │   ├── repository.py    # SQLite CRUD, 상태 전이 조건
 │   ├── service.py       # jobId 발급, 조회, 재시작 시 미종료 작업 정리
 │   ├── worker.py        # asyncio.Queue + 워커 N개, 파이프라인 실행·결과 기록
 │   └── router.py        # 요청·응답 스키마, POST/GET 엔드포인트
-├── tests/               # pytest
+├── tests/               # pytest (sample_entrypoint.py: 실제 모드 테스트용 등록 함수)
 ├── pytest.ini
 ├── requirements.txt
-├── Dockerfile           # 로컬 실행 확인용 (compose 등록은 범위 밖, infra 이슈)
+├── Dockerfile           # 빌드 위치는 저장소 루트(pipelines/, ai/ 포함). compose·K8s 등록은 infra 이슈
+├── Dockerfile.dockerignore  # 이 Dockerfile 전용 무시 목록
 └── .env.example
 ```
 
@@ -168,6 +170,33 @@ K8s에 올릴 때는 `terminationGracePeriodSeconds`를 `SHUTDOWN_TIMEOUT_SECOND
 요청 플래그로 고르는 방식은 쓰지 않는다. 계약에 없는 필드가 API에 남기 때문이다. 테스트는
 `create_app(settings, registry)`로 원하는 함수를 직접 등록한다.
 
+### 2.6.1 실제 파이프라인 등록 (#86)
+
+`PIPELINE_MODE=real`이면 `PIPELINE_ENTRYPOINT`("모듈경로:함수명")가 가리키는 ai 담당 등록 함수를 불러온다.
+
+```python
+# ai 담당 코드 (예: PIPELINE_ENTRYPOINT=ai.pipelines:register)
+def register(registry: PipelineRegistry) -> None:
+    registry.register(JobType.DOCUMENT_PREPARATION, prepare)   # 구현한 작업 종류만
+```
+
+- **등록하지 않은 작업 종류는 시작 요청을 `501`로 거절한다**("아직 지원하지 않는 작업입니다.").
+  작업을 만들지 않으며, backend는 시작 실패를 `markFailed`로 끝낸다(`ai-contract.md` 2.5).
+  가짜 구현을 섞어 쓰지 않는 이유: 배포에서 가짜 결과가 실제 결과처럼 저장될 수 있다.
+  분석·예측 파이프라인(#66 등)이 등록 함수에 추가되면 거절이 자연히 풀린다.
+- **자료 준비 원본은 서버가 준비한다.** 등록된 자료 준비 함수를 감싸, `fileStorageKey`의 원본을 로컬
+  경로로 만든 뒤 payload의 `file_path`로 넘긴다. ai 코드는 저장소 방식을 모르고 경로만 읽는다.
+  - `S3_BUCKET`이 있으면 S3에서 임시 폴더로 내려받고(확장자 유지), 작업이 끝나면(성공·실패 모두) 지운다.
+    자격증명은 boto3 기본 체인(배포는 IRSA)이다.
+  - 없으면 `FILE_STORAGE_DIR`(backend 로컬 저장소와 같은 폴더)에서 그 경로를 그대로 쓴다.
+  - 키가 폴더를 벗어나거나(`../`, 절대 경로, 하위 폴더) 원본이 없으면 "원본 파일을 찾을 수 없습니다.",
+    그 밖의 S3 오류는 "원본 파일을 읽지 못했습니다."로 실패한다. 키·버킷은 문구에 넣지 않는다.
+- 잘못된 설정은 기동 시점에 막는다: real인데 등록 함수가 없음, real인데 원본 위치(S3·로컬)가 없음,
+  버킷은 있는데 리전이 없음.
+- 이미지에는 `pipelines/`, `ai/` 코드만 넣고 **pipelines 의존성(docling, torch 등)과 모델 파일은 아직
+  설치하지 않는다.** 실제 자료 준비 파이프라인(ai 담당, 별도 이슈)이 생길 때 ai 담당과 함께 정한다
+  (모델을 이미지에 넣을지 기동 시 받을지, 그에 맞춘 `MAX_CONCURRENT_JOBS` 기본값). 그 전까지 이미지는 가짜 모드로만 쓴다.
+
 ### 2.7 재시작 처리 — 미종료 작업은 `FAILED`로 확정
 
 서버가 내려가면 메모리 큐와 실행 중이던 스레드가 사라진다. 그런데 DB에는 `QUEUED`/`RUNNING`이
@@ -213,6 +242,11 @@ PipelineFn = Callable[[JobContext, dict], dict]          # (ctx, payload) -> res
 | `INTERNAL_API_KEY` | ○ | — | backend와 공유하는 비밀키 |
 | `DB_PATH` | ○ | — | SQLite 파일 경로 (`data/` 아래 권장) |
 | `MAX_CONCURRENT_JOBS` | | 2 | 동시 실행 상한 (1 이상) |
+| `PIPELINE_MODE` | | `fake` | `fake`(모든 작업 가짜) / `real`(등록 함수가 붙인 작업만) |
+| `PIPELINE_ENTRYPOINT` | real이면 ○ | — | ai 담당 등록 함수 `모듈경로:함수명` |
+| `S3_BUCKET` | | — | 있으면 자료 준비 원본을 S3에서 받는다 |
+| `AWS_REGION` | `S3_BUCKET`이면 ○ | — | S3 리전 |
+| `FILE_STORAGE_DIR` | real이고 S3가 없으면 ○ | — | 로컬 원본 폴더. backend의 `FILE_STORAGE_DIR`과 같은 곳 |
 | `FAKE_PIPELINE_MODE` | | `success` | `success` / `fail` |
 | `FAKE_PIPELINE_DELAY_SECONDS` | | 3.0 | 가짜 파이프라인 지연 |
 | `SHUTDOWN_TIMEOUT_SECONDS` | | 20.0 | 종료 시 실행 중 작업을 기다리는 최대 시간 |
@@ -221,7 +255,10 @@ PipelineFn = Callable[[JobContext, dict], dict]          # (ctx, payload) -> res
 | `PENDING_RETRY_INTERVAL_SECONDS` | | 5.0 | 최종 저장 실패분을 다시 시도하는 주기 |
 | `LOG_LEVEL` | | `INFO` | |
 
-LLM 키, MCP 주소, 파일 저장 경로는 그 값을 쓰는 파이프라인 코드가 붙을 때 추가한다.
+`.env`에서 위 표에 없는 키(ai 파이프라인용 `OPENAI_API_KEY` 등)는 서버 설정이 무시한다. 같은 `.env`를 공유해도 기동이 실패하지 않는다. 표의 키는 그대로 검증한다.
+
+LLM 키(`OPENAI_API_KEY`), 임베딩 모델(`PARSER_EMBED_MODEL`), `HF_TOKEN`은 ai 코드가 직접 읽는다(`.env.example`에 이름만).
+ChromaDB·MCP 주소는 그 값을 쓰는 파이프라인 코드가 붙을 때 추가한다.
 
 ### 2.10 실행과 테스트
 
@@ -230,6 +267,13 @@ cd ai/server
 pip install -r requirements.txt
 INTERNAL_API_KEY=... DB_PATH=../../data/ai-server/jobs.db uvicorn main:app --port 8000
 pytest
+```
+
+이미지는 저장소 루트에서 빌드한다(`pipelines/`, `ai/`를 함께 넣는다).
+
+```bash
+# 저장소 루트에서
+docker build -f ai/server/Dockerfile -t telescope-ai-server .
 ```
 
 테스트 범위: 상태 전이, 즉시 반환, 없는 작업 404, 인증 401, `PipelineError` 메시지 전달, 일반

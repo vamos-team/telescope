@@ -286,19 +286,22 @@ backend                                   ai
 - 타임아웃이 발생하면 2.5의 "일시 오류"로 처리한다(시작 호출은 `markFailed`, 상태 조회는
   상태 유지 후 재시도).
 
-### 2.11 파일 접근 방식 (`fileStorageKey`, 공유 볼륨) — 제안 + 열림(infra 협의 필요)
+### 2.11 파일 접근 방식 (`fileStorageKey`) — 결정 (2026-11-26, #86)
 
-- 지금은 단일 서버 구성이고 `docker-compose.yml`의 `./data` 볼륨을 backend 컨테이너가
-  마운트한다. `FileStorage`(로컬 구현)가 반환하는 `fileStorageKey`는 이 볼륨 기준 상대
-  경로다. ai 컨테이너도 같은 볼륨을 마운트하면 같은 키로 파일을 읽을 수 있다는 전제다.
-- K8s 전환(#43)은 backend/frontend까지만 끝났고(`infra/k8s/*.yaml`, DB는 #76에서 RDS PostgreSQL로 이전), ai·pipelines용
-  매니페스트는 아직 없다. 공유 볼륨 전제가 K8s에서도 그대로 성립하려면 backend와 ai 파드가
-  같은 PVC를 마운트해야 하는데, 이건 **이 문서(backend ↔ ai 규약)만으로 결정할 수 없고
-  infra 담당 영역과 함께 정해야 한다.** `CLAUDE.md` 2번 규칙에 따라 이 자리에서 infra
-  파일을 직접 건드리지 않고, 후속 이슈로만 남긴다(4번).
-- 이후 객체 스토리지(S3 등)로 전환하면 `fileStorageKey`는 버킷 키가 되고 ai가 자격증명으로
-  직접 접근하는 모양으로 바뀐다. 전환 시점은 **열림**(문서 보관 정책 미정과도 연결 —
-  루트 `CLAUDE.md` 7번).
+| 자료 | 저장 위치 (배포) | 관리 |
+|---|---|---|
+| 사용자 입력 파일 (예산서, 근거자료 업로드) | S3 (`S3_BUCKET`) — backend `FileStorage` (#89) | backend |
+| 공시 원본 (DART 등, `pipelines/collectors` 수집분) | ai 쪽 저장소 | ai |
+
+- `fileStorageKey`는 backend `FileStorage`가 발급한 키다. 형식은 `<UUID><확장자>`이고, S3에서는 버킷
+  최상위 키, 로컬에서는 backend 저장 폴더(`FILE_STORAGE_DIR`) 기준 파일 이름이다.
+- 자료 준비 작업에서는 ai/server가 이 키로 원본을 로컬 경로로 준비해 파이프라인에 넘긴다
+  (`ai-server-design.md` 2.6.1). ai 파이프라인 코드는 S3를 직접 다루지 않는다.
+- 그래서 ai/server 실행 환경에는 S3 읽기 권한(IRSA)과 `S3_BUCKET`·`AWS_REGION`이 필요하다.
+  ai/server의 K8s 매니페스트와 권한 구성은 infra 담당이다(아직 없음).
+- backend는 공시 원본을 저장하거나 S3에 올리지 않는다.
+- 이전 제안(backend·ai가 같은 공유 볼륨을 마운트)은 쓰지 않는다. 로컬 개발에서만 두 서버가 같은 폴더를 본다.
+- 업로드 원본의 보관·삭제 정책은 아직 정하지 않았다(루트 `CLAUDE.md` 7번).
 
 ### 2.12 파이프라인 호출 방식 (파이썬 함수 호출 여부) — 제안, ai 담당자 최종 합의 필요
 
@@ -326,7 +329,7 @@ backend                                   ai
 | 결과를 "언제" 대상 도메인에 저장하는지(`getJob`과 결과 저장의 관계) | 2.7 | 지금 `getJob`은 `Job.status`만 동기화. 저장 성공 후에만 종료 확정하도록 재구성 필요 |
 | `PredictionRequest`에 `allowedDocumentVersionIds` 추가 여부 | 2.9 | prediction 작업별 이슈에서 최종 확정 |
 | 허용 목록 밖 근거를 걸러낼 때 분석 전체 실패 여부 | 2.9 | 제안: 해당 항목만 버림 |
-| 공유 볼륨(PVC)을 ai/pipelines K8s 매니페스트에 어떻게 구성할지 | 2.11 | infra 담당 영역과 협의 |
+| ai/server K8s 매니페스트와 S3 읽기 권한(IRSA) 구성 | 2.11 | infra 담당 영역과 협의 |
 | 파이프라인 호출 방식(HTTP 최종 확정) | 2.12 | ai 담당자 합의 필요 |
 | 재무 데이터 적재·예측 평가가 이 폴링 패턴을 그대로 쓸지 | 2.4 | 작업별 이슈(datasync, prediction)에서 결정 |
 
@@ -342,7 +345,7 @@ backend                                   ai
 | backend | 예측 평가, 재무 데이터 적재용 `PythonAiClient` 메서드 추가 (결과 보관·폴링 패턴 적용 여부는 각 작업별 이슈에서 먼저 확정) |
 | backend | `job` 도메인 재구성: `getJob`이 상태 동기화와 결과 저장(대상 도메인 호출)을 묶어서, 저장 성공 후에만 종료 확정하도록 변경 (2.7) |
 | backend | 시작 요청 멱등키 설계: 재요청에도 유지되는 키 선정, ai가 기존 jobId를 돌려줬을 때 새 `Job`에 `markStarted`로 연결하는 처리 추가 (2.8) |
-| infra | ai/pipelines K8s 매니페스트, 공유 볼륨(PVC) 구성 — backend/ai 양쪽과 협의 |
+| infra | ai/server K8s 매니페스트, S3 읽기 권한(IRSA)·`S3_BUCKET`·`AWS_REGION` 전달 — backend/ai 양쪽과 협의 |
 | backend/ai 공통 | `AI_SERVICE_API_KEY`/`INTERNAL_API_KEY` 환경변수를 `.env.example`에 추가 |
 
 ## 5. 다시 확인할 시점
@@ -351,6 +354,6 @@ backend                                   ai
 |---|---|
 | ai 담당자 확인 후 | 이 문서의 "제안"·"열림" 표시를 실제 합의 결과로 갱신, 이슈 #51 체크리스트 반영 |
 | ai/pipelines의 FastAPI 껍데기를 만들 때 | 2.4의 경로·응답 형식이 실제 구현과 일치하는지 |
-| infra가 ai/pipelines K8s 매니페스트를 만들 때 | 2.11의 공유 볼륨 전제가 유지되는지 |
+| infra가 ai/server K8s 매니페스트를 만들 때 | 2.11의 S3 읽기 권한과 환경변수가 들어가는지 |
 | prediction 작업별 이슈를 진행할 때 | 2.9의 `allowedDocumentVersionIds` 간극, 2.4의 평가 폴링 여부 |
 | api-spec 문서가 만들어질 때 | 2.5의 에러 코드 접두사(`job.md` 미정 항목과 공유), 폴링 간격 권장값 |

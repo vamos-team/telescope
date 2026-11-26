@@ -3,6 +3,8 @@
 파이프라인 함수는 `(ctx, payload) -> result` 모양의 동기 함수다.
 - ctx: 서버가 요청에서 꺼내 고정한 값(기준 시점, 허용 문서). 수정할 수 없다.
 - payload: 작업별 나머지 요청 필드. 기준 시점·허용 문서는 들어 있지 않다(ctx로만 받는다).
+  자료 준비는 서버가 원본을 로컬로 준비해 `file_path`(로컬 경로 문자열)를 더해 준다.
+  저장소(S3·로컬) 구분 없이 이 경로만 읽고, 경로는 작업이 끝나면 지워질 수 있으므로 밖에 보관하지 않는다.
 - result: JSON으로 직렬화 가능한 dict. 작업별 모양은 작업별 입출력 이슈에서 정한다.
 
 실패 사유를 backend(와 사용자)에게 보여주려면 PipelineError를 던진다. 그 밖의 예외는
@@ -35,4 +37,6 @@ class PipelineError(Exception):
         self.user_message = user_message
 
 
+# ai 담당 등록 함수(PIPELINE_ENTRYPOINT가 가리킴)는 `register(registry: PipelineRegistry) -> None` 모양이고,
+# 구현한 작업 종류만 registry.register(JobType.X, fn)으로 붙인다. 붙이지 않은 종류는 시작 요청이 거절된다.
 PipelineFn = Callable[[JobContext, dict[str, Any]], dict[str, Any]]
