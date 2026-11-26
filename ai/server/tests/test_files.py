@@ -87,3 +87,19 @@ def test_staged_file_cleans_up_even_when_the_pipeline_fails(s3):
 
     assert not seen[0].exists()
     assert "file_path" not in payload  # 원래 payload는 바꾸지 않는다
+
+
+def test_s3_source_closes_the_response_stream_even_when_writing_fails(s3, monkeypatch):
+    client, stubber = s3
+    raw = io.BytesIO(b"hello")
+    stubber.add_response("get_object", {"Body": StreamingBody(raw, 5)}, {"Bucket": BUCKET, "Key": "abc.pdf"})
+
+    def broken_copy(src, dst):
+        raise OSError("디스크 가득 참")
+
+    monkeypatch.setattr("jobs.files.shutil.copyfileobj", broken_copy)
+
+    with pytest.raises(OSError):
+        with S3FileSource(client, BUCKET).local_file("abc.pdf"):
+            pass
+    assert raw.closed

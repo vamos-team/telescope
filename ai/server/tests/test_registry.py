@@ -92,3 +92,25 @@ def test_invalid_combinations_stop_at_startup(db_path, overrides, message):
 def test_bad_entrypoint_spec_is_rejected(spec):
     with pytest.raises(ValueError, match="PIPELINE_ENTRYPOINT"):
         load_entrypoint(spec)
+
+
+def test_pipeline_keys_in_the_shared_dotenv_do_not_stop_startup(tmp_path):
+    from config import Settings
+
+    env = tmp_path / ".env"
+    env.write_text(
+        "INTERNAL_API_KEY=x\nDB_PATH=/tmp/j.db\nMAX_CONCURRENT_JOBS=3\n"
+        "OPENAI_API_KEY=dummy\nPARSER_EMBED_MODEL=some/model\nHF_TOKEN=dummy\n",
+        encoding="utf-8",
+    )
+    settings = Settings(_env_file=str(env))
+    assert settings.max_concurrent_jobs == 3  # 서버 키는 그대로 읽고 검증한다
+
+
+def test_declared_server_keys_are_still_validated_from_dotenv(tmp_path):
+    from config import Settings
+
+    env = tmp_path / ".env"
+    env.write_text("INTERNAL_API_KEY=x\nDB_PATH=/tmp/j.db\nMAX_CONCURRENT_JOBS=0\n", encoding="utf-8")
+    with pytest.raises(ValidationError, match="max_concurrent_jobs"):
+        Settings(_env_file=str(env))
