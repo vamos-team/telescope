@@ -2,7 +2,7 @@
 
 v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화면에서 부르는 기능을 서버 API로 옮겨 적은 문서다. 데모는 `frontend/src/api.ts`의 `api` 객체가 브라우저 안 구현(`local/server.ts`, `local/ai.ts`)을 부른다. 실제 서비스에서는 같은 자리에서 아래 API를 부른다.
 
-- 근거 코드: `frontend/src/api.ts`(타입), `stores/canvas.ts`(캔버스·이벤트), `local/server.ts`(검색·비교·컨텍스트), `local/ai.ts`(정리 글·질문·평가), `local/dashboard.ts`·`local/dart.ts`(대시보드 패널)
+- 근거 코드: `frontend/src/api.ts`(타입), `stores/canvas.ts`(캔버스·이벤트), `local/server.ts`(검색·비교·컨텍스트), `local/ai.ts`(검토·정리 글·질문·평가), `local/validate.ts`(업로드 검증), `local/dashboard.ts`·`local/dart.ts`(대시보드 패널)
 - 경로와 필드는 **제안**이다. backend·ai 담당자와 합의한 뒤 확정한다. `CLAUDE.md` 7장의 미정 항목은 여기서 정하지 않는다.
 
 ## 1. 공통 규칙
@@ -16,7 +16,8 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | 시각 | ISO 8601 문자열 (`2026-11-25T09:30:00`) |
 | 금액 단위 | 원본 표는 공시 단위 그대로(`unit`). 비교·근거 값은 서버가 십억원으로 변환(`UNIT_TO_BIL`). 화면은 표시만 바꿈 |
 | 오래 걸리는 작업 | `202` + `{ jobId }`를 받고 `GET /api/v1/jobs/{id}`를 `SUCCEEDED`·`FAILED`까지 폴링한 뒤 결과 조회 API를 부름. 콜백 없음 |
-| 권한 | 캔버스마다 소유자 · 편집 · 보기 권한(3.9). 권한 없는 캔버스는 403. 공용 문서 수집·삭제는 관리자만 |
+| 권한 | 페이지(캔버스)마다 소유자 · 편집 · 보기 권한(3.9). 권한 없는 페이지는 403. 분석 세션은 요청한 본인만 조회. 공용 문서 수집·삭제는 관리자만 |
+| 용어 | 화면의 "페이지" = 캔버스 + 분석. API 경로는 `canvases`를 그대로 쓴다 |
 
 ### 1.1 화면별 호출 요약
 
@@ -24,15 +25,14 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 |---|---|---|---|
 | 로그인 | 로그인 | `POST /auth/login` | `canvas.login` |
 | 로그인 | 내 정보 | `GET /users/me` | `restoreUser` |
-| 캔버스 홈 (C00) | 볼 수 있는 캔버스 목록·삭제 | `GET /canvases`, `DELETE /canvases/{id}` | `canvases`, `removeCanvas`, `thumb` |
-| 새 캔버스 (C14) | 이름 · 분기 · 편집할 사람으로 생성, 사람 찾기 | `POST /canvases`, `GET /users?q=` | `newCanvas`, `findPeople` |
-| 상단 바 | 캔버스 이름 변경 | `PATCH /canvases/{id}` | `rename` |
-| 메뉴 팝업 (C15) | 나의 캔버스 목록 | `GET /canvases` | `canvases`, `canvas.open` |
-| 공유 창 (C13) | 사내 사람 찾기 | `GET /users?q=` | `ALL_MEMBERS` 상수 |
-| 공유 창 (C13) | 권한 조회·변경 | `GET/PUT /canvases/{id}/shares` | `members`, `setShare` |
-| 캔버스 | 캔버스 열기 | `GET /canvases/{id}` | `canvas.open` |
-| 캔버스 | 카드·연결·메모·프롬프트 조작 | `POST /canvases/{id}/events` | `api.postEvents` |
-| 왼쪽 사이드바 | 프롬프트 목록 | (캔버스 상태에서 계산, API 없음) | `cardTitle`, `userPrompts` |
+| 페이지 홈 (C00) | 볼 수 있는 페이지 목록·삭제 | `GET /canvases`, `DELETE /canvases/{id}` | `canvases`, `removeCanvas`, `thumb` |
+| 새 페이지 (C14) | 이름 · 기준 시점 · 편집할 사람으로 생성, 사람 찾기 | `POST /canvases`, `GET /users?q=` | `newCanvas`, `findPeople` |
+| 헤더 | 페이지 이름 변경 | `PATCH /canvases/{id}` | `rename` |
+| 페이지 정보 (C13) | 사내 사람 찾기 | `GET /users?q=` | `ALL_MEMBERS` 상수 |
+| 페이지 정보 (C13) | 정보 · 권한 조회·변경 | `GET /canvases/{id}`, `GET/PUT /canvases/{id}/shares` | `meta`, `members`, `setShare` |
+| 캔버스 (C10) | 페이지 열기 | `GET /canvases/{id}` | `canvas.open` |
+| 캔버스 (C10) | 카드·연결·메모 조작, 표 생성 · 시각화 생성 | `POST /canvases/{id}/events` | `api.postEvents` |
+| 왼쪽 사이드바 | 메모 목록 (카드 메모 · 메모 카드 · 선 메모) | (캔버스 상태에서 계산, API 없음) | `cardTitle`, `notes` |
 | 캔버스 | 같은 개념 자동 연결 | `GET /canvases/{id}/card-tags` | `api.cardTags` |
 | 자료 검색 · 대시보드 · 회사 재무 탭 | 대시보드 패널 (KPI · 차트 · 표 · 자산 계정) | `GET /dashboard` | `local/dashboard.ts` `panelOf`, `LAYOUT` |
 | 자료 검색 · 통합 검색 | 공시 재무 데이터 검색 (입력 즉시, 아래 두 줄과 같은 `q`로 함께 부름) | `GET /filings/search` | `api.searchQuestion` |
@@ -41,15 +41,15 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | 자료 검색 · 인사이트 | 3사 비교 인사이트(분기) | `GET /insights` | `api.analysis.insights`, `api.peerFacts` |
 | 자료 검색 · 인사이트 | 연간 인사이트 | `GET /dashboard` (인사이트 패널) | `local/dart.ts` `ANNUAL_INSIGHTS` |
 | 자료 검색 · 인사이트 | 관련 뉴스 추천 (썸네일) | `GET /documents?kind=news` | `api.recommend` |
-| 자료 검색 · 입력창 `+` | 사내 자료 업로드 | `POST /documents/uploads` | `api.registerDoc` |
-| 비교·시각화 카드 | 표 비교 결과 | `GET /canvases/{id}/compares/{cardId}` | `api.compare` |
-| 생성하기 → 정리 글 | 캔버스를 컨텍스트 글로 정리 | `POST /canvases/{id}/context-notes` → job | `ai.contextNote` (+ `userPrompts`, `memos`) |
-| 생성하기 | 근거 목록 (질문 · 가정 입력) | `GET /canvases/{id}/evidence` | `api.evidence` |
-| 생성하기 → 질문 | 질문 생성 | `POST /canvases/{id}/questions` → job | `ai.questions` |
-| 생성하기 → 평가 | 평가 | `POST /canvases/{id}/evaluations` | `ai.evaluate` |
-| 정리 글 · 질문 | 복사 · Markdown 내보내기, 정리 글 편집 | (화면에서 만듦, API 없음) | clipboard, Blob 내려받기 |
+| 데이터 입력 (C16) | 사내 자료 업로드 (포맷 · 4사 회사 검증) | `POST /documents/uploads` | `validate.checkUpload`, `api.registerDoc` |
+| 비교·시각화 카드 | 표 비교 결과 (확정 · 거부 반영) | `GET /canvases/{id}/compares/{cardId}` | `api.compare` |
+| 분석 (C20) | 내 분석 세션 목록 | `GET /canvases/{id}/analyses` | `canvas.analyses` (브라우저 저장) |
+| 분석하기 → 검토 (C21) | 메모 분류 · 주장 · 근거 판정 · 지적 · AI 인사이트 + 정리 글 | `POST /canvases/{id}/analyses` → job | `ai.review` (+ `notes`, `api.evidence`) |
+| 분석하기 → 질문 (C22) | 질문 생성 (같은 작업의 두 번째 단계) | `POST /canvases/{id}/analyses` → job | `ai.questions` |
+| 평가 (C23) | 다음 분기 자료가 들어온 뒤 평가 | `POST /analyses/{id}/evaluations` | `ai.evaluate`, `canvas.attachEval` |
+| 검토 · 질문 | 정리 글 복사 · Markdown, 질문 리포트 Markdown | (화면에서 만듦, API 없음) | clipboard, Blob 내려받기 |
 
-데모에만 있는 기능은 API를 두지 않는다: 로그인 화면의 데모 계정 미리 입력, `예시 불러오기`(`api.meta.example`), 시각화 카드(화면 전용, 컨텍스트 제외), 홈 미리보기(`thumb`, 실제 서비스는 서버가 만든 썸네일 또는 카드 좌표), `api.warmup`·`api.ask`(LLM 없음).
+데모에만 있는 기능은 API를 두지 않는다: 로그인 화면의 데모 계정 미리 입력, `예시 불러오기`(`api.meta.example`), 평가의 `다음 분기 자료 반영 (데모)` 버튼, 홈 미리보기(`thumb`, 실제 서비스는 서버가 만든 썸네일 또는 카드 좌표), `api.warmup`·`api.ask`(LLM 없음).
 
 ## 2. 인증·사용자
 
@@ -139,7 +139,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 |---|---|---|
 | `meta` | 3.1의 항목 | object |
 | `cards` | 카드 목록 (3.5의 `Card`) | Card[] |
-| `links` | `{ id, source, target, rel }` 목록 | Link[] |
+| `links` | `{ id, source, target, memo? }` 목록 | Link[] |
 | `lastSeq` | 마지막 이벤트 번호 | number |
 
 | HTTP | 상황 | 화면 문구 |
@@ -155,15 +155,15 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | `kind` | 필드 | 설명 |
 |---|---|---|
 | `table` | `tableId`, `rows`, `cols`, `vcol`, `edits`, `sort` | 공시 표 카드. `vcol`은 비교 기준 열, `edits`는 `"r,c": 값` |
-| `compare` | `sources` | 표 비교 카드. 원본 표 카드 ID 목록 |
+| `compare` | `sources` | 비교 카드(표 생성). 원본 표 카드 ID 목록 |
+| `chart` | `sources`, `compareId?` | 시각화 카드(시각화 생성). 서버에는 `create_compare`(`view: chart`)로 등록해 같은 비교 계산을 씀. `compareId`는 비교 카드에서 만들었을 때 |
 | `doc` | `docId` | IR·AR·뉴스·사내 자료 카드 |
-| `memo` | `author`, `text`, `type` | 팀원 메모 카드. `type`: `memo`(메모) / `request`(보완 요청). 컨텍스트에 의견으로 들어가고 사실 근거로 쓰지 않음 |
-| `dash` | `panel` | 대시보드 카드. `panel`은 4.4 패널 ID (예: `kpis`, `op_bridge`, `yoy_heat`, `asset`, `pl_rev`, `capex`, `opi`, `peer`, `ins_op`) |
-| `chart` | `compareId` | 시각화 카드 (화면 전용) |
+| `memo` | `author`, `text` | 메모 카드. 종류 구분 없음 |
+| `dash` | `panel` | 대시보드 카드. `panel`은 4.4 패널 ID |
 
-메모 카드를 뺀 모든 카드는 `prompt`(카드 프롬프트, 이 근거를 어떻게 활용할지)를 가질 수 있다. 프롬프트만 담는 카드는 없다.
+메모 카드를 뺀 모든 카드는 `memo`(카드 메모)를 가질 수 있다. 연결은 `source`, `target`, `memo`(선 메모)만 갖는다. 관계 종류(근거 · 설명 · 반박)는 저장하지 않고 분석에서 에이전트가 판단한다.
 
-연결 `rel`: `근거` / `설명` / `반박` / `관련`. 연결은 `prompt`(선 프롬프트, 이 관계를 어떻게 쓸지)를 가질 수 있다.
+메모 3종(카드 메모 · 메모 카드 · 선 메모)은 모두 사용자가 쓴 글이다. 분석(7.2)에서 에이전트가 문장마다 지시 · 근거 · 의견으로 가린다.
 
 ### 3.6 `POST /api/v1/canvases/{id}/events`
 
@@ -195,25 +195,25 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | `revert_card` | `cardId` | — |
 | `add_doc` | `cardId`, `docId` | 자료를 올림 |
 | `add_dash` | `cardId`, `panel` | 대시보드를 올림 |
-| `add_memo` | `cardId`, `text`, `author`, `memoType` | 메모를 남김. `memoType`: `memo` / `request` |
+| `add_memo` | `cardId`, `text`, `author` | 메모를 남김 |
 | `edit_memo` | `cardId`, `text` | 메모를 고침 |
-| `set_memo_type` | `cardId`, `memoType` | 메모 종류를 바꿈 |
-| `set_card_prompt` | `cardId`, `text` | 카드 프롬프트를 고침. 빈 값이면 지움 |
-| `set_link_prompt` | `linkId`, `text` | 선 프롬프트를 고침. 빈 값이면 지움 |
-| `create_compare` | `cardId`, `sources` | 비교 카드를 만듦 |
-| `confirm_mapping` | `conceptId`, `company`, `cells`, `accepted` | 계정 대응을 확정함 |
-| `add_link` | `linkId`, `source`, `target`, `rel` | 카드를 연결함 |
-| `set_link` | `linkId`, `rel` | 연결 관계를 바꿈 |
+| `set_card_memo` | `cardId`, `text` | 카드 메모를 고침. 빈 값이면 지움 |
+| `set_link_memo` | `linkId`, `text` | 선 메모를 고침. 빈 값이면 지움 |
+| `create_compare` | `cardId`, `sources`, `view?` | 비교 카드(`view: compare`, 기본) 또는 시각화 카드(`view: chart`)를 만듦 |
+| `confirm_mapping` | `conceptId`, `company`, `cells`, `accepted` | 계정 대응 확정(`true`) · 거부(`false`) · 취소(`null`). 같은 개념 · 회사의 이전 값을 덮어씀 |
+| `add_link` | `linkId`, `source`, `target` | 카드를 연결함 |
 | `remove_link` | `linkId` | 연결을 지움 |
 | `remove_card` | `cardId` | 카드를 지움. 서버가 그 카드의 연결과 비교 원본에서도 뺌 |
 | `move_card` | `cardId`, `x`, `y` | 좌표만 저장. 컨텍스트·활동 기록에 영향 없음 |
 
-#97 중간 저장본의 프롬프트 카드(`kind: prompt`, 이벤트 `add_prompt` · `edit_prompt`)는 메모 카드(`memo`, `add_memo` · `edit_memo`)로 읽는다.
+예전 저장본 읽기: 프롬프트 카드(`kind: prompt`)는 메모 카드로, 카드 · 연결의 `prompt`는 `memo`로, 이벤트 `add_prompt` · `edit_prompt` · `set_card_prompt` · `set_link_prompt`는 `add_memo` · `edit_memo` · `set_card_memo` · `set_link_memo`로 바꿔 재생한다. `set_memo_type`, `set_link`와 `add_link`의 `rel`, `add_memo`의 `memoType`은 무시한다.
 
 ```json
 { "events": [
   { "type": "add_card", "cardId": "c1", "tableId": "SKT_2026Q1_is", "rows": [3, 5], "cols": [0, 1] },
-  { "type": "add_link", "linkId": "l2", "source": "c1", "target": "c3", "rel": "근거" }
+  { "type": "add_link", "linkId": "l2", "source": "c1", "target": "c3" },
+  { "type": "set_link_memo", "linkId": "l2", "text": "이 IR 수치가 표의 감소를 설명함" },
+  { "type": "create_compare", "cardId": "c7", "sources": ["c1", "c4"], "view": "chart" }
 ] }
 ```
 
@@ -361,17 +361,22 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 ### 5.3 `POST /api/v1/documents/uploads`
 
-`사내 자료` 탭에 파일을 올린다. `multipart/form-data`, 필드 `file`(여러 개 가능). 데모는 txt·md·csv만 읽어 브라우저에서 요약을 만든다. 서버는 파서 모델로 요약·수치·개념 태그를 뽑으므로 자료 준비 작업으로 돌린다.
+C16 데이터 입력 창에서 파일을 올린다. `multipart/form-data`, 필드 `file`(여러 개 가능). 서버는 파일마다 아래 두 검증을 하고, 통과한 파일만 파서 모델로 요약 · 수치 · 개념 태그를 뽑는다(자료 준비 작업). 데모는 브라우저에서 같은 규칙(`local/validate.ts` `checkUpload`)으로 검사하고 txt · md · csv · json만 본문을 읽는다.
+
+| 검증 (MVP) | 오류 코드 | 규칙 |
+|---|---|---|
+| 포맷 불일치 | `FORMAT_MISMATCH` | 확장자가 txt · md · csv · json · pdf · xlsx · docx · hwp가 아님, 텍스트 파일이 비었거나 읽을 수 없음, json 문법 오류 |
+| 회사 불일치 | `COMPANY_MISMATCH` | 파일 이름 · 본문에 대상 4사(SKT · SKB · KT · LGU+, 다른 표기 포함)가 없음 |
 
 | 응답 | 설명 |
 |---|---|
-| `202` + `{ jobId, documentIds }` | `GET /jobs/{id}`가 `SUCCEEDED`가 되면 `GET /documents/{id}`로 요약본을 받아 카드로 올림 |
+| `202` + `{ jobId, results: [{ fileName, documentId?, company?, error?: { code, message } }] }` | 파일별 결과. 통과한 파일은 `GET /jobs/{id}`가 `SUCCEEDED`가 되면 `GET /documents/{id}`로 요약본을 받아 카드로 올림. 실패한 파일은 C16 목록에 이유를 표시 |
 
-| HTTP | 상황 | 화면 문구 |
+| HTTP | 상황 | 화면 |
 |---|---|---|
-| 400 | 지원하지 않는 형식 | "파일을 읽지 못했습니다: {사유}" |
+| 400 | 모든 파일이 검증 실패 | 파일별 `포맷 불일치` · `회사 불일치`와 이유 |
 
-허용 파일 형식, 업로드 문서의 소유자·만료·접근 범위는 미정(`CLAUDE.md` 7장)이다.
+대상 회사 목록을 설정으로 둘지, 업로드 문서의 소유자·만료·접근 범위는 미정(`CLAUDE.md` 7장)이다.
 
 ## 6. 비교
 
@@ -384,102 +389,96 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | `groups[]` | 열 순서 `{ company, basis }` | object[] |
 | `lines[]` | 맞춘 계정 줄 | CompareLine[] |
 | `unmatched[]` | 맞추지 못한 줄 | CompareLine[] |
-| `warnings[]` | 연결/별도·기간 차이 등 안내 | string[] |
 
-`CompareLine`: `{ label, why, conceptId, note, values: (Part[] | null)[], totals?: (number | null)[] }`. `values`는 `groups` 순서이고, `Part`는 `{ cardId, cellId, label, valueBil }`(십억원). `cellId` 형식은 `{tableId}#r{행}c{열}`.
+공통 계정이 하나도 없으면(맞춘 줄 0개) 비교를 고집하지 않고, 고른 표의 행을 모두 `lines`에 `why: "표 그대로"`로 넣는다(거부한 대응 행만 `unmatched`에 남음). 화면은 비교 카드 제목을 `표 모음`, 시각화 카드 제목을 `계정별 값`으로 바꾸고 확정 칸을 숨긴다.
+| `warnings[]` | 연결/별도·단위·기간 차이 안내. 화면은 카드에 목록으로 띄우지 않고 부제 한 줄과 분석 지적(7.2)에만 씀 | string[] |
+| `rejected[]` | 사용자가 거부한 개념 이름 | string[] |
 
-## 7. 캔버스 정리 · 질문 · 평가 (오른쪽 결과 패널)
+사용자 대응 반영: 확정(`confirm_mapping` `accepted: true`)한 줄은 `confirmed: true`. 거부한 개념은 `lines`에서 빼고, 그 행들을 회사별로 `unmatched`에 `why: "거부한 대응"`, `conceptId`(되돌리기용)와 함께 넣는다.
 
-상단 `생성하기` 한 번으로 7.4(정리 글) → 7.3 · 7.5(질문) → 7.6(평가)을 차례로 부르고, 프로세스 바에 단계별 진행을 표시한다. 생성하기 첫 단계는 결과물(예산서 · 사업기획서)을 만들지 않고, 캔버스 내용을 글로 정리한 컨텍스트를 만든다. 근거 부족 판정은 하지 않는다.
+`CompareLine`: `{ label, why, conceptId, note, values: (Part[] | null)[], totals?: (number | null)[], confirmed? }`. `values`는 `groups` 순서이고, `Part`는 `{ cardId, cellId, label, valueBil }`(십억원). `cellId` 형식은 `{tableId}#r{행}c{열}`.
 
-### 7.1 `GET /api/v1/deliverables` (화면에서 쓰지 않음)
+## 7. 분석 (검토 · 질문 · 평가)
 
-#97 추가 수정에서 결과 패널의 `결과물` 선택을 없앴다. 화면은 양식을 고르지 않는다. 평가(7.6)의 가정 계정은 양식들의 `assume` 태그 합집합을 서버가 쓴다. 개념 이름(`tagNames`)은 문서 카드 태그와 같은 개념 점선에 계속 쓴다.
+캔버스 하단 `분석하기`(또는 C20 `새로 분석하기`)를 누르면 분석 세션을 하나 만든다. 세션은 검토(7.2) → 질문(7.4)을 한 작업으로 진행하고, 평가(7.5)는 다음 분기 자료가 들어온 뒤 세션에 붙인다. 새 세션은 `새로 분석하기`(또는 세션이 없을 때 `분석하기`)로만 만든다. 캔버스가 바뀐 뒤 `업데이트`를 누르면 보고 있는 세션을 지금 캔버스로 다시 분석해 같은 ID 자리에 바꿔 넣는다(질문이 바뀌므로 평가는 비움). 세션은 요청한 본인만 조회하고 지울 수 있다. 기준 시점(`asOfDate`)은 페이지의 기준 시점이고 필수다.
 
-| 응답 `data` | 설명 | 타입 |
+### 7.1 `GET /api/v1/canvases/{id}/analyses`
+
+내 분석 세션 목록(최신 먼저). C25 세션 목록과 C10 지적 박스(최신 세션)에 쓴다. 데모는 `localStorage` `telescope-analyses:v1`에 `{페이지ID}|{사번}`별로 저장한다.
+
+| 응답 `data[]` | 설명 | 타입 |
 |---|---|---|
-| `focus` | 주 대상 회사 | string |
-| `tagNames` | 개념 ID → 이름 | Record |
-| `deliverables[]` | `{ id, name, goal, sections: [{ title, tags }], assume }` | object[] |
+| `id`, `createdAt` | 세션 ID, 만든 시각 | string |
+| `canvasSig` | 분석 당시 캔버스 내용 지문(좌표 제외). 지금 캔버스와 다르면 화면이 "캔버스가 변경되었습니다" | string |
+| `cards`, `asOfDate` | 카드 수, 기준 시점 | number, string |
+| `status` | `RUNNING` / `REVIEWED`(검토 · 질문 끝, 평가 대기) / `EVALUATED` / `FAILED` | string |
+| `review` | 7.2 응답 | object |
+| `questions[]`, `assumptions[]` | 7.4 응답 | object[] |
+| `evaluation` | 7.5 응답 또는 `null` | object \| null |
 
-### 7.2 `POST /api/v1/canvases/{id}/context`
+`DELETE /api/v1/canvases/{id}/analyses/{analysisId}`: 내 세션 지우기, `204`. 다른 사람 세션은 `404`. 데모는 `canvas.removeAnalysis`.
 
-LLM에 보내는 층별 컨텍스트. 화면에서 직접 부르지 않고(`프롬프트 복사` 삭제), 정리 글(7.4)이 서버 안에서 같은 층을 쓴다. 캔버스의 카드·연결·수정 이력·메모·사용자 프롬프트를 층으로 묶는다.
+### 7.2 `POST /api/v1/canvases/{id}/analyses` (검토)
 
-| 요청 | 설명 | 타입 |
+`{ asOfDate }`를 보내면 `202` + `{ jobId, analysisId }`. 업데이트는 `PUT /api/v1/canvases/{id}/analyses/{analysisId}`에 같은 본문(같은 세션을 다시 분석, `eval`은 비움, 데모는 `canvas.replaceAnalysis`). job 진행 단계(`step: REVIEW` → `QUESTIONS`)로 프로세스 바를 움직인다. LLM에는 아래 컨텍스트 층(7.3)을 보내고, 응답의 근거 ID는 서버가 컨텍스트에 실제로 있는지 검증한 것만 남긴다. 데모는 규칙 기반(`local/ai.ts` `review`).
+
+| `review` 필드 | 설명 | 타입 |
 |---|---|---|
-| `extra` | 추가 요청 (선택) | string? |
+| `memos[]` | 메모 문장별 분류 `{ key, kind: 지시 \| 근거 \| 의견, text, where, author?, cardId?, linkId? }` | object[] |
+| `claims[]` | 주장 `{ id, text, from, source, cardId?, tags[], company?, verdict: 충분 \| 보통 \| 부족, evidence: [{ cite, label, source }], need? }`. 주장 = 의견 메모 문장 + 문서 카드 요약 | object[] |
+| `overall` | `{ verdict, text }` 전체 판정 | object |
+| `findings[]` | 캔버스 박스로 표시할 지적 `{ cardId, level: bad \| warn, text, ref }`: 근거 부족, 연결 · 별도 섞임, 단위 환산, 사용자 수정값, 연결 없음 | object[] |
+| `insights[]` | AI 인사이트 `{ id, title, facts: [{ text, cite? }], ai, news[] }`. `facts`의 숫자 · 변화율은 코드 계산, `ai`는 AI 해석 | object[] |
+| `note` | 캔버스 정리 글(Markdown, 근거 ID 포함). 복사 · Markdown 내보내기용 | string |
 
-| 응답 `data` | 설명 | 타입 |
+판정 규칙(데모): 공시 숫자가 있고 출처가 2종 이상이면 `충분`, 숫자 근거만 있으면 `보통`, 없으면 `부족`. 근거는 주장과 같은 개념 태그 · 같은 회사의 7.6 근거 줄. 숫자는 코드로 계산하고 LLM이 새 숫자를 만들지 않는다.
+
+### 7.3 컨텍스트 층 (서버 내부)
+
+| 층 | 내용 |
+|---|---|
+| `L0_system` | 규칙(근거 ID, 메모는 지시 · 근거 · 의견으로 가림, 선 관계는 에이전트가 판단), 개념 사전 |
+| `L1_sources` | 출처 (공시 접수번호, 문서 ID · 발행처 · 발행일) |
+| `L2_workspace` | 카드 내용 (공시 표, 문서 요약 · 수치, 대시보드 값, 메모 카드) |
+| `L3_edits` | 수정값, 확정 · 거부 대응, 비교 · 시각화 원본, 연결, `# 메모`(카드 메모 · 선 메모) |
+| `L4_task` | 요청 |
+
+근거 ID 형식: 표 셀 `[{tableId}#r{행}c{열}]`, 대시보드 값 `[dash:{panelId}#{행 이름}]`, 문서 수치 `[doc:{문서ID}#f{번호}]`, 문서 내용 `[doc:{문서ID}]`. 앞 층이 같으면 LLM prefix 캐시를 재사용한다.
+
+### 7.4 질문 (같은 분석 작업의 두 번째 단계)
+
+`questions[]`: `{ topic, tags[], q, why, level, cite[] }`(`높음`이 먼저). `assumptions[]`: `{ tag, name, value, cite, period }`(평가에 쓸 가정 = 대상 회사 기준 분기 공시 원본값, 사용자 수정값 · 다른 기간 열 제외, 대상 계정은 `analysis.json` `deliverables[].assume` 합집합). 화면은 애널리스트 리포트 형식(요지 · 핵심 쟁점 · 쟁점별 절)으로 보여 주고 Markdown을 만든다.
+
+### 7.5 `POST /api/v1/analyses/{id}/evaluations`
+
+다음 분기 자료(실적 · 애널리스트 리포트)가 들어온 뒤 그 세션의 질문 · 가정을 평가한다. 데모는 C23 `다음 분기 자료 반영 (데모)` 버튼이 이 호출을 대신한다. 다음 분기 자료가 "들어왔다"를 무엇으로 판단할지(리포트 수집 시점, 관리자 등록)는 정하지 않았다.
+
+| 응답 `data` (`evaluation`) | 설명 | 타입 |
 |---|---|---|
-| `layers` | `L0_system`(규칙·개념 사전), `L1_sources`(출처), `L2_workspace`(카드·대시보드·메모), `L3_edits`(수정·대응·비교·연결 + `# 사용자 프롬프트`: 카드 프롬프트, 선 프롬프트), `L4_task`(요청) | Record |
-| `hashes` | 층별 해시. 앞 층이 같으면 LLM prefix 캐시 재사용 | Record |
-| `messages[]` | `{ role, content }`. L0~L2는 system, L3~L4는 user | object[] |
+| `target` | `{ label, date, company }` 평가 기준 분기 (예: 2Q26) | object |
+| `hit[]`, `off[]`, `missed[]` | 맞은 질문(쟁점 링크) · 리포트에 없던 질문 · 놓친 쟁점 | object[] |
+| `checks[]` | 가정 대조 `{ tag, name, value, actual, diff, ok, cite, period }`. 차이 5% 이내면 유지 | object[] |
+| `precision`, `recall` | 정밀도·재현율 (%) | number |
 
-근거 ID 형식: 표 셀 `[{tableId}#r{행}c{열}]`, 대시보드 값 `[dash:{panelId}#{행 이름}]`, 문서 수치 `[doc:{문서ID}#f{번호}]`, 문서 내용 `[doc:{문서ID}]`. 메모는 팀원 의견이라 근거 ID를 붙이지 않는다.
+| HTTP | 상황 | 화면 |
+|---|---|---|
+| 409 | 다음 분기 자료가 아직 없음 | C23 회색 대기 유지 |
 
-### 7.3 `GET /api/v1/canvases/{id}/evidence`
+### 7.6 `GET /api/v1/canvases/{id}/evidence`
 
-캔버스 카드를 개념 태그가 붙은 근거 줄로 편다. 질문 · 가정의 입력이며, 화면은 근거 ID를 눌러 카드를 찾을 때 쓴다.
+캔버스 카드를 개념 태그가 붙은 근거 줄로 편다. 검토 · 질문 · 가정의 입력이며 서버 안에서 쓴다.
 
 | 응답 `data[]` | 설명 | 타입 |
 |---|---|---|
 | `tag`, `company`, `label`, `period` | 개념, 회사, 계정·제목, 기간 | string |
 | `value`, `unit` | 값. 공시는 십억원으로 변환. 문서 요약 줄은 `null` | number \| null, string |
-| `cite` | 근거 ID | string |
-| `cardId` | 카드 ID | string |
-| `source` | `공시` / `IR` / `AR` / `뉴스` / `사내` (대시보드 값은 `공시`) | string |
-| `text` | 문서 요약 (문서 줄만) | string? |
-| `edited` | 사용자가 고친 값이면 `true` | boolean |
+| `cite`, `cardId` | 근거 ID, 카드 ID | string |
+| `source` | `공시` / `IR` / `AR` / `뉴스` / `사내` | string |
+| `text`, `edited` | 문서 요약, 사용자 수정값 여부 | string?, boolean |
 
-### 7.4 `POST /api/v1/canvases/{id}/context-notes`
+### 7.7 `GET /api/v1/deliverables` (화면에서 쓰지 않음)
 
-생성하기의 첫 단계. 캔버스의 카드 · 연결 · 카드/선 프롬프트 · 메모를 사람이 읽는 글(Markdown)로 정리한다. 다음 작업(질문, 이후 문서 작성)의 컨텍스트로 쓴다. LLM을 부르므로 작업으로 돌린다(job `ANALYSIS`). 데모는 규칙 기반(`local/ai.ts` `contextNote`)으로 같은 모양을 만든다.
-
-| 요청 | 설명 | 타입 |
-|---|---|---|
-| `asOfDate` | 기준 시점. 이 날짜 이전 자료만 씀 | string |
-
-`202` + `{ jobId }` → 완료 뒤 `GET /api/v1/context-notes/{noteId}`(`noteId`는 작업 결과에서 받음, 받는 방식은 backend와 합의).
-
-| `GET /context-notes/{noteId}` 응답 `data` | 설명 | 타입 |
-|---|---|---|
-| `id`, `createdAt` | 정리 글 ID, 만든 시각 | string |
-| `markdown` | 정리 글. `# 제목`, 기준 분기 · 카드 수, `## 섹션`(공시 재무 · DART 대시보드 · 계정 대응 비교 · IR·AR · 뉴스 · 사내 자료 · 카드 사이 관계 · 팀 메모 · 보완 요청) 아래 `- 줄`. 숫자 줄 끝에 `[근거ID]`, 카드 프롬프트는 그 카드 줄 아래 `- 지시: …` | string |
-| `cites[]` | 글에 쓴 근거 ID 목록 (서버가 컨텍스트에 실제로 있는지 검증한 것만) | string[] |
-
-규칙: 숫자는 카드 값을 코드로 옮기고(단위 환산 포함) LLM이 새 숫자를 만들지 않는다. 사용자 수정값은 "사용자 수정값"으로 적는다. 메모와 AI 해석은 사실 근거가 아님을 글에 밝힌다. 화면은 글을 고칠 수 있고(편집), `복사` · `Markdown` 내보내기는 화면이 만든다. 고친 글을 서버에 저장할지는 정하지 않았다(데모는 패널 안에서만 유지). 결과는 고치지 않고 새로 쌓는다.
-
-### 7.5 `POST /api/v1/canvases/{id}/questions`
-
-생성하기의 두 번째 단계. job `PREDICTION`. 요청은 `{ asOfDate, contextNoteId? }`. 데모는 7.3 근거 줄의 개념 태그로 질문 뱅크에서 고른다. Markdown 파일은 화면이 만든다.
-
-완료 뒤 `GET /api/v1/question-sets/{id}`:
-
-| 응답 `data` | 설명 | 타입 |
-|---|---|---|
-| `id`, `createdAt` | 질문 묶음 ID, 만든 시각 | string |
-| `questions[]` | `{ topic, q, why, level, cite[] }`. `level`: `높음` / `보통` 등, `높음`이 먼저 | object[] |
-
-### 7.6 `POST /api/v1/canvases/{id}/evaluations`
-
-생성하기의 세 번째 단계. 질문은 다음 분기 리포트 쟁점과 같은 주제면 적중, 가정(캔버스의 대상 회사 기준 분기 공시 원본값이 다음 분기에도 유지된다고 둠, 사용자 수정값 · 다른 기간 열 제외)은 실제 실적과 차이 5% 이내면 유지로 판정한다. 다음 분기 자료는 평가에서만 쓴다.
-
-| 요청 | 설명 | 타입 |
-|---|---|---|
-| `questionSetId` | 평가할 질문 묶음 | string |
-| `canvasId` | 가정을 뽑을 캔버스 (서버가 7.3 근거에서 계산) | string |
-
-| 응답 `data` | 설명 | 타입 |
-|---|---|---|
-| `target` | `{ label, date, company }` 평가 기준 분기 (예: 2Q26) | object |
-| `hit[]` | 맞은 질문 `{ q, issue: { id, topic, title, publisher, url } }` | object[] |
-| `off[]` | 리포트 쟁점에 없던 질문 | object[] |
-| `missed[]` | 놓친 쟁점 | object[] |
-| `checks[]` | 가정 대조 `{ tag, name, value, actual, diff, ok, cite, period }`. `diff`는 % | object[] |
-| `precision`, `recall` | 정밀도·재현율 (%) | number |
-
-평가를 동기로 돌려줄지 작업으로 돌릴지는 backend와 정한다(데모는 즉시 계산).
+양식 정의 `{ focus, tagNames, deliverables[] }`. 화면은 양식을 고르지 않고, 서버가 `assume` 합집합(7.4)과 개념 이름에 쓴다.
 
 ## 8. 오류 처리 (화면)
 
@@ -489,7 +488,8 @@ LLM에 보내는 층별 컨텍스트. 화면에서 직접 부르지 않고(`프�
 | 비교 조회 실패 | 이전 결과를 그대로 보여 줌 |
 | 카드 태그 조회 실패 | 이전 태그를 유지 |
 | 401 | 로그인 화면으로 |
-| job `FAILED` | 프로세스 바의 그 단계에 `errorMessage`를 표시하고 `다시 생성` 유지 |
+| job `FAILED` | 프로세스 바의 그 단계에 `errorMessage`를 표시하고 `새로 분석하기` 유지 |
+| 업로드 검증 실패 | C16 파일 줄에 `포맷 불일치` · `회사 불일치`와 서버 `message` |
 
 ## 9. 정해야 할 것
 
@@ -498,10 +498,10 @@ LLM에 보내는 층별 컨텍스트. 화면에서 직접 부르지 않고(`프�
 - 공유 링크 복사 기능 여부
 - 동시 편집 시 카드·연결 ID 발급과 충돌 처리 (서버 발급 vs 화면 발급)
 - 다른 팀원의 조작을 화면에 반영하는 방식 (폴링 주기, `GET /canvases/{id}/events?after={seq}` 여부)
-- 정리 글·질문 작업 결과 ID를 받는 경로 (`GET /jobs/{id}` 응답에 넣을지, 캔버스별 최신 결과 조회로 할지)
-- 평가의 동기·비동기 여부
-- 생성하기 세 단계를 한 작업으로 묶을지, 단계별 작업 세 개로 둘지 (프로세스 바 진행 표시 방식)
-- 화면에서 고친 정리 글을 서버에 새 버전으로 저장할지, 질문 생성 입력으로 다시 쓸지
+- 분석 작업 결과를 받는 경로 (`GET /jobs/{id}`에 `analysisId`를 넣을지, 7.1 목록을 다시 부를지)
+- 다음 분기 자료가 "들어왔다"를 판단하는 방법과 평가를 자동으로 돌릴지
+- 분석 세션을 협업자에게 공유하는 방법 (지금은 본인만)
+- 메모 분류 · 주장 판정을 LLM으로 바꿀 때 판정 기준과 검증
 - 통합 검색을 서버 한 API(`GET /search`)로 합칠지, 화면이 공시 · 문서 검색을 나눠 부를지
 - 업로드 허용 형식과 업로드 문서 정책 (`CLAUDE.md` 7장)
 - 채팅 응답 방식 (`CLAUDE.md` 7장). 데모에 채팅 화면이 없어 이 문서에 넣지 않음
