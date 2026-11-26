@@ -20,7 +20,8 @@ export interface InsightItem { id: string; title: string; facts: { text: string;
 export interface Review { memos: MemoLine[]; claims: Claim[]; overall: { verdict: Verdict; text: string }; findings: Finding[]; insights: InsightItem[]; note: string }
 export type Evaluation = ReturnType<typeof evaluate>;
 // 분석 세션: 분석하기를 누를 때마다 하나씩 쌓임. 평가는 다음 분기 자료가 들어온 뒤 붙음
-export interface Session { id: string; at: string; sig: string; cards: number; quarter: string; review: Review; questions: Question[]; assume: Assumption[]; eval: Evaluation | null }
+// base: 업데이트로 만든 버전이면 처음 세션의 ID (같은 세션의 버전끼리 묶음). 결과는 고치지 않고 버전으로 쌓는다
+export interface Session { id: string; base?: string; at: string; sig: string; cards: number; quarter: string; review: Review; questions: Question[]; assume: Assumption[]; eval: Evaluation | null }
 
 const CUR = /1Q26|당분기|제 10 기 1분기/;  // 기준 분기 열 (server.ts peerFacts와 같은 규칙)
 const num = (v: number) => v.toLocaleString("ko-KR", { maximumFractionDigits: 1 });

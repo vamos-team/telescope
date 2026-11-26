@@ -20,6 +20,12 @@ const cur = computed<Session | null>(() => cv.analyses.find((s) => s.id === curI
 const rv = computed(() => doing.value ? live.value.review : cur.value?.review ?? null);
 const qs = computed(() => doing.value ? live.value.questions : cur.value?.questions ?? null);
 const ev = computed(() => cur.value?.eval ?? null);
+// 세션 = 처음 분석과 그 업데이트 버전들(base로 묶음). 결과는 고치지 않고 버전으로 쌓는다. 목록은 최근에 바뀐 세션이 위
+const lineOf = (s: Session) => s.base ?? s.id;
+const lines = computed(() => { const m = new Map<string, Session[]>();
+  for (const s of cv.analyses) m.set(lineOf(s), [s, ...(m.get(lineOf(s)) ?? [])]);  // analyses는 최신이 앞 → 버전은 오래된 것부터
+  return [...m].map(([key, vers]) => ({ key, vers })); });
+const curKey = computed(() => cur.value ? lineOf(cur.value) : null);
 // 보고 있는 세션을 만든 뒤 캔버스가 바뀌었는지. 바뀌면 업데이트(이 세션을 다시 분석) · 새로 분석하기(새 세션) 중 고름
 const stale = computed(() => !doing.value && !!cur.value && cur.value.sig !== cv.sig);
 
@@ -29,7 +35,7 @@ const st = (k: Step) => k === "eval" ? (ev.value && !doing.value ? "done" : "wai
 const fill = computed(() => st("questions") === "done" ? 100 : st("questions") === "doing" ? 50 : 0);  // 검토 → 질문 구간
 
 const tick = () => new Promise((ok) => setTimeout(ok, 600));  // ponytail: 목업 AI는 즉시 끝나 진행이 안 보여 단계마다 짧게 쉼. LLM 연결 뒤 삭제
-// mode new: 새 세션을 쌓음. update: 보고 있는 세션의 검토 · 질문을 지금 캔버스로 다시 만듦 (평가는 질문이 바뀌어 비움)
+// mode new: 새 세션. update: 보고 있는 세션의 새 버전(이전 버전과 그 평가는 그대로 남음, 새 버전은 평가 대기)
 async function start(mode: "new" | "update" = "new") {
   if (!cv.cards.length || doing.value) return;
   const target = mode === "update" ? cur.value : null;
@@ -45,9 +51,9 @@ async function start(mode: "new" | "update" = "new") {
   await tick();
   const q = makeQuestions(A, evs);
   live.value.questions = q;
-  const s: Session = { id: target?.id ?? "a" + Date.now().toString(36), at: new Date().toISOString(), sig, cards: cv.cards.length, quarter: quarterOf(cv.meta),
+  const s: Session = { id: "a" + Date.now().toString(36), base: target ? lineOf(target) : undefined, at: new Date().toISOString(), sig, cards: cv.cards.length, quarter: quarterOf(cv.meta),
     review: r, questions: q, assume: makeAssumptions(A, evs), eval: null };
-  if (target) cv.replaceAnalysis(s); else cv.pushAnalysis(s);
+  cv.pushAnalysis(s);
   curId.value = s.id; doing.value = null;
 }
 // 캔버스의 분석하기: 세션이 없을 때만 새로 시작. 있으면 분석 화면만 열고, 캔버스가 바뀌었으면 위 막대에서 업데이트 · 새로 분석하기를 고름
@@ -61,10 +67,12 @@ watch(() => props.flag?.n, async () => {
   const el = document.querySelector(`.aview [data-card="${props.flag.id}"]`) as HTMLElement | null;
   el?.scrollIntoView({ block: "center", behavior: "smooth" });  // 이동만, 강조 표시 없음
 }, { immediate: true });
-function delSession(id: string) {
-  if (!confirm("이 분석을 지울까요? 지우면 되돌릴 수 없어요.")) return;
-  cv.removeAnalysis(id);
-  if (curId.value === id) { curId.value = cv.analyses[0]?.id ?? null; part.value = "review"; }
+// 지우기 = 내 목록에서 숨김 (결과는 저장소에 남음)
+function delSession(key: string) {
+  if (!confirm("이 분석을 목록에서 지울까요?")) return;
+  const was = curKey.value === key;
+  cv.hideAnalysis(key);
+  if (was) { curId.value = cv.analyses[0]?.id ?? null; part.value = "review"; }
 }
 function applyNext() { if (cur.value) { cv.attachEval(cur.value.id, evaluate(A, cur.value.questions, cur.value.assume)); part.value = "eval"; } }
 
@@ -107,16 +115,18 @@ async function copyX() { try { await navigator.clipboard.writeText(xtext.value);
   <div class="aview">
     <!-- 왼쪽: 분석 세션 목록 (접기 버튼은 안에) -->
     <aside v-if="alOpen" class="alist" aria-label="분석 세션">
-      <div class="alh"><b>분석 세션 <small>{{ cv.analyses.length }}</small></b>
+      <div class="alh"><b>분석 세션 <small>{{ lines.length }}</small></b>
         <button class="pclose" data-tip="세션 목록 접기" aria-label="세션 목록 접기" @click="alOpen = false"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2" /><path d="M7.5 3.5v13" /></svg></button></div>
       <p v-if="!cv.analyses.length" class="none">아직 분석하지 않았습니다.</p>
-      <div v-for="(s, i) in cv.analyses" :key="s.id" class="arow">
-      <button class="ai" :aria-current="s.id === curId && !doing ? 'true' : undefined" @click="curId = s.id; part = 'review'">
-        <b>{{ i === 0 ? "최신 분석" : `분석 ${cv.analyses.length - i}` }}<span v-if="s.sig !== cv.sig" class="old">이전 캔버스</span></b>
-        <small>{{ when(s.at) }}</small>
-        <span class="st" :data-v="s.review.overall.verdict">근거 {{ s.review.overall.verdict }}</span><span class="st" :data-v="s.eval ? 'done' : 'wait'">{{ s.eval ? "평가 완료" : "평가 대기" }}</span>
+      <div v-for="(ln, i) in lines" :key="ln.key" class="arow">
+      <button class="ai" :aria-current="ln.key === curKey && !doing ? 'true' : undefined" @click="curId = ln.vers[ln.vers.length - 1].id; part = 'review'">
+        <b>{{ i === 0 ? "최신 분석" : `분석 ${lines.length - i}` }}<span v-if="ln.vers.length > 1" class="ver">v{{ ln.vers.length }}</span><span v-if="ln.vers[ln.vers.length - 1].sig !== cv.sig" class="old">이전 캔버스</span></b>
+        <small>{{ when(ln.vers[ln.vers.length - 1].at) }}</small>
+        <span class="st" :data-v="ln.vers[ln.vers.length - 1].review.overall.verdict">근거 {{ ln.vers[ln.vers.length - 1].review.overall.verdict }}</span><span class="st" :data-v="ln.vers[ln.vers.length - 1].eval ? 'done' : 'wait'">{{ ln.vers[ln.vers.length - 1].eval ? "평가 완료" : "평가 대기" }}</span>
       </button>
-      <button class="adel" data-tip="분석 지우기" aria-label="분석 지우기" :disabled="!!doing" @click="delSession(s.id)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h12M8 6V4.5h4V6M6 6l.7 9.5h6.6L14 6" /></svg></button>
+      <div v-if="ln.vers.length > 1 && ln.key === curKey" class="vers" role="tablist" aria-label="버전">
+        <button v-for="(v, k) in ln.vers" :key="v.id" role="tab" :aria-selected="v.id === curId" :title="when(v.at)" @click="curId = v.id; part = 'review'">v{{ k + 1 }}</button></div>
+      <button class="adel" data-tip="분석 지우기" aria-label="분석 지우기" :disabled="!!doing" @click="delSession(ln.key)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h12M8 6V4.5h4V6M6 6l.7 9.5h6.6L14 6" /></svg></button>
       </div>
       <p class="own">분석 결과는 요청한 본인만 봅니다.</p>
     </aside>

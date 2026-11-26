@@ -80,6 +80,10 @@ const KEY = "telescope-canvas:v1";
 const AKEY = "telescope-analyses:v1";
 const readA = (): Record<string, Session[]> => { try { return JSON.parse(localStorage.getItem(AKEY) ?? "{}"); } catch { return {}; } };
 const writeA = (all: Record<string, Session[]>) => { try { localStorage.setItem(AKEY, JSON.stringify(all)); } catch { /* 저장 불가: 화면에서만 유지 */ } };
+// 지운 세션: 결과는 그대로 두고 내 목록에서 숨길 세션(처음 세션 ID)만 따로 적는다
+const HKEY = "telescope-analyses-hidden:v1";
+const readH = (): Record<string, string[]> => { try { return JSON.parse(localStorage.getItem(HKEY) ?? "{}"); } catch { return {}; } };
+const writeH = (all: Record<string, string[]>) => { try { localStorage.setItem(HKEY, JSON.stringify(all)); } catch { /* 저장 불가 */ } };
 const readAll = (): Record<string, Saved> => { try { return JSON.parse(localStorage.getItem(KEY) ?? "{}"); } catch { return {}; } };
 const writeAll = (all: Record<string, Saved>) => { try { localStorage.setItem(KEY, JSON.stringify(all)); } catch { /* 저장 불가(사생활 보호 모드 등): 화면에서만 유지 */ } };
 const now = () => new Date().toISOString();
@@ -441,26 +445,22 @@ export const useCanvas = defineStore("canvas", {
     },
     // ---------- 분석 세션 (본인만) ----------
     akey() { return `${this.canvasId}|${this.user?.id ?? ""}`; },
-    readAnalyses() { return readA()[this.akey()] ?? []; },
+    readAnalyses() { const hid = new Set(readH()[this.akey()] ?? []); return (readA()[this.akey()] ?? []).filter((s) => !hid.has(s.base ?? s.id)); },
+    // 새로 분석하기 · 업데이트 모두 새 결과를 앞에 쌓는다 (업데이트는 base로 같은 세션의 새 버전)
     pushAnalysis(s: Session) {
       this.analyses = [s, ...this.analyses];
-      const all = readA(); all[this.akey()] = this.analyses; writeA(all);
+      const all = readA(); all[this.akey()] = [s, ...(all[this.akey()] ?? [])]; writeA(all);
     },
-    // 업데이트: 같은 세션 자리에 다시 만든 결과를 넣음 (새 세션을 쌓지 않음)
-    replaceAnalysis(s: Session) {
-      this.analyses = this.analyses.map((x) => x.id === s.id ? s : x);
-      const all = readA(); all[this.akey()] = this.analyses; writeA(all);
-    },
-    // 분석 세션 지우기 (본인 세션만 보이므로 본인 것만 지움)
-    removeAnalysis(id: string) {
-      this.analyses = this.analyses.filter((x) => x.id !== id);
-      const all = readA(); all[this.akey()] = this.analyses; writeA(all);
+    // 세션 지우기 = 내 목록에서 숨김. 결과(모든 버전)는 저장소에 그대로 둔다
+    hideAnalysis(base: string) {
+      this.analyses = this.analyses.filter((x) => (x.base ?? x.id) !== base);
+      const h = readH(); h[this.akey()] = [...new Set([...(h[this.akey()] ?? []), base])]; writeH(h);
     },
     // 평가는 다음 분기 자료가 들어온 뒤 그 세션에 붙인다 (세션의 검토 · 질문은 그대로)
     attachEval(id: string, ev: Session["eval"]) {
       const s = this.analyses.find((x) => x.id === id); if (!s) return;
       s.eval = ev;
-      const all = readA(); all[this.akey()] = this.analyses; writeA(all);
+      const all = readA(); all[this.akey()] = (all[this.akey()] ?? []).map((x) => x.id === id ? { ...x, eval: ev } : x); writeA(all);
     },
   },
 });

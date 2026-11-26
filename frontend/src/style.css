@@ -1601,3 +1601,9 @@ body.resizing .vue-flow,body.resizing iframe{pointer-events:none}
 
 .selbar button.memo{background:#D99A00;color:#fff} .selbar button.memo:hover{background:#B88200}
 .stalebar button:first-of-type{background:var(--surface);color:var(--t-strong);box-shadow:inset 0 0 0 1px var(--line)} .stalebar button+button{margin-left:-4px}
+
+/* 세션 버전: 업데이트하면 같은 세션의 새 버전이 쌓임. 보고 있는 세션 아래 v1 v2 … */
+.alist .ver{height:18px;padding:0 5px;border-radius:5px;font-size:10.5px;font-weight:700;line-height:18px;background:var(--bg-grey);color:var(--t-sub)}
+.alist .vers{display:flex;flex-wrap:wrap;gap:4px;padding:0 10px 8px}
+.alist .vers button{height:22px;padding:0 8px;border-radius:6px;font-size:11.5px;font-weight:600;color:var(--t-sub);box-shadow:inset 0 0 0 1px var(--line)}
+.alist .vers button[aria-selected="true"]{color:var(--primary-text);font-weight:700;box-shadow:inset 0 0 0 1.5px var(--primary-text)}

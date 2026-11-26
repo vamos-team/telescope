@@ -400,7 +400,7 @@ C16 데이터 입력 창에서 파일을 올린다. `multipart/form-data`, 필�
 
 ## 7. 분석 (검토 · 질문 · 평가)
 
-캔버스 하단 `분석하기`(또는 C20 `새로 분석하기`)를 누르면 분석 세션을 하나 만든다. 세션은 검토(7.2) → 질문(7.4)을 한 작업으로 진행하고, 평가(7.5)는 다음 분기 자료가 들어온 뒤 세션에 붙인다. 새 세션은 `새로 분석하기`(또는 세션이 없을 때 `분석하기`)로만 만든다. 캔버스가 바뀐 뒤 `업데이트`를 누르면 보고 있는 세션을 지금 캔버스로 다시 분석해 같은 ID 자리에 바꿔 넣는다(질문이 바뀌므로 평가는 비움). 세션은 요청한 본인만 조회하고 지울 수 있다. 기준 시점(`asOfDate`)은 페이지의 기준 시점이고 필수다.
+캔버스 하단 `분석하기`(또는 C20 `새로 분석하기`)를 누르면 분석 세션을 하나 만든다. 세션은 검토(7.2) → 질문(7.4)을 한 작업으로 진행하고, 평가(7.5)는 다음 분기 자료가 들어온 뒤 세션에 붙인다. 새 세션은 `새로 분석하기`(또는 세션이 없을 때 `분석하기`)로만 만든다. 캔버스가 바뀐 뒤 `업데이트`를 누르면 보고 있는 세션의 새 버전을 만든다(새 분석 결과, `baseAnalysisId`로 같은 세션에 묶음). 결과는 고치지 않고 쌓으므로 이전 버전과 그 평가는 그대로 남는다. 세션은 요청한 본인만 조회하고, 지우기는 내 목록에서 숨길 뿐 결과는 남긴다(숨김 목록은 데모 `localStorage` `telescope-analyses-hidden:v1`). 숨길 수 있다. 기준 시점(`asOfDate`)은 페이지의 기준 시점이고 필수다.
 
 ### 7.1 `GET /api/v1/canvases/{id}/analyses`
 
@@ -408,7 +408,8 @@ C16 데이터 입력 창에서 파일을 올린다. `multipart/form-data`, 필�
 
 | 응답 `data[]` | 설명 | 타입 |
 |---|---|---|
-| `id`, `createdAt` | 세션 ID, 만든 시각 | string |
+| `id`, `createdAt` | 분석 결과 ID, 만든 시각 | string |
+| `baseAnalysisId` | 업데이트로 만든 버전이면 처음 세션의 ID (없으면 처음 버전) | string? |
 | `canvasSig` | 분석 당시 캔버스 내용 지문(좌표 제외). 지금 캔버스와 다르면 화면이 "캔버스가 변경되었습니다" | string |
 | `cards`, `asOfDate` | 카드 수, 기준 시점 | number, string |
 | `status` | `RUNNING` / `REVIEWED`(검토 · 질문 끝, 평가 대기) / `EVALUATED` / `FAILED` | string |
@@ -416,11 +417,11 @@ C16 데이터 입력 창에서 파일을 올린다. `multipart/form-data`, 필�
 | `questions[]`, `assumptions[]` | 7.4 응답 | object[] |
 | `evaluation` | 7.5 응답 또는 `null` | object \| null |
 
-`DELETE /api/v1/canvases/{id}/analyses/{analysisId}`: 내 세션 지우기, `204`. 다른 사람 세션은 `404`. 데모는 `canvas.removeAnalysis`.
+`POST /api/v1/canvases/{id}/analyses/{analysisId}/hide`: 내 목록에서 그 세션(모든 버전) 숨기기, `204`. 결과는 지우지 않는다. 다른 사람 세션은 `404`. 데모는 `canvas.hideAnalysis`. 목록 응답에는 숨긴 세션을 넣지 않는다.
 
 ### 7.2 `POST /api/v1/canvases/{id}/analyses` (검토)
 
-`{ asOfDate }`를 보내면 `202` + `{ jobId, analysisId }`. 업데이트는 `PUT /api/v1/canvases/{id}/analyses/{analysisId}`에 같은 본문(같은 세션을 다시 분석, `eval`은 비움, 데모는 `canvas.replaceAnalysis`). job 진행 단계(`step: REVIEW` → `QUESTIONS`)로 프로세스 바를 움직인다. LLM에는 아래 컨텍스트 층(7.3)을 보내고, 응답의 근거 ID는 서버가 컨텍스트에 실제로 있는지 검증한 것만 남긴다. 데모는 규칙 기반(`local/ai.ts` `review`).
+`{ asOfDate }`를 보내면 `202` + `{ jobId, analysisId }`. 업데이트는 같은 `POST`에 `{ asOfDate, baseAnalysisId }`를 보내 새 분석 결과를 만든다(기존 결과는 고치지 않음, 데모는 `Session.base`). job 진행 단계(`step: REVIEW` → `QUESTIONS`)로 프로세스 바를 움직인다. LLM에는 아래 컨텍스트 층(7.3)을 보내고, 응답의 근거 ID는 서버가 컨텍스트에 실제로 있는지 검증한 것만 남긴다. 데모는 규칙 기반(`local/ai.ts` `review`).
 
 | `review` 필드 | 설명 | 타입 |
 |---|---|---|

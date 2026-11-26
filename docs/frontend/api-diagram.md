@@ -184,7 +184,7 @@ sequenceDiagram
   participant B as backend
   participant A as ai
 
-  U->>F: 캔버스 하단 분석하기 (세션이 없을 때) 또는 새로 분석하기 / 업데이트(PUT, 같은 세션)
+  U->>F: 캔버스 하단 분석하기 (세션이 없을 때) 또는 새로 분석하기 / 업데이트(POST, baseAnalysisId = 같은 세션의 새 버전)
   Note over F: 남은 이벤트(메모 포함)를 먼저 보내고 분석 화면(C20)으로
   F->>B: POST /canvases/{id}/analyses (asOfDate)
   B->>A: 분석 작업 (컨텍스트 L0~L4: 카드 · 연결 · 메모 3종)
@@ -207,7 +207,7 @@ sequenceDiagram
   end
   Note over F: 보고 있는 세션의 canvasSig가 지금과 다르면 "캔버스가 변경되었습니다." 업데이트 · 새로 분석하기
   U->>F: 세션 목록 휴지통
-  F->>B: DELETE /canvases/{id}/analyses/{analysisId}
+  F->>B: POST /canvases/{id}/analyses/{analysisId}/hide (목록에서 숨김, 결과는 보존)
 ```
 
 ## 6. 작업 상태 (job)

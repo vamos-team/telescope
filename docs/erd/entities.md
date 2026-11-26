@@ -214,7 +214,7 @@ erDiagram
 3. 허용 문서를 정해 `AnalysisRunDocument`로 스냅샷한다. 업로드한 파일과 DuckDB/ChromaDB의 공용 공시를 함께 쓰며, 예산서는 `BUDGET`, 나머지는 `EVIDENCE`로 표시한다.
 4. `Job`을 만들고 ai 서비스에 분석을 요청한다(202와 `jobId`). 허용 문서와 기준 시점은 서버가 강제로 주입한다.
 5. ai가 숫자를 코드로 계산하고 공시와 대조해 결과를 돌려주면, 서버가 지표별로 `AnalysisFinding`을 저장한다.
-6. 다시 분석할 때 요청한 본인이 고른다. 새로 분석하기는 새 `AnalysisRun`을 만들고, 업데이트는 기존 `AnalysisRun`의 결과(`AnalysisFinding` 등)를 다시 만들어 바꾼다. 본인 결과는 지울 수 있다.
+6. 같은 조건으로 다시 분석하면 기존 결과를 고치지 않고 새 `AnalysisRun`을 만든다.
 
 ### 3.5 예측 (애널리스트 질문 예측)
 
@@ -228,7 +228,7 @@ erDiagram
 1. 예측의 기준 시점(`PredictionRun.asOfDate`) 이후에 새 리포트가 발행되어 `DocumentVersion`으로 들어온다.
 2. 평가를 요청할 때 평가 기준 시점(`asOfDate`, 필수)을 정한다. 비교 대상은 예측 기준 시점 이후부터 평가 기준 시점까지 발행된 문서로 서버가 제한한다.
 3. 예측했던 `PredictedQuestion`과 그 리포트를 견주어 맞았는지 평가한다.
-4. 결과를 `PredictionEvaluation`(`predictedQuestionId`, `comparedDocumentVersionId`, `asOfDate`, `evaluatedAt`, `result`)으로 저장한다. 분석을 업데이트해 질문이 바뀌면 그 평가는 지운다.
+4. 결과를 `PredictionEvaluation`(`predictedQuestionId`, `comparedDocumentVersionId`, `asOfDate`, `evaluatedAt`, `result`)으로 새로 쌓는다. 다시 평가하면 새 row를 추가한다.
 
 ### 3.7 채팅
 
@@ -362,7 +362,7 @@ erDiagram
 | `isMatched` | boolean | 일치 여부 |
 
 - 숫자는 코드로 계산해 공시와 대조한다. LLM 응답을 그대로 신뢰하지 않는다.
-- `PredictionRun`이 이 결과를 재료로 쓴다. 분석을 업데이트하면 다시 만든다.
+- 수정하지 않고 새로 쌓는다. `PredictionRun`이 이 결과를 재료로 쓴다.
 
 ### 4.6 prediction
 
@@ -397,7 +397,7 @@ erDiagram
 | `result` | string | 적중 여부 |
 
 - 평가는 `prediction`의 결과를 다루므로 별도 패키지 대신 `prediction`에 포함한다.
-- 분석을 업데이트해 질문이 바뀌면 지운다.
+- 수정하지 않고 새로 쌓는다.
 
 ### 4.7 chat
 
@@ -420,7 +420,7 @@ erDiagram
 
 ## 5. 공통 규칙
 
-- 문서 버전은 수정하지 않고 새로 쌓는다. 분석·예측·평가 결과는 요청한 본인이 업데이트(다시 분석)하거나 지울 수 있다.
+- 문서 버전, 분석·예측·평가 결과는 수정하지 않고 새로 쌓는다.
 - 분석·예측 결과(`AnalysisRun`, `PredictionRun`과 그 하위 결과)는 요청한 본인만 조회한다. `requestedBy`로 서버가 강제한다.
 - 예측과 평가는 `asOfDate`가 필수이고, 기준 시점 이후에 발행된 문서는 서버가 허용 문서에서 제외한다.
 - 예측의 `asOfDate`는 바탕이 되는 분석의 `asOfDate`보다 이르면 안 된다(예측 ≥ 분석). 서버가 검증한다.
