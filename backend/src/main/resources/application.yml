@@ -21,3 +21,8 @@ app:
   storage:
     local:
       base-dir: ${FILE_STORAGE_DIR:./data/files}
+    # 버킷이 설정되면(배포: s3-config ConfigMap) S3에, 없으면(로컬) 위 디렉터리에 저장한다.
+    # 자격증명은 기본 체인(배포는 IRSA)을 쓴다. 키를 설정 파일에 넣지 않는다.
+    s3:
+      bucket: ${S3_BUCKET:}
+      region: ${AWS_REGION:}
