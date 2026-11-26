@@ -45,6 +45,3 @@ Thumbs.db
 
 # Claude Code 로컬 설정
 .claude/settings.local.json
-
-# macOS 폴더 아이콘
-Icon?
