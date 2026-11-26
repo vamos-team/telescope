@@ -133,11 +133,11 @@ class CanvasRealtimeTest {
         BlockingQueue<Map<String, Object>> toViewer = subscribe(connect(viewer), events());
         awaitSubscribers(events(), 1);
         eventService.apply(canvasId, owner, batch(
-                event("set_card_prompt", "cardId", card.toString(), "text", "먼저", "baseVersion", 0)));
+                event("set_card_memo", "cardId", card.toString(), "text", "먼저", "baseVersion", 0)));
         assertThat(toViewer.poll(WAIT_SECONDS, TimeUnit.SECONDS)).isNotNull();
 
         assertThatThrownBy(() -> eventService.apply(canvasId, editor, batch(
-                event("set_card_prompt", "cardId", card.toString(), "text", "늦게", "baseVersion", 0))))
+                event("set_card_memo", "cardId", card.toString(), "text", "늦게", "baseVersion", 0))))
                 .isInstanceOf(BusinessException.class);
         eventService.apply(canvasId, owner, batch(event("move_card", "cardId", card.toString(), "x", 1, "y", 1)));
 

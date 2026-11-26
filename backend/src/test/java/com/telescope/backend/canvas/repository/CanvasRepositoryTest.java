@@ -59,7 +59,7 @@ class CanvasRepositoryTest {
         UUID cardId = UUID.randomUUID();
         CanvasCard card = CanvasCard.create(cardId, canvas.getId(), CardKind.TABLE, 10, 20,
                 "{\"tableId\":\"SKT_2026Q1_is\",\"rows\":[3,5]}", owner);
-        card.changePrompt("감가상각비 추이 확인");
+        card.changeMemo("감가상각비 추이 확인");
         cardRepository.save(card);
         em.flush();
         em.clear();
@@ -67,8 +67,8 @@ class CanvasRepositoryTest {
         CanvasCard found = cardRepository.findByCanvasIdAndId(canvas.getId(), cardId).orElseThrow();
         // PostgreSQL은 JSONB를 정규화해서 돌려주므로(공백·키 순서) 값만 확인한다
         assertThat(found.getProps()).contains("\"tableId\": \"SKT_2026Q1_is\"").contains("\"rows\": [3, 5]");
-        assertThat(found.getPrompt()).isEqualTo("감가상각비 추이 확인");
-        assertThat(found.getPromptVersion()).isEqualTo(1);
+        assertThat(found.getMemo()).isEqualTo("감가상각비 추이 확인");
+        assertThat(found.getMemoVersion()).isEqualTo(1);
         assertThat(found.isNew()).isFalse();
     }
 
@@ -78,7 +78,7 @@ class CanvasRepositoryTest {
         UUID a = UUID.randomUUID(), b = UUID.randomUUID(), link = UUID.randomUUID();
         cardRepository.save(CanvasCard.create(a, canvas.getId(), CardKind.DOC, 0, 0, "{}", owner));
         cardRepository.save(CanvasCard.create(b, canvas.getId(), CardKind.DOC, 0, 0, "{}", owner));
-        linkRepository.save(CanvasLink.create(link, canvas.getId(), a, b, "근거", owner));
+        linkRepository.save(CanvasLink.create(link, canvas.getId(), a, b, owner));
         em.flush();
 
         jdbc.update("delete from app.canvas_card where id = ?", a);
