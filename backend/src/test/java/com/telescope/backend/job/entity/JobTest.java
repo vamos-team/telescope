@@ -128,4 +128,30 @@ class JobTest {
         assertThat(job.getStatus()).isEqualTo(JobStatus.SUCCEEDED);
         assertThat(job.getErrorMessage()).isNull();
     }
+
+    @Test
+    void 결과_저장_실패는_한도_전까지_세기만_하고_한도에_닿으면_FAILED가_된다() {
+        Job job = Job.create(JobType.ANALYSIS);
+        job.start(NOW);
+
+        assertThat(job.recordResultSaveFailure(2, "저장 실패", NOW)).isFalse();
+        assertThat(job.getResultSaveFailures()).isEqualTo(1);
+        assertThat(job.getStatus()).isEqualTo(JobStatus.RUNNING);
+
+        assertThat(job.recordResultSaveFailure(2, "저장 실패", NOW.plusSeconds(1))).isTrue();
+        assertThat(job.getStatus()).isEqualTo(JobStatus.FAILED);
+        assertThat(job.getErrorMessage()).isEqualTo("저장 실패");
+        assertThat(job.getFinishedAt()).isEqualTo(NOW.plusSeconds(1));
+    }
+
+    @Test
+    void 이미_끝난_작업의_결과_저장_실패는_기록하지_않는다() {
+        Job job = Job.create(JobType.ANALYSIS);
+        job.start(NOW);
+        job.succeed(NOW);
+
+        assertThat(job.recordResultSaveFailure(1, "저장 실패", NOW)).isFalse();
+        assertThat(job.getResultSaveFailures()).isZero();
+        assertThat(job.getStatus()).isEqualTo(JobStatus.SUCCEEDED);
+    }
 }
