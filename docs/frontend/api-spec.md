@@ -16,7 +16,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | 시각 | ISO 8601 문자열 (`2026-11-25T09:30:00`) |
 | 금액 단위 | 원본 표는 공시 단위 그대로(`unit`). 비교·근거 값은 서버가 십억원으로 변환(`UNIT_TO_BIL`). 화면은 표시만 바꿈 |
 | 오래 걸리는 작업 | `202` + `{ jobId }`를 받고 `GET /api/v1/jobs/{id}`를 `SUCCEEDED`·`FAILED`까지 폴링한 뒤 결과 조회 API를 부름. 콜백 없음 |
-| 권한 | 페이지(캔버스)마다 소유자 · 편집 · 보기 권한(3.9). 권한 없는 페이지는 403. 분석 세션은 요청한 본인만 조회. 공용 문서 수집·삭제는 관리자만 |
+| 권한 | 페이지(캔버스)마다 소유자 · 편집 · 보기 권한(3.9). 공유 설정은 소유자만 바꾼다. 일반 액세스(회사 전체 보기)는 없다. 권한 없는 페이지는 403. 분석 세션은 요청한 본인만 조회. 공용 문서 수집·삭제는 관리자만 |
 | 용어 | 화면의 "페이지" = 캔버스 + 분석. API 경로는 `canvases`를 그대로 쓴다 |
 
 ### 1.1 화면별 호출 요약
@@ -91,7 +91,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 ### 3.1 `GET /api/v1/canvases`
 
-내가 볼 수 있는 캔버스 목록(캔버스 홈 C00). 소유한 것, 초대받은 것, 일반 액세스(부서 · 회사 전체)로 열리는 것을 모두 담는다. 최근 수정 순.
+내가 볼 수 있는 캔버스 목록(캔버스 홈 C00). 소유한 것과 초대받은 것을 담는다. 최근 수정 순.
 
 | 쿼리 | 설명 | 타입 |
 |---|---|---|
@@ -109,7 +109,6 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | `cardCount` | 카드 수 | number |
 | `ownerId` | 소유자 사번 | string |
 | `myRole` | 내 권한 `owner` / `edit` / `view` | string |
-| `access` | 일반 액세스 `invited` / `company`(회사 전체 보기) | string |
 | `quarter` | 분기 (예: `2026년 1분기`). 상단 제목 옆에 표시 | string |
 | `thumbnail` | 홈 미리보기. 카드 `{ kind, x, y }` 목록 또는 이미지 URL (정해야 함) | object |
 
@@ -121,7 +120,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | `quarter` | 분기 (예: `2026년 1분기`) | string |
 | `editorIds` | 편집 권한을 줄 사번 목록 (C14 편집할 사람) | string[] |
 
-응답은 3.1의 항목 하나. `201`. 만든 사람이 소유자가 되고, `editorIds`는 `edit`으로 초대되며, 일반 액세스는 `invited`(초대한 사람만)로 시작한다.
+응답은 3.1의 항목 하나. `201`. 만든 사람이 소유자가 되고, `editorIds`는 `edit`으로 초대된다.
 
 ### 3.3 `PATCH /api/v1/canvases/{id}` · `DELETE /api/v1/canvases/{id}`
 
@@ -150,7 +149,9 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 ### 3.5 카드·연결 타입
 
-좌표(`x`, `y`)는 화면 배치용이며 컨텍스트에 들어가지 않는다.
+좌표(`x`, `y`)는 화면 배치용이며 컨텍스트에 들어가지 않는다. 카드·연결 ID는 화면이 UUID로 만든다(여러 사람이 동시에 만들어도 겹치지 않게).
+
+여러 사람이 고칠 수 있는 글은 버전을 갖는다: 메모 카드 본문 `textVersion`, 카드 메모 `memoVersion`, 선 메모 `memoVersion`(캔버스 열기 응답에 함께 온다).
 
 | `kind` | 필드 | 설명 |
 |---|---|---|
@@ -167,20 +168,24 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 ### 3.6 `POST /api/v1/canvases/{id}/events`
 
-카드·연결 조작을 묶어 보낸다. 화면은 150ms 동안 모은 이벤트를 한 번에 보낸다. 실패하면 화면이 같은 묶음을 다음에 다시 보낸다.
+카드·연결 조작을 묶어 보낸다. 화면은 150ms 동안 모은 이벤트를 한 번에 보낸다. 실패하면 화면이 같은 묶음을 **같은 `requestId`로** 다시 보낸다(서버는 한 번만 저장).
+저장 규칙은 `docs/backend/api-spec.md` 5장, 결정 이유는 `docs/backend/canvas.md`.
 
 | 요청 | 설명 | 타입 |
 |---|---|---|
+| `requestId` | 묶음마다 화면이 만드는 UUID. 같은 묶음을 다시 보낼 때는 같은 값 | string |
 | `events` | 이벤트 목록. 작성자는 토큰의 사용자 | Event[] |
 
 | HTTP | 상황 | 화면 문구 |
 |---|---|---|
-| 403 | 보기 권한 | "보기 권한만 있습니다." (화면은 보기 권한이면 편집 도구를 숨기고 보내지 않음) |
+| 403 | 보기 권한 (`K002`) | "보기 권한만 있습니다." (화면은 보기 권한이면 편집 도구를 숨기고 보내지 않음) |
+| 409 | 다른 사람이 같은 글을 먼저 고침 (`K003`). `data`: `{ targetId, field, text, version }` | "다른 사람이 먼저 고쳤습니다. 최신 글로 바꿨으니 확인한 뒤 다시 고쳐 주세요." 충돌한 글만 최신으로 바꾸고 나머지 조작은 새 `requestId`로 다시 보냄 |
 
 | 응답 `data` | 설명 | 타입 |
 |---|---|---|
 | `lastSeq` | 반영 후 마지막 이벤트 번호 | number |
 | `firstChangedLayer` | 처음 바뀐 컨텍스트 층 (`L1_sources` / `L2_workspace` / `L3_edits` / `null`) | string \| null |
+| `textVersions` | 이번 묶음으로 바뀐 글의 새 버전 `{ 카드·연결 ID: { text?, prompt? } }` | object |
 
 이벤트 종류 (`type`과 필드):
 
@@ -195,10 +200,10 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | `revert_card` | `cardId` | — |
 | `add_doc` | `cardId`, `docId` | 자료를 올림 |
 | `add_dash` | `cardId`, `panel` | 대시보드를 올림 |
-| `add_memo` | `cardId`, `text`, `author` | 메모를 남김 |
-| `edit_memo` | `cardId`, `text` | 메모를 고침 |
-| `set_card_memo` | `cardId`, `text` | 카드 메모를 고침. 빈 값이면 지움 |
-| `set_link_memo` | `linkId`, `text` | 선 메모를 고침. 빈 값이면 지움 |
+| `add_memo` | `cardId`, `text`, `author` | 메모를 남김. 서버 모드에서는 `author`를 보내지 않고 서버가 토큰으로 정함 |
+| `edit_memo` | `cardId`, `text`, `baseVersion` | 메모 카드 본문을 고침 |
+| `set_card_memo` | `cardId`, `text`, `baseVersion` | 카드 메모를 고침. 빈 값이면 지움 |
+| `set_link_memo` | `linkId`, `text`, `baseVersion` | 선 메모를 고침. 빈 값이면 지움 |
 | `create_compare` | `cardId`, `sources`, `view?` | 비교 카드(`view: compare`, 기본) 또는 시각화 카드(`view: chart`)를 만듦 |
 | `confirm_mapping` | `conceptId`, `company`, `cells`, `accepted` | 계정 대응 확정(`true`) · 거부(`false`) · 취소(`null`). 같은 개념 · 회사의 이전 값을 덮어씀 |
 | `add_link` | `linkId`, `source`, `target` | 카드를 연결함 |
@@ -209,15 +214,18 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 예전 저장본 읽기: 프롬프트 카드(`kind: prompt`)는 메모 카드로, 카드 · 연결의 `prompt`는 `memo`로, 이벤트 `add_prompt` · `edit_prompt` · `set_card_prompt` · `set_link_prompt`는 `add_memo` · `edit_memo` · `set_card_memo` · `set_link_memo`로 바꿔 재생한다. `set_memo_type`, `set_link`와 `add_link`의 `rel`, `add_memo`의 `memoType`은 무시한다.
 
 ```json
-{ "events": [
-  { "type": "add_card", "cardId": "c1", "tableId": "SKT_2026Q1_is", "rows": [3, 5], "cols": [0, 1] },
-  { "type": "add_link", "linkId": "l2", "source": "c1", "target": "c3" },
-  { "type": "set_link_memo", "linkId": "l2", "text": "이 IR 수치가 표의 감소를 설명함" },
-  { "type": "create_compare", "cardId": "c7", "sources": ["c1", "c4"], "view": "chart" }
+{ "requestId": "6f1c2a1e-6c1e-4d0f-9a43-7d3f8a0b9c21",
+  "events": [
+  { "type": "add_card", "cardId": "0d9f…", "tableId": "SKT_2026Q1_is", "rows": [3, 5], "cols": [0, 1], "x": 120, "y": 80 },
+  { "type": "add_link", "linkId": "5b2e…", "source": "0d9f…", "target": "a71c…" },
+  { "type": "set_link_memo", "linkId": "5b2e…", "text": "이 IR 수치가 표의 감소를 설명함", "baseVersion": 0 },
+  { "type": "create_compare", "cardId": "c3d4…", "sources": ["0d9f…", "e8a1…"], "view": "chart", "x": 740, "y": 640 }
 ] }
 ```
 
-카드·연결 ID(`c{n}`, `l{n}`)는 데모처럼 화면이 만든다. 여러 사람이 동시에 고칠 때 ID가 겹치지 않게 하는 방식은 backend와 정한다.
+- 새 카드를 만드는 이벤트(`add_card`, `add_doc`, `add_dash`, `add_memo`, `create_compare`)는 위치(`x`, `y`)를 함께 보낸다. 시각화 카드도 `create_compare`(`view: chart`)로 만든다.
+- `baseVersion`은 고치기 시작할 때 알고 있던 그 글의 버전이다. 한 묶음 안에서 같은 글을 여러 번 고쳤으면 마지막 것만 보낸다(같은 카드의 이동도 마지막 위치만).
+- 화면 안(목업 계산 엔진)에서는 기존 snake_case 형식(`card_id`)을 쓰고, 서버로 보낼 때만 이 형식으로 바꾼다(`frontend/src/sync/protocol.ts`).
 
 ### 3.7 `GET /api/v1/canvases/{id}/activities`
 
@@ -237,26 +245,40 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 ### 3.9 `GET /api/v1/canvases/{id}/shares` · `PUT /api/v1/canvases/{id}/shares`
 
-공유 창(C13). `GET`은 권한 있는 사람 전원(활동 로그 "이 캔버스 사람"에도 씀), `PUT`은 소유자 · 편집 권한만 부른다.
+공유 창(C13). `GET`은 권한 있는 사람 전원(활동 로그 "이 캔버스 사람"에도 씀), `PUT`은 소유자만 부른다.
 
 | 필드 | 설명 | 타입 |
 |---|---|---|
 | `ownerId` | 소유자 사번 (`GET`만, 바꿀 수 없음) | string |
 | `members` | 직접 초대한 사람 `{ userId, role }`. `role`은 `edit` / `view`. 목록에서 빠지면 권한 삭제 | object[] |
-| `access` | 일반 액세스 `invited`(초대한 사람만) / `company`(회사 전체, 보기 권한 고정). 편집 권한은 `members`로만 줌 | string |
 
-`GET` 응답에는 일반 액세스로 권한을 받은 사람까지 펼친 `people[]`(`{ id, name, dept, job, role }`)를 함께 준다.
+`GET` 응답에는 소유자와 초대한 사람을 펼친 `people[]`(`{ id, name, dept, job, role }`)를 함께 준다.
 
 ```json
-{ "members": [{ "userId": "2001", "role": "view" }], "access": "invited" }
+{ "members": [{ "userId": "2001", "role": "view" }] }
 ```
 
-권한 계산 순서: 소유자 → 직접 초대 권한 → 일반 액세스. 바꾼 결과는 활동 로그에 "공유 권한을 바꿈"으로 남는다.
+권한 계산 순서: 소유자 → 직접 초대 권한. 둘 다 아니면 권한 없음. 바꾼 결과는 활동 로그에 "공유 권한을 바꿈"으로 남는다.
 
 | HTTP | 상황 | 화면 문구 |
 |---|---|---|
-| 403 | 보기 권한으로 `PUT` | 화면은 공유 창을 읽기 전용으로 보여 줌 ("보기 권한이라 공유 설정을 바꿀 수 없습니다.") |
+| 403 | 소유자가 아닌 사람(편집 · 보기 권한)이 `PUT` | 화면은 공유 창을 읽기 전용으로 보여 줌 ("공유 설정은 소유자만 바꿀 수 있습니다.") |
 | 404 | 없는 사번 | "찾는 사람이 없거나 이미 권한이 있습니다." |
+
+### 3.10 실시간 연결 (WebSocket · STOMP)
+
+다른 사람의 변경·커서·접속자는 WebSocket(STOMP)으로 받는다. 주소·메시지 형식은 `docs/backend/api-spec.md` 5.5·5.6, 선정 이유는 11장.
+
+| 화면 동작 | 방법 |
+|---|---|
+| 연결 | `wss://{호스트}/api/v1/ws`, `CONNECT` 헤더 `Authorization: Bearer {토큰}`. 끊기면 3초 뒤 다시 연결 |
+| 캔버스 열기 | 구독(`/topic/canvases/{id}/events` 등) → `GET /canvases/{id}` → `lastSeq` 뒤 메시지만 반영 |
+| 다른 사람 변경 | `firstSeq`가 내 마지막 번호 + 1이면 반영, 아니면 캔버스를 다시 조회. 내 `requestId`면 번호만 올림 |
+| 커서 | 마우스 위치를 캔버스 좌표로 `/app/canvases/{id}/cursor`에 50ms마다 최대 1번. 받은 커서 중 내 것은 무시 |
+| 접속자 | `/app/canvases/{id}/presence`로 지금 목록을 한 번 받고, `/topic/canvases/{id}/presence`로 들어옴·나감 반영 |
+| 권한 알림 | `/user/queue/canvases`: `revoked`·`deleted`면 캔버스 홈으로, `role_changed`면 편집 도구를 권한에 맞춤 |
+
+화면 구현은 `frontend/src/sync/`(연동 계층)이고, 환경변수 `VITE_CANVAS_SYNC=server`일 때만 켜진다(기본은 목업). 로그인(#34) 전에는 서버가 연결을 거절하므로 목업으로 동작한다.
 
 ## 4. 공시
 
@@ -485,7 +507,10 @@ C16 데이터 입력 창에서 파일을 올린다. `multipart/form-data`, 필�
 
 | 상황 | 화면 동작 |
 |---|---|
-| 이벤트 전송 실패 | 묶음을 큐 앞에 되돌리고 "조작을 반영하지 못했습니다. 새로고침 후 다시 시도하세요." |
+| 이벤트 전송 실패 (네트워크·5xx) | 같은 `requestId`로 다음에 다시 보냄. "서버에 연결하지 못했습니다. 연결되면 다시 보냅니다." |
+| 글 충돌 (`409 K003`) | 충돌한 글을 최신으로 바꾸고 "다른 사람이 먼저 고쳤습니다. 최신 글로 바꿨으니 확인한 뒤 다시 고쳐 주세요." |
+| 다른 사람 변경의 번호 누락, 재접속 | 캔버스를 다시 조회 |
+| 권한 회수·캔버스 삭제 알림 | 캔버스 홈으로 가고 "이 캔버스를 볼 권한이 없습니다." 또는 "캔버스가 삭제되었습니다." |
 | 비교 조회 실패 | 이전 결과를 그대로 보여 줌 |
 | 카드 태그 조회 실패 | 이전 태그를 유지 |
 | 401 | 로그인 화면으로 |
@@ -497,8 +522,6 @@ C16 데이터 입력 창에서 파일을 올린다. `multipart/form-data`, 필�
 - 공유 알림 (초대받은 사람에게 알릴지, 알린다면 메일 · 사내 메신저 중 무엇으로)
 - 소유권 넘기기, 소유자 퇴사 · 부서 이동 시 처리
 - 공유 링크 복사 기능 여부
-- 동시 편집 시 카드·연결 ID 발급과 충돌 처리 (서버 발급 vs 화면 발급)
-- 다른 팀원의 조작을 화면에 반영하는 방식 (폴링 주기, `GET /canvases/{id}/events?after={seq}` 여부)
 - 분석 작업 결과를 받는 경로 (`GET /jobs/{id}`에 `analysisId`를 넣을지, 7.1 목록을 다시 부를지)
 - 다음 분기 자료가 "들어왔다"를 판단하는 방법과 평가를 자동으로 돌릴지
 - 분석 세션을 협업자에게 공유하는 방법 (지금은 본인만)

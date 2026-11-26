@@ -9,17 +9,17 @@ from fastapi.responses import JSONResponse
 
 from config import Settings
 from db import init_db
-from jobs.registry import PipelineRegistry, build_fake_registry
+from jobs.registry import PipelineRegistry, build_registry
 from jobs.repository import JobRepository
 from jobs.router import router as jobs_router
-from jobs.service import JobService
+from jobs.service import JobService, UnsupportedJobTypeError
 from jobs.worker import JobWorker, WorkerUnavailableError
 
 logger = logging.getLogger(__name__)
 
 
 def create_app(settings: Settings | None = None, registry: PipelineRegistry | None = None) -> FastAPI:
-    """settings·registry는 테스트에서 주입한다. 생략하면 환경변수와 가짜 파이프라인을 쓴다."""
+    """settings·registry는 테스트에서 주입한다. 생략하면 환경변수와 설정(PIPELINE_MODE)에 맞는 파이프라인을 쓴다."""
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -30,7 +30,7 @@ def create_app(settings: Settings | None = None, registry: PipelineRegistry | No
         repository = JobRepository(resolved.db_path)
         worker = JobWorker(
             repository,
-            registry or build_fake_registry(resolved.fake_pipeline_mode, resolved.fake_pipeline_delay_seconds),
+            registry or build_registry(resolved),
             resolved.max_concurrent_jobs,
             shutdown_timeout=resolved.shutdown_timeout_seconds,
             store_retry_attempts=resolved.store_retry_attempts,
@@ -66,6 +66,14 @@ def create_app(settings: Settings | None = None, registry: PipelineRegistry | No
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={"detail": "서버가 작업을 받을 수 없는 상태입니다."},
+        )
+
+    @app.exception_handler(UnsupportedJobTypeError)
+    async def unsupported_job_type_handler(request: Request, exc: UnsupportedJobTypeError) -> JSONResponse:
+        # backend는 시작 호출의 4xx/5xx를 모두 markFailed로 끝낸다(ai-contract 2.5)
+        return JSONResponse(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            content={"detail": "아직 지원하지 않는 작업입니다."},
         )
 
     @app.exception_handler(Exception)

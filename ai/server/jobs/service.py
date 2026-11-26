@@ -14,6 +14,10 @@ logger = logging.getLogger(__name__)
 RESTART_ERROR_MESSAGE = "서버 재시작으로 작업이 중단되었습니다."
 
 
+class UnsupportedJobTypeError(Exception):
+    """실제 모드에서 파이프라인이 아직 등록되지 않은 작업 종류. 작업을 만들지 않고 501로 거절한다."""
+
+
 class JobService:
     def __init__(self, repository: JobRepository, worker: JobWorker) -> None:
         self._repository = repository
@@ -36,6 +40,9 @@ class JobService:
                 else None
             ),
         )
+        if not self._worker.supports(job_type):
+            # TODO(#86 후속): 분석·예측 파이프라인이 ai 등록 함수에 붙으면 이 거절은 생기지 않는다
+            raise UnsupportedJobTypeError(job_type)
         if not self._worker.is_accepting:
             raise WorkerUnavailableError
         self._repository.create(job_id, job_type)

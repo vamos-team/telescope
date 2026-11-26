@@ -7,10 +7,13 @@ services:
     env_file:
       - path: .env
         required: false
+    # .env의 SPRING_DATASOURCE_*는 호스트 bootRun용(localhost)이라, 컨테이너에서는 서비스명(postgres)으로 덮어쓴다
     environment:
-      MYSQL_HOST: mysql
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-telescope}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-telescope}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-telescope}
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
     volumes:
       - ./data:/app/data
@@ -35,25 +38,27 @@ services:
       - ./data:/app/data
     profiles: ["batch"]
 
-  # 로컬 개발용 MySQL. backend 컨테이너는 서비스명(mysql)으로 접속하고,
-  # 호스트에서 ./gradlew bootRun 할 때는 .env의 MYSQL_HOST(localhost)로 붙여 쓴다.
+  # 로컬 개발용 PostgreSQL. 배포 환경(RDS PostgreSQL 18)과 같은 메이저 버전.
+  # backend 컨테이너는 서비스명(postgres)으로 접속하고,
+  # 호스트에서 ./gradlew bootRun 할 때는 .env의 SPRING_DATASOURCE_URL(localhost)로 붙여 쓴다.
   # .env가 없어도(CI 등) 기본값으로 뜰 수 있도록 environment에 기본값을 둔다.
-  mysql:
-    image: mysql:8.4
+  # RDS에 붙으려고 pg-proxy를 5432로 port-forward하는 중이면 POSTGRES_PORT를 다른 값으로 바꾼다.
+  postgres:
+    image: postgres:18
     environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-telescope}
-      MYSQL_USER: ${MYSQL_USER:-telescope}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-telescope}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-telescope}
+      POSTGRES_DB: ${POSTGRES_DB:-telescope}
+      POSTGRES_USER: ${POSTGRES_USER:-telescope}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-telescope}
     ports:
-      - "${MYSQL_PORT:-3306}:3306"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
+      # postgres 18 이미지부터 데이터 볼륨 경로가 /var/lib/postgresql로 바뀌었다
+      - postgres_data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
 volumes:
-  mysql_data:
+  postgres_data:

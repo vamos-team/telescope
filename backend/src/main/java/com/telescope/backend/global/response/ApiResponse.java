@@ -25,4 +25,9 @@ public class ApiResponse<T> {
     public static ApiResponse<Void> fail(ErrorCode errorCode, String message) {
         return new ApiResponse<>(null, new ErrorResponse(errorCode.getCode(), message));
     }
+
+    /** 실패이지만 화면이 다시 그릴 데이터를 함께 돌려줄 때 쓴다(예: 글 충돌 시 현재 글). */
+    public static ApiResponse<Object> fail(ErrorCode errorCode, String message, Object data) {
+        return new ApiResponse<>(data, new ErrorResponse(errorCode.getCode(), message));
+    }
 }

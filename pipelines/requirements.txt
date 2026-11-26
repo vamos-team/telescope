@@ -6,6 +6,8 @@ openpyxl==3.1.5          # Excel
 python-pptx==1.0.2       # PowerPoint
 openai==3.46.0           # VLM 처리기(pipelines/vision). 키(OPENAI_API_KEY)가 없으면 쓰지 않는다
 
+duckdb==2.0.0            # 재무 수치 DB(loaders/xbrl.py가 XBRL 원본을 적재). 기존 파일은 새로 만든 뒤 교체
+
 selenium==4.52.0         # 수집: JS 렌더링 페이지 (Chrome 필요, 드라이버는 Selenium Manager가 받는다)
 
 # 항목 매칭(parsers/align.py) 임베딩. 모델(kf_deberta_ft_v1)이 6.3.0으로 저장돼 5.x로는 읽히지 않는다

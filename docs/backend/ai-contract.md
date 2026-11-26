@@ -214,6 +214,10 @@ backend                                   ai
   없다. 이 재구성(`getJob`을 어떻게 나눌지, 대상 도메인과의 연결 지점을 어디에 둘지)은 공통
   `job` 도메인과 각 대상 도메인(분석/예측/자료 준비)이 함께 정할 몫이라 **후속 이슈로 올린다
   (4번).**
+- **반영 (#63)**: `getJob`은 ai가 `SUCCEEDED`를 주면 작업 행을 잠근 한 트랜잭션에서 대상 도메인의
+  `JobResultHandler`가 결과를 저장하고 완료를 확정한다. 저장이 실패하면 둘 다 되돌리고 다음 조회에서
+  같은 `jobId`로 다시 받아 재시도한다(실패 횟수 한도 기본 5회, 넘으면 `FAILED`). ai/server는 끝난 작업의
+  결과를 SQLite에 계속 보관하므로(#48) 재시도할 수 있다. 세부는 `job.md` 3.3.
 
 ### 2.8 중복 요청 처리, 동시 실행 개수 — 제안
 
@@ -272,33 +276,96 @@ backend                                   ai
   - 걸러낸 뒤 분석 전체를 실패로 볼지, 그 항목만 버리고 나머지는 저장할지는 **열림**
     (제안: 그 항목만 버리고 경고 로그를 남긴다 — 전체 실패는 사용자 경험상 과하다).
 
-### 2.10 호출 인증, 타임아웃 — 제안
+### 2.10 호출 인증, 타임아웃 — 구현 (#114)
 
 - **인증**: backend ↔ ai는 같은 신뢰 경계 안의 내부 호출이다(외부에 노출되지 않음). 공유
   비밀키를 헤더로 보내는 방식을 제안한다: `X-Internal-Api-Key: {값}`. 값은 환경변수로 주입하고
   (`.env.example`에는 변수명만, 루트 `CLAUDE.md` 6번) backend·ai 양쪽에 같은 값을 둔다.
-  변수명 제안: backend `AI_SERVICE_API_KEY`, ai `INTERNAL_API_KEY`(ai 쪽 명명은 ai 담당자
-  재량). mTLS 등 더 강한 방식은 MVP 범위를 넘는다고 본다.
-- **타임아웃(제안, 숫자는 조정 가능)**: 연결 타임아웃 2초(공통). 시작 호출(`startXxx`)은
+  변수명: backend `AI_SERVICE_API_KEY`, ai `INTERNAL_API_KEY`. mTLS 등 더 강한 방식은 MVP 범위를 넘는다고 본다.
+- **backend 설정** (`infra.python-ai-client`, #114): `mode`(`AI_SERVICE_MODE`, 기본 `stub` / 실제 호출 `http`),
+  `base-url`(`AI_SERVICE_BASE_URL`), `api-key`(`AI_SERVICE_API_KEY`). `http`인데 주소나 비밀키가 비어 있으면 기동 시점에 실패한다.
+  구현은 `PythonAiClientHttp`(Spring `RestClient` + JDK HTTP 클라이언트).
+- **HTTP/1.1 고정**: JDK HTTP 클라이언트 기본값(HTTP/2)은 `http://` 주소에 h2c 업그레이드를 시도하는데,
+  ai/server(uvicorn)는 그 요청의 본문을 받지 못해 작업 시작이 `422`로 거절됐다(로컬 확인). backend는 HTTP/1.1로만 보낸다.
+- **타임아웃(설정으로 조정 가능)**: 연결 타임아웃 2초(공통). 시작 호출(`startXxx`)은
   읽기 타임아웃 5초 — 작업을 큐에 올리는 것만 하므로 오래 걸리지 않아야 한다. 상태 조회는
   읽기 타임아웃 3초 — 폴링마다 호출되므로 더 짧게 잡는다. 분석·예측 자체의 실행 시간은
   비동기 처리로 가려지므로 이 타임아웃들과 무관하다.
 - 타임아웃이 발생하면 2.5의 "일시 오류"로 처리한다(시작 호출은 `markFailed`, 상태 조회는
   상태 유지 후 재시도).
+- **오류 구분(구현)**: 상태 조회 `404`만 `AiJobNotFoundException`이고, 그 밖의 실패(타임아웃·연결 실패·`5xx`·형식이 틀린 응답)는
+  `AiCallFailedException`이다. 시작 호출의 `4xx`/`5xx`도 `AiCallFailedException`이며, 미등록 작업의 `501`(#86)은
+  "ai 서비스가 아직 지원하지 않는 작업입니다."로 구분한다. 예외 메시지와 로그에는 요청·응답 본문과 비밀키를 넣지 않는다.
 
-### 2.11 파일 접근 방식 (`fileStorageKey`, 공유 볼륨) — 제안 + 열림(infra 협의 필요)
+### 2.10.1 결정 기록: backend의 실제 HTTP 호출 구현 (#114, PR #118)
 
-- 지금은 단일 서버 구성이고 `docker-compose.yml`의 `./data` 볼륨을 backend 컨테이너가
-  마운트한다. `FileStorage`(로컬 구현)가 반환하는 `fileStorageKey`는 이 볼륨 기준 상대
-  경로다. ai 컨테이너도 같은 볼륨을 마운트하면 같은 키로 파일을 읽을 수 있다는 전제다.
-- K8s 전환(#43)은 backend/frontend까지만 끝났고(`infra/k8s/*.yaml`, DB는 #76에서 RDS PostgreSQL로 이전), ai·pipelines용
-  매니페스트는 아직 없다. 공유 볼륨 전제가 K8s에서도 그대로 성립하려면 backend와 ai 파드가
-  같은 PVC를 마운트해야 하는데, 이건 **이 문서(backend ↔ ai 규약)만으로 결정할 수 없고
-  infra 담당 영역과 함께 정해야 한다.** `CLAUDE.md` 2번 규칙에 따라 이 자리에서 infra
-  파일을 직접 건드리지 않고, 후속 이슈로만 남긴다(4번).
-- 이후 객체 스토리지(S3 등)로 전환하면 `fileStorageKey`는 버킷 키가 되고 ai가 자격증명으로
-  직접 접근하는 모양으로 바뀐다. 전환 시점은 **열림**(문서 보관 정책 미정과도 연결 —
-  루트 `CLAUDE.md` 7번).
+출발점: `PythonAiClient`에는 가짜 구현(`PythonAiClientStub`)뿐이라 ai/server가 떠 있어도 backend가 부르지 않았다.
+
+#### H1. HTTP 클라이언트는 Spring `RestClient` + JDK HTTP 클라이언트
+
+| 후보 | 판단 |
+|---|---|
+| **(a) `RestClient` + `JdkClientHttpRequestFactory`** (선택) | Spring Framework에 들어 있어 의존성 추가가 없다. 동기 호출이라 기존 `JobService` 흐름과 맞다 |
+| (b) `WebClient` | 비동기·리액티브 의존성(webflux)이 필요하고, 호출하는 쪽이 모두 동기다 |
+| (c) Boot의 자동 구성 `RestClient.Builder` | Boot 4에서는 별도 모듈(`spring-boot-restclient`)이라 의존성이 늘고, 이 클라이언트에만 쓸 설정이라 직접 만드는 편이 단순하다 |
+
+- **클라이언트를 둘 두는 이유**: 시작 호출(읽기 5초)과 상태 조회(읽기 3초)의 타임아웃이 다르다(2.10). 주소·헤더는 같고 읽기 타임아웃만 다른 클라이언트 두 개를 만든다.
+
+#### H2. 테스트는 `MockRestServiceServer`로 하되, 실제 연결 테스트를 하나 더 둔다
+
+| 후보 | 장점 | 단점 |
+|---|---|---|
+| **(a) `MockRestServiceServer`** (선택, 주 테스트) | spring-test에 들어 있다. 경로·헤더·본문·응답 변환을 짧게 확인한다 | 실제 HTTP 클라이언트(요청 팩토리)를 바꿔 끼우므로 연결 수준의 문제를 보지 못한다 |
+| (b) 로컬 HTTP 서버 | 타임아웃·연결까지 본다 | 테스트 코드가 길어진다 |
+
+- 사용자 결정은 (a)였다. 그런데 (a)의 단점이 실제로 드러났다(H3). 그래서 JDK 내장 HTTP 서버(`com.sun.net.httpserver`, 의존성 추가 없음)로 실제 연결을 보는 테스트 하나(`PythonAiClientWireTest`)를 더 뒀다. 타임아웃은 로컬 확인으로 봤다.
+
+#### H3. JDK HTTP 클라이언트를 HTTP/1.1로 고정한다 (로컬 확인에서 발견)
+
+- **발견 과정**:
+  1. 목 테스트는 모두 통과했다.
+  2. 로컬에서 실제 ai/server(가짜 파이프라인 모드)를 띄우고 backend 구현체로 작업 시작을 불렀다.
+  3. ai/server가 `422`(`body: Field required`)로 거절했다. 요청 본문이 도착하지 않았다.
+  4. 원인: JDK HTTP 클라이언트의 기본 버전은 HTTP/2다. `http://` 주소에는 h2c 업그레이드(`Upgrade: h2c`)를 시도하는데, ai/server(uvicorn)는 그 요청의 본문을 받지 못했다.
+  5. `HttpClient.Version.HTTP_1_1`로 고정하자 같은 확인이 모두 통과했다.
+  6. 회귀 테스트(`PythonAiClientWireTest`)가 수정 전 코드에서 `Upgrade: h2c` 헤더 때문에 실패하는 것을 확인했다.
+- **버린 대안**: ai/server 쪽에서 h2c를 받게 하기. uvicorn 설정을 바꿔야 하고, 내부 호출에 HTTP/2가 필요한 이유도 없다.
+
+#### H4. 오류는 "없는 작업"과 "그 밖의 실패" 둘로만 나눈다
+
+- 상태 조회 `404`만 `AiJobNotFoundException`(작업 `FAILED` 확정)이다. 타임아웃·연결 실패·`5xx`·형식이 틀린 응답은 모두 `AiCallFailedException`(일시 오류, 다음 폴링에서 재시도)이다. 둘을 섞으면 "무한 재시도"나 "성급한 실패 확정"이 생긴다(2.5).
+- 시작 호출의 `4xx`/`5xx`는 모두 `AiCallFailedException`이고 호출한 쪽이 `markFailed`로 끝낸다. 그중 `501`(#86 미등록 작업)만 "ai 서비스가 아직 지원하지 않는 작업입니다."로 문구를 나눴다. 사용자가 "고장"과 "아직 없음"을 구분할 수 있게 하려는 것이다.
+- `AiCallFailedException`을 새로 둔 이유: 기존 `JobService`는 `AiJobNotFoundException`이 아닌 `RuntimeException`을 일시 오류로 본다. 그 규칙을 바꾸지 않으면서, 호출 실패를 다른 런타임 오류(버그 등)와 로그에서 구분하려고 이름 있는 예외를 뒀다.
+- 응답이 `2xx`여도 `jobId`나 `status`가 비어 있으면 실패로 본다.
+
+#### H5. 설정 이름
+
+- `AI_SERVICE_BASE_URL`, `AI_SERVICE_API_KEY`: 2.10의 제안 그대로다. 값은 ai/server의 `INTERNAL_API_KEY`와 같은 Secret에서 읽는다(infra PR #117).
+- `AI_SERVICE_MODE`(`stub`/`http`)는 새로 붙였다. 없으면 배포에서 relaxed binding 이름(`INFRA_PYTHONAICLIENT_MODE`)을 써야 해서 다른 두 값과 이름이 어긋난다.
+- `http`인데 주소나 비밀키가 비어 있으면 기동 시점에 실패한다. 설정이 잘못된 채 떠서 모든 작업이 시작 실패로 쌓이는 것보다 낫다.
+- 모드 기본값은 `stub`이다. 로컬 개발과 테스트는 ai/server 없이 돌아간다.
+
+#### H6. 비밀키와 본문을 남기지 않는다
+
+- 예외 메시지와 로그에는 요청·응답 본문을 넣지 않는다. 상태 코드와 예외 종류만 쓴다. ai의 `422` 응답처럼 본문에 요청 필드 위치가 담길 수 있고, 작업 실패 사유는 사용자에게 그대로 보이기 때문이다.
+- 설정 객체(`PythonAiClientProperties`)의 `toString`은 비밀키를 `****`로 가린다(설정 출력·디버그 로그 대비).
+
+### 2.11 파일 접근 방식 (`fileStorageKey`) — 결정 (2026-11-26, #86)
+
+| 자료 | 저장 위치 (배포) | 관리 |
+|---|---|---|
+| 사용자 입력 파일 (예산서, 근거자료 업로드) | S3 (`S3_BUCKET`) — backend `FileStorage` (#89) | backend |
+| 공시 원본 (DART 등, `pipelines/collectors` 수집분) | ai 쪽 저장소 | ai |
+
+- `fileStorageKey`는 backend `FileStorage`가 발급한 키다. 형식은 `<UUID><확장자>`이고, S3에서는 버킷
+  최상위 키, 로컬에서는 backend 저장 폴더(`FILE_STORAGE_DIR`) 기준 파일 이름이다.
+- 자료 준비 작업에서는 ai/server가 이 키로 원본을 로컬 경로로 준비해 파이프라인에 넘긴다
+  (`ai-server-design.md` 2.6.1). ai 파이프라인 코드는 S3를 직접 다루지 않는다.
+- 그래서 ai/server 실행 환경에는 S3 읽기 권한(IRSA)과 `S3_BUCKET`·`AWS_REGION`이 필요하다.
+  ai/server의 K8s 매니페스트와 권한 구성은 infra 담당이다(아직 없음).
+- backend는 공시 원본을 저장하거나 S3에 올리지 않는다.
+- 이전 제안(backend·ai가 같은 공유 볼륨을 마운트)은 쓰지 않는다. 로컬 개발에서만 두 서버가 같은 폴더를 본다.
+- 업로드 원본의 보관·삭제 정책은 아직 정하지 않았다(루트 `CLAUDE.md` 7번).
 
 ### 2.12 파이프라인 호출 방식 (파이썬 함수 호출 여부) — 제안, ai 담당자 최종 합의 필요
 
@@ -326,7 +393,7 @@ backend                                   ai
 | 결과를 "언제" 대상 도메인에 저장하는지(`getJob`과 결과 저장의 관계) | 2.7 | 지금 `getJob`은 `Job.status`만 동기화. 저장 성공 후에만 종료 확정하도록 재구성 필요 |
 | `PredictionRequest`에 `allowedDocumentVersionIds` 추가 여부 | 2.9 | prediction 작업별 이슈에서 최종 확정 |
 | 허용 목록 밖 근거를 걸러낼 때 분석 전체 실패 여부 | 2.9 | 제안: 해당 항목만 버림 |
-| 공유 볼륨(PVC)을 ai/pipelines K8s 매니페스트에 어떻게 구성할지 | 2.11 | infra 담당 영역과 협의 |
+| ai/server K8s 매니페스트와 S3 읽기 권한(IRSA) 구성 | 2.11 | infra 담당 영역과 협의 |
 | 파이프라인 호출 방식(HTTP 최종 확정) | 2.12 | ai 담당자 합의 필요 |
 | 재무 데이터 적재·예측 평가가 이 폴링 패턴을 그대로 쓸지 | 2.4 | 작업별 이슈(datasync, prediction)에서 결정 |
 
@@ -337,12 +404,12 @@ backend                                   ai
 | 영역 | 내용 |
 |---|---|
 | ai | FastAPI 껍데기 구현: 2.4의 엔드포인트, `X-Internal-Api-Key` 검증 미들웨어 |
-| backend | `PythonAiClient` 실제 HTTP 구현체 추가 (`infra.python-ai-client.mode`에 값 추가) |
+| backend | ~~`PythonAiClient` 실제 HTTP 구현체 추가~~ → #114에서 완료(`mode=http`) |
 | backend | `PredictionRequest`에 `allowedDocumentVersionIds` 추가, `AnalysisRequest`의 `profileSnapshotJson`은 profile 패키지 확정 후 정리 |
 | backend | 예측 평가, 재무 데이터 적재용 `PythonAiClient` 메서드 추가 (결과 보관·폴링 패턴 적용 여부는 각 작업별 이슈에서 먼저 확정) |
-| backend | `job` 도메인 재구성: `getJob`이 상태 동기화와 결과 저장(대상 도메인 호출)을 묶어서, 저장 성공 후에만 종료 확정하도록 변경 (2.7) |
+| backend | ~~`job` 도메인 재구성: 결과 저장 성공 후에만 종료 확정~~ → #63에서 완료 |
 | backend | 시작 요청 멱등키 설계: 재요청에도 유지되는 키 선정, ai가 기존 jobId를 돌려줬을 때 새 `Job`에 `markStarted`로 연결하는 처리 추가 (2.8) |
-| infra | ai/pipelines K8s 매니페스트, 공유 볼륨(PVC) 구성 — backend/ai 양쪽과 협의 |
+| infra | ai/server K8s 매니페스트, S3 읽기 권한(IRSA)·`S3_BUCKET`·`AWS_REGION` 전달 — backend/ai 양쪽과 협의 |
 | backend/ai 공통 | `AI_SERVICE_API_KEY`/`INTERNAL_API_KEY` 환경변수를 `.env.example`에 추가 |
 
 ## 5. 다시 확인할 시점
@@ -351,6 +418,6 @@ backend                                   ai
 |---|---|
 | ai 담당자 확인 후 | 이 문서의 "제안"·"열림" 표시를 실제 합의 결과로 갱신, 이슈 #51 체크리스트 반영 |
 | ai/pipelines의 FastAPI 껍데기를 만들 때 | 2.4의 경로·응답 형식이 실제 구현과 일치하는지 |
-| infra가 ai/pipelines K8s 매니페스트를 만들 때 | 2.11의 공유 볼륨 전제가 유지되는지 |
+| infra가 ai/server K8s 매니페스트를 만들 때 | 2.11의 S3 읽기 권한과 환경변수가 들어가는지 |
 | prediction 작업별 이슈를 진행할 때 | 2.9의 `allowedDocumentVersionIds` 간극, 2.4의 평가 폴링 여부 |
 | api-spec 문서가 만들어질 때 | 2.5의 에러 코드 접두사(`job.md` 미정 항목과 공유), 폴링 간격 권장값 |

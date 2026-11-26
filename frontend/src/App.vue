@@ -22,6 +22,7 @@ import HomeView from "./components/HomeView.vue";
 import PageInfo from "./components/PageInfo.vue";
 import NewCanvasDialog from "./components/NewCanvasDialog.vue";
 import { useCanvas, quarterOf, type Card, type TableCard } from "./stores/canvas";
+import { SYNC_MODE } from "./sync/config";
 import { api } from "./api";
 import { selfCheck } from "./local/ai";
 
@@ -247,6 +248,22 @@ function clearFlagged() {
 
 const zoom = computed(() => Math.round(flow.viewport.value.zoom * 100));
 const typing = () => !!(document.activeElement as HTMLElement | null)?.closest("input,textarea,select,[contenteditable]");
+
+// ---- 서버 모드: 다른 사람 커서와 접속자 (docs/backend/api-spec.md 5.6) ----
+const realtime = SYNC_MODE === "server";
+/** 다른 사람 커서를 화면 좌표로 바꾼다(캔버스 좌표 × 확대 + 이동). 사람마다 색을 고정한다. */
+const remoteCursors = computed(() => {
+  const { x: vx, y: vy, zoom: z } = flow.viewport.value;
+  return Object.entries(cv.cursors).map(([id, c]) => ({
+    id, left: c.x * z + vx, top: c.y * z + vy, color: `hsl(${(Number(id) * 67) % 360} 70% 45%)`, label: `사용자 ${id}`,
+  }));
+});
+/** 내 마우스 위치를 캔버스 좌표로 바꿔 보낸다(보내는 빈도는 연결 쪽에서 50ms로 제한). */
+function onPointerMove(e: MouseEvent) {
+  if (!realtime) return;
+  const p = flow.screenToFlowCoordinate({ x: e.clientX, y: e.clientY });
+  cv.sendCursor(p.x, p.y);
+}
 const key = (e: KeyboardEvent) => {
   if (!cv.canvasId) return;  // 홈에서는 페이지 단축키 없음
   // ⌘K: 오른쪽 사이드바(자료 검색) 열기 · 닫기
@@ -281,6 +298,8 @@ const staleDot = computed(() => !!cv.latest && cv.latest.sig !== cv.sig);
     <b v-else class="ctitle" :title="cv.readOnly ? cv.canvasName : '두 번 눌러 이름 바꾸기'" @dblclick="renaming = !cv.readOnly">{{ cv.canvasName }}</b>
     <span class="asof" title="기준 시점: 이 시점 이전에 발행된 자료만 예측에 씀">{{ quarterOf(cv.meta) }}</span>
     <div class="acts">
+      <span v-if="realtime && cv.present.length" class="presence" :title="cv.present.map((id) => `사용자 ${id}`).join(', ')">
+        접속 {{ cv.present.length }}명</span>
       <span v-if="cv.readOnly" class="ro-note">보기 전용</span>
       <!-- 화면 전환: 캔버스(사용자) / 분석(AI). 정보 아이콘 옆 -->
       <div class="vsw" role="tablist" aria-label="페이지 화면">
@@ -298,7 +317,7 @@ const staleDot = computed(() => !!cv.latest && cv.latest.sig !== cv.sig);
     <!-- 캔버스 화면 (숨겨도 Vue Flow 상태 유지) -->
     <div v-show="view === 'canvas'" ref="cview" class="cview">
       <LeftPanel v-if="lpOpen" @focus="focusCard" @link="focusLink" @close="lpOpen = false" />
-      <div class="flow-wrap" :class="{ ro: cv.readOnly, spc: !spOpen }" :style="{ '--iz': Math.min(4, 100 / zoom) }" @dragover.prevent @drop.prevent="onDrop">
+      <div class="flow-wrap" :class="{ ro: cv.readOnly, spc: !spOpen }" :style="{ '--iz': Math.min(4, 100 / zoom) }" @dragover.prevent @drop.prevent="onDrop" @mousemove="onPointerMove">
         <!-- 사이드바가 닫혀 있을 때만 헤더 아래 플로팅 버튼. 열려 있으면 접기 버튼은 사이드바 안에 -->
         <button v-if="!lpOpen" class="float fl" data-tip="근거 데이터 · 메모 보기" aria-label="왼쪽 사이드바 보기" @click="lpOpen = true">
           <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2" /><path d="M7.5 3.5v13" /></svg></button>
@@ -364,6 +383,12 @@ const staleDot = computed(() => !!cv.latest && cv.latest.sig !== cv.sig);
             <button class="primary" :disabled="!cv.cards.length" :data-tip="cv.cards.length ? '분석하기 (검토 · 질문 · 평가)' : '카드를 올린 뒤 분석할 수 있어요'" aria-label="분석하기" @click="analyze">
               <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5l1.8 4.4 4.7.4-3.6 3 1.1 4.6L10 12.4l-4 2.5 1.1-4.6-3.6-3 4.7-.4z" /></svg></button>
           </Panel>
+          <!-- 다른 사람 커서: 눌리지 않는 층으로 띄움 -->
+          <div v-if="realtime" class="cursors" aria-hidden="true">
+            <div v-for="c in remoteCursors" :key="c.id" class="cursor" :style="{ left: c.left + 'px', top: c.top + 'px', '--c': c.color }">
+              <svg width="14" height="18" viewBox="0 0 14 18"><path d="M1 1l12 7-5 1.5L5.5 17z" /></svg><span>{{ c.label }}</span>
+            </div>
+          </div>
           <Panel position="bottom-right" class="zoom">
             <button aria-label="축소" @click="flow.zoomOut({ duration: 150 })">−</button>
             <button title="화면에 맞추기" @click="flow.fitView({ padding: 0.1, duration: 300 })">{{ zoom }}%</button>

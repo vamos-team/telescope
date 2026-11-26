@@ -7,6 +7,7 @@ resources:
   - ingress.yaml
   - chroma.yaml
   - pg-proxy.yaml
+  - ai-server.yaml
 images:
   - name: skala-registry.skala-ai.com/p3-1/backend
     newName: 881490135253.dkr.ecr.ap-northeast-2.amazonaws.com/teams/p3-1/app
@@ -14,3 +15,6 @@ images:
   - name: skala-registry.skala-ai.com/p3-1/frontend
     newName: 881490135253.dkr.ecr.ap-northeast-2.amazonaws.com/teams/p3-1/app
     newTag: frontend-placeholder
+  - name: skala-registry.skala-ai.com/p3-1/ai-server
+    newName: 881490135253.dkr.ecr.ap-northeast-2.amazonaws.com/teams/p3-1/app
+    newTag: ai-server-placeholder

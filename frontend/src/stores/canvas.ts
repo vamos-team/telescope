@@ -4,6 +4,21 @@ import { defineStore } from "pinia";
 import { api, docTitle, type CanvasEvent, type Doc } from "../api";
 import { panelOf } from "../local/dashboard";
 import type { Session } from "../local/ai";
+import { SYNC_MODE } from "../sync/config";
+import { Outbox } from "../sync/outbox";
+import { SeqTracker } from "../sync/seq";
+import { applyRemote } from "../sync/apply";
+import { fromServerEvent, type CanvasNotice, type CursorMessage, type EventsMessage, type PresenceMessage } from "../sync/protocol";
+import { openCanvas, postEvents as postServerEvents, versionsOf } from "../sync/http";
+import { connectCanvas, type RealtimeConnection } from "../sync/realtime";
+import { fromSnapshot, replayEvents } from "../sync/snapshot";
+
+// 서버 모드 연동 객체. 반응형 상태(Pinia)에 넣지 않는다(클래스 내부 상태를 프록시로 감싸지 않게).
+let outbox: Outbox | null = null;
+let tracker: SeqTracker | null = null;
+let connection: RealtimeConnection | null = null;
+/** 서버 사용자 ID로 이름을 찾는다. 사용자 API(#34) 전이라 ID만 보인다. */
+const nameOfUser = (id: number | undefined) => (id == null ? "다른 사용자" : `사용자 ${id}`);
 
 // memo: 카드 메모 (카드에 직접 적은 메모). 메모는 한 종류이고, 지시 · 근거 · 의견은 분석(검토)에서 에이전트가 가린다
 export interface TableCard { id: string; kind: "table"; tableId: string; rows: number[]; cols: number[];
@@ -40,17 +55,14 @@ export const who = (name: string) => { const m = memberOf(name); return m ? `${m
 
 // 캔버스(세션) 저장: 카드·연결 스냅숏 + 서버로 보낸 이벤트 로그. 다시 열면 이벤트를 새 세션에 재생한다
 // ponytail: localStorage(같은 브라우저 안에서만 공유). 실제 서비스는 서버 이벤트 저장소
-// 공유(F-08 권한 목업): 소유자, 초대한 사람별 권한, 일반 액세스(초대한 사람만 / 회사 전체 보기)
+// 공유(F-08 권한 목업): 소유자와 직접 초대한 사람별 권한(편집 가능 / 보기 가능)만 둔다.
+// 일반 액세스(회사 전체 보기)는 두지 않는다. 공유 설정은 소유자만 바꾼다 (docs/backend/api-spec.md 4장)
 export type Role = "owner" | "edit" | "view";
-export type Access = "invited" | "company";
 export interface CanvasMeta { id: string; name: string; dept: string; owner: string; updated: string; updatedBy: string; count: number;
-  ownerId?: string; share?: Record<string, "edit" | "view">; access?: Access; quarter?: string }
-// 예전 저장분(공유 필드 없음, 부서 전체)은 초대한 사람만으로 읽음
-export const shareOf = (m: CanvasMeta) => ({ ownerId: m.ownerId ?? memberOf(m.owner)?.id ?? "", share: m.share ?? {},
-  access: (m.access === "company" ? "company" : "invited") as Access });
+  ownerId?: string; share?: Record<string, "edit" | "view">; quarter?: string }
+/** 캔버스의 공유 정보(소유자 ID, 초대한 사람별 권한)를 돌려준다. 예전 저장분(공유 필드 없음)은 소유자만 있는 것으로 읽는다. */
+export const shareOf = (m: CanvasMeta) => ({ ownerId: m.ownerId ?? memberOf(m.owner)?.id ?? "", share: m.share ?? {} });
 export const ROLE: Record<Role, string> = { owner: "소유자", edit: "편집 가능", view: "보기 가능" };
-export const accessText = (m: CanvasMeta) => { const s = shareOf(m);
-  return s.access === "company" ? "회사 전체 보기" : "초대한 사람만"; };
 export const when = (iso: string) => {
   const d = new Date(iso), m = Math.round((Date.now() - d.getTime()) / 60000);
   return m < 1 ? "방금" : m < 60 ? `${m}분 전` : m < 1440 ? `${Math.round(m / 60)}시간 전` : d.toLocaleDateString("ko-KR");
@@ -65,13 +77,12 @@ export function findPeople(q: string, exclude: Set<string>, dept: string) {
   if (!t) return [...rest.filter((m) => m.dept === dept), ...rest.filter((m) => m.dept !== dept)].slice(0, 6);
   return rest.filter((m) => m.id.includes(t) || m.name.includes(t) || m.dept.includes(t)).slice(0, 6);
 }
+/** 사용자 u가 캔버스 m에서 가진 권한을 돌려준다. 소유자 → 직접 초대 권한 순으로 보고, 둘 다 아니면 권한 없음(null). */
 export function roleOf(m: CanvasMeta, u: { id: string; dept: string } | null): Role | null {
   if (!u) return null;
   const s = shareOf(m);
   if (s.ownerId === u.id) return "owner";
-  if (s.share[u.id]) return s.share[u.id];
-  if (s.access === "company") return "view";
-  return null;
+  return s.share[u.id] ?? null;
 }
 // uploads: 이 캔버스 카드가 쓰는 업로드 문서(파서 요약본). 새로고침 뒤 같은 ID로 다시 등록해 카드가 사라지지 않게 함
 interface Saved { meta: CanvasMeta; cards: Card[]; links: Link[]; seq: number; activity: { author: string; text: string; time: string }[]; log: CanvasEvent[]; uploads?: Doc[] }
@@ -130,13 +141,19 @@ export const useCanvas = defineStore("canvas", {
     saved: 0,  // 저장할 때마다 올려 목록을 다시 읽게 함
     rev: 0,  // 근거에 영향을 주는 조작마다 오름 (결과 패널의 "다시 생성" 안내 기준)
     error: "",  // 이벤트 반영·캔버스 복원 실패 안내
+    // ---- 서버 모드(SYNC_MODE=server)에서만 쓰는 상태 ----
+    serverRole: null as Role | null,  // 캔버스 열기 응답·권한 변경 알림의 내 권한
+    myUserId: null as number | null,  // 내 서버 사용자 ID(로그인 #34 후 채움). 내 커서를 걸러낼 때 쓴다
+    cursors: {} as Record<string, { x: number; y: number }>,  // 다른 사람 커서(캔버스 좌표), 키는 사용자 ID
+    present: [] as number[],  // 지금 이 캔버스에 들어와 있는 사람(사용자 ID)
   }),
   getters: {
     // 볼 수 있는 캔버스 전부 (소유 · 초대 · 부서 · 회사 접근)
     canvases: (s): CanvasMeta[] => { void s.saved; return Object.values(readAll()).map((x) => x.meta).filter((m) => roleOf(m, s.user))
       .sort((a, b) => b.updated.localeCompare(a.updated)); },
     meta(): CanvasMeta | undefined { return this.canvases.find((m) => m.id === this.canvasId); },
-    role(): Role | null { return this.meta ? roleOf(this.meta, this.user) : null; },  // 메타가 없으면(권한이 풀림 등) 권한 없음
+    // 서버 모드는 서버가 알려 준 권한, 로컬 모드는 저장된 공유 정보로 계산. 메타가 없으면(권한이 풀림 등) 권한 없음
+    role(): Role | null { return SYNC_MODE === "server" ? this.serverRole : this.meta ? roleOf(this.meta, this.user) : null; },
     readOnly(): boolean { return this.role === "view"; },
     canEdit(): boolean { return this.role === "owner" || this.role === "edit"; },  // 소유자 · 편집 권한만 편집
     // 이 캔버스에 권한 있는 사람 (활동 로그 목록, 공유 창)
@@ -178,13 +195,15 @@ export const useCanvas = defineStore("canvas", {
     emit(e: CanvasEvent) {
       if (this.blocked()) return;  // 이벤트 단계에서도 한 번 더 막음
       this.queue.push({ author: this.author, ...e });  // 예시 메모처럼 작성자를 지정한 이벤트는 그대로
-      if (e.type !== "move_card") this.rev++;
+      outbox?.push(e);  // 서버 모드: 서버로 보낼 대기열에도 쌓음(작성자는 서버가 토큰으로 정함)
+      if (e.type !== "move_card") this.rev++;  // 이동은 생성 컨텍스트에 영향 없음
       if (ACT[e.type]) this.activity.unshift({ author: this.author, text: ACT[e.type] + (e.card_id ? ` (${e.card_id})` : ""),
         time: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) });
       clearTimeout(this.timer);
       this.timer = window.setTimeout(() => { this.flush().catch((err) => console.error(err)); }, 150); // 드래그 등 연속 조작은 묶어서 전송
     },
     async flush() {
+      await this.flushServer();
       if (!this.queue.length) return;
       const batch = this.queue.splice(0);
       let res;
@@ -205,6 +224,121 @@ export const useCanvas = defineStore("canvas", {
       if (res.first_changed_layer && res.first_changed_layer <= "L2_workspace") api.warmup(this.sessionId).catch(() => {});
       this.save();
     },
+    /**
+     * 서버 모드: 대기열의 이벤트를 서버에 저장한다. 실패하면 같은 묶음을 다음에 다시 보내고,
+     * 글 충돌(409 K003)이면 서버의 최신 글로 바꾸고 안내한다. 로컬 모드에서는 아무것도 하지 않는다.
+     */
+    async flushServer() {
+      if (!outbox || !this.canvasId) return;
+      const canvasId = this.canvasId;
+      const result = await outbox.flush((batch) => {
+        tracker?.markMine(batch.requestId);  // 응답보다 메시지가 먼저 올 수 있어 보내기 전에 표시
+        return postServerEvents(canvasId, batch);
+      });
+      if (result.status === "conflict") {
+        const { targetId, field, text } = result.conflict;
+        const card = this.cards.find((c) => c.id === targetId), link = this.links.find((l) => l.id === targetId);
+        if (field === "text" && card?.kind === "memo") card.text = text ?? "";
+        else if (card) card.memo = text ?? undefined;
+        else if (link) link.memo = text ?? undefined;
+        this.error = "다른 사람이 먼저 고쳤습니다. 최신 글로 바꿨으니 확인한 뒤 다시 고쳐 주세요.";
+      } else if (result.status === "rejected") {
+        this.error = result.error.code === "K002" ? "보기 권한만 있습니다." : "조작을 반영하지 못했습니다. 새로고침 후 다시 시도하세요.";
+      } else if (result.status === "retry") {
+        this.error = "서버에 연결하지 못했습니다. 연결되면 다시 보냅니다.";
+      }
+    },
+    /** 서버 모드: 캔버스를 서버에서 다시 읽어 화면을 맞춘다(처음 열 때, 재접속, 번호 누락). 보내지 못한 조작을 먼저 보낸다. */
+    async reloadFromServer() {
+      if (!this.canvasId) return;
+      await this.flushServer();
+      tracker?.reset();
+      let snapshot;
+      try {
+        snapshot = await openCanvas(this.canvasId);
+      } catch (err) {
+        console.error("캔버스 열기 실패", err);
+        this.error = "캔버스를 열지 못했습니다. 권한이 없거나 연결이 끊겼을 수 있습니다.";
+        return;
+      }
+      const { cards, links } = fromSnapshot(snapshot, nameOfUser);
+      Object.assign(this, { cards, links, canvasName: snapshot.meta.name, serverRole: snapshot.meta.myRole });
+      outbox?.updateVersions(versionsOf(snapshot));
+      if (snapshot.warnings.length) this.error = `'${snapshot.meta.name}' 캔버스 일부를 복원하지 못했습니다. 자료가 바뀌었을 수 있습니다.`;
+      // 비교·태그는 아직 목업이 계산하므로 새 목업 세션에 지금 상태를 넣는다
+      this.sessionId = crypto.randomUUID();
+      await api.postEvents(this.sessionId, replayEvents(cards, links)).catch((err) => console.error(err));
+      this.tags = await api.cardTags(this.sessionId).catch(() => this.tags);
+      for (const c of this.cards) if (c.kind === "compare" || c.kind === "chart") c.version++;
+      for (const d of tracker?.start(snapshot.lastSeq) ?? []) this.handleSeq(d);
+    },
+    /** 서버 모드: 받은 이벤트 메시지를 번호 확인 후 반영한다. */
+    onRemoteEvents(message: EventsMessage) {
+      if (tracker) this.handleSeq(tracker.receive(message));
+    },
+    handleSeq(d: ReturnType<SeqTracker["receive"]>) {
+      if (d.action === "gap") { this.reloadFromServer(); return; }
+      if (d.action !== "apply" && d.action !== "own") return;
+      outbox?.updateVersions(d.message.textVersions ?? {});
+      if (d.action === "own") return;  // 내 조작은 이미 화면에 있다
+      const author = nameOfUser(d.message.author.id);
+      const local = d.message.events.map(fromServerEvent);
+      let changed = false;
+      for (const e of local) {
+        if (applyRemote(this, e, author)) changed = true;
+        if (ACT[e.type]) this.activity.unshift({ author, text: ACT[e.type], time: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) });
+      }
+      if (!changed) return;
+      if (local.some((e) => e.type !== "move_card")) this.rev++;
+      // 비교·태그 계산용 목업에도 같은 변경을 넣는다
+      api.postEvents(this.sessionId, local).then(async () => {
+        this.tags = await api.cardTags(this.sessionId).catch(() => this.tags);
+        for (const c of this.cards) if (c.kind === "compare" || c.kind === "chart") c.version++;
+      }).catch((err) => console.error(err));
+    },
+    onRemoteCursor(m: CursorMessage) {
+      if (m.user.id === this.myUserId) return;  // 보낸 사람도 받으므로 내 커서는 무시
+      this.cursors = { ...this.cursors, [m.user.id]: { x: m.x, y: m.y } };
+    },
+    onPresence(m: PresenceMessage) {
+      if (m.type === "join") { if (!this.present.includes(m.user.id)) this.present = [...this.present, m.user.id]; return; }
+      this.present = this.present.filter((id) => id !== m.user.id);
+      const { [m.user.id]: _gone, ...rest } = this.cursors;
+      this.cursors = rest;
+    },
+    /** 권한이 사라지거나 캔버스가 삭제되면 홈으로, 권한이 바뀌면 편집 도구를 맞춘다. */
+    async onNotice(n: CanvasNotice) {
+      if (String(n.canvasId) !== this.canvasId) return;
+      if (n.type === "role_changed") { this.serverRole = n.role ?? null; return; }
+      await this.goHome();
+      this.error = n.type === "deleted" ? "캔버스가 삭제되었습니다." : "이 캔버스를 볼 권한이 없습니다.";
+    },
+    /** 서버 모드: 캔버스의 실시간 연결을 열고 서버에서 읽는다. */
+    async openServer(id: string) {
+      this.closeServer();
+      this.canvasId = id;
+      outbox = new Outbox(undefined, (cardId) => { const c = this.cards.find((x) => x.id === cardId); return c && { x: c.x, y: c.y }; });
+      tracker = new SeqTracker();
+      connection = connectCanvas(id, {
+        onEvents: (m) => this.onRemoteEvents(m),
+        onCursor: (m) => this.onRemoteCursor(m),
+        onPresence: (m) => this.onPresence(m),
+        onPresenceSnapshot: (users) => { this.present = users.map((u) => u.id); },
+        onNotice: (n) => { this.onNotice(n); },
+        onConnected: () => { this.reloadFromServer(); },  // 재접속하면 놓친 변경이 있을 수 있어 다시 읽음
+        onDisconnected: () => { this.cursors = {}; },
+      });
+      try { sessionStorage.setItem(KEY + ":canvas", id); } catch { /* 무시 */ }
+      await this.reloadFromServer();
+    },
+    /** 서버 모드: 실시간 연결과 대기열을 닫는다(캔버스를 닫거나 바꿀 때). */
+    closeServer() {
+      connection?.close();
+      connection = null; outbox = null; tracker = null;
+      Object.assign(this, { serverRole: null, cursors: {}, present: [] });
+    },
+    /** 서버 모드: 내 커서 위치(캔버스 좌표)를 다른 사람에게 보낸다. */
+    sendCursor(x: number, y: number) { connection?.sendCursor(x, y); },
     login(id: string) {  // 사번으로 들어감. 없는 사번이면 false
       const m = memberById(id); if (!m) return false;
       this.user = { id: m.id, name: m.name, dept: m.dept }; this.author = m.name;
@@ -229,13 +363,14 @@ export const useCanvas = defineStore("canvas", {
       const all = readAll(), prev = all[this.canvasId]?.meta;
       if (prev && !["owner", "edit"].includes(roleOf(prev, this.user) ?? "")) return;  // 저장된 캔버스는 편집 권한이 있을 때만. 처음 저장(새 캔버스)은 통과
       all[this.canvasId] = { meta: { id: this.canvasId, name: this.canvasName, dept: prev?.dept ?? this.user.dept, owner: prev?.owner ?? this.author,
-        updated: now(), updatedBy: this.author, count: this.cards.length, quarter: prev?.quarter, ...(prev ? shareOf(prev) : { ownerId: this.user.id, share: {}, access: "invited" as Access }) },
+        updated: now(), updatedBy: this.author, count: this.cards.length, quarter: prev?.quarter, ...(prev ? shareOf(prev) : { ownerId: this.user.id, share: {} }) },
         cards: JSON.parse(JSON.stringify(this.cards)), links: this.links, seq: this.seq, activity: this.activity.slice(0, 200), log: this.log,
         uploads: this.cards.flatMap((c) => { const d = c.kind === "doc" ? api.docs.get(c.docId) : undefined; return d?.uploaded ? [d] : []; }) };
       writeAll(all); this.saved++;
     },
     reset() {
       clearTimeout(this.timer); this.queue = []; this.error = "";
+      this.closeServer();
       Object.assign(this, { sessionId: crypto.randomUUID(), cards: [], links: [], tags: {}, activity: [], log: [], seq: 0, lastChangedLayer: null, focus: null, active: null, selected: [], analyses: [] });
       this.overlay = { tableId: null, match: [], cardId: null };
     },
@@ -252,6 +387,7 @@ export const useCanvas = defineStore("canvas", {
     async open(id: string) {
       if (id === this.canvasId) return;
       await this.flush(); this.save();
+      if (SYNC_MODE === "server") { this.reset(); await this.openServer(id); return; }
       const x = readAll()[id]; if (!x) return;
       this.reset();
       this.canvasId = id; this.canvasName = x.meta.name;
@@ -283,16 +419,17 @@ export const useCanvas = defineStore("canvas", {
       if (id === this.canvasId) { this.reset(); this.canvasId = ""; this.canvasName = ""; }
     },
     thumb(id: string) { return (readAll()[id]?.cards ?? []).map((c) => ({ kind: c.kind, x: c.x, y: c.y })); },  // 홈 미리보기
-    // 공유 바꾸기: 소유자·편집 권한만. 지금 캔버스 meta를 고쳐 바로 저장
-    setShare(patch: { share?: Record<string, "edit" | "view">; access?: Access }) {
-      if (this.role !== "owner" && this.role !== "edit") return;
+    /** 지금 캔버스의 초대 명단(사람별 권한)을 바꾸고 바로 저장한다. 소유자만 바꿀 수 있고, 다른 권한이면 아무것도 하지 않는다. */
+    setShare(patch: { share?: Record<string, "edit" | "view"> }) {
+      if (this.role !== "owner") return;
       const all = readAll(), x = all[this.canvasId]; if (!x) return;
       x.meta = { ...x.meta, ...shareOf(x.meta), ...patch }; writeAll(all); this.saved++;
       this.activity.unshift({ author: this.author, text: "공유 권한을 바꿈", time: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) });
     },
     // 화면 상태를 바꾸기 전에 권한 확인. 편집 권한이 없으면 안내만 하고 막음 (키보드로 버튼을 눌러도 상태가 바뀌지 않게)
     blocked() { if (this.canEdit) return false; this.error = "보기 권한만 있습니다."; return true; },
-    newId() { return "c" + ++this.seq; },
+    /** 카드·연결 ID. 여러 사람이 동시에 만들어도 겹치지 않게 UUID로 만든다(docs/backend/canvas.md D1). */
+    newId() { this.seq++; return crypto.randomUUID(); },
     addTableCard(tableId: string, rows: number[], cols: number[], vcol = cols[0], pos = { x: 0, y: 0 }) {
       if (this.blocked()) return "";
       const id = this.newId();
@@ -396,7 +533,7 @@ export const useCanvas = defineStore("canvas", {
     addLink(source: string, target: string) {
       if (this.blocked()) return;
       if (source === target || this.links.some((l) => (l.source === source && l.target === target) || (l.source === target && l.target === source))) return;
-      const id = "l" + ++this.seq;
+      const id = this.newId();
       this.links.push({ id, source, target });
       this.emit({ type: "add_link", link_id: id, source, target });
     },

@@ -2,6 +2,7 @@
 fastapi==0.165.0
 uvicorn[standard]==0.54.0
 pydantic-settings==2.16.3
+boto3==1.44.0          # 자료 준비 원본을 S3에서 받을 때(S3_BUCKET 설정 시). 자격증명은 기본 체인(IRSA)
 
 # 테스트
 pytest==9.2.0

@@ -12,12 +12,28 @@ spring:
     properties:
       "[hibernate.default_schema]": app
 
-# infra 구현체 전환용 설정. 실제 ai 서비스/클라우드 스토리지가 생기면 여기서 바꾼다.
+# infra 구현체 전환용 설정.
 infra:
   python-ai-client:
-    mode: stub # stub | (TODO: 실제 구현 생기면 값 추가)
+    # stub(기본, 가짜 구현) | http(ai/server 실제 호출). http면 주소와 비밀키가 필요하다(없으면 기동 실패).
+    mode: ${AI_SERVICE_MODE:stub}
+    base-url: ${AI_SERVICE_BASE_URL:}
+    # ai/server의 INTERNAL_API_KEY와 같은 값. 설정 파일에 값을 넣지 않는다
+    api-key: ${AI_SERVICE_API_KEY:}
+    # ai-contract 2.10 제안값
+    connect-timeout: 2s
+    start-read-timeout: 5s
+    status-read-timeout: 3s
 
 app:
+  job:
+    # ai가 끝났다고 알려 준 작업의 결과 저장이 이 횟수만큼 실패하면 FAILED로 끝낸다(#63)
+    result-save-max-attempts: 5
   storage:
     local:
       base-dir: ${FILE_STORAGE_DIR:./data/files}
+    # 버킷이 설정되면(배포: s3-config ConfigMap) S3에, 없으면(로컬) 위 디렉터리에 저장한다.
+    # 자격증명은 기본 체인(배포는 IRSA)을 쓴다. 키를 설정 파일에 넣지 않는다.
+    s3:
+      bucket: ${S3_BUCKET:}
+      region: ${AWS_REGION:}

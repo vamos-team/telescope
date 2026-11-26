@@ -1,24 +1,26 @@
 <script setup lang="ts">
-// 페이지 정보 (헤더 오른쪽 i 아이콘): 내 페이지 정보 + 바로 협업자 편집(초대 · 권한 · 일반 액세스)
-// 헤더 아래 오른쪽에 뜨는 팝오버. 닫기는 ✕ · 바깥 클릭 · Esc(App). 보기 권한이면 읽기만. 홈으로 가는 건 로고
+// 페이지 정보 (헤더 오른쪽 i 아이콘): 내 페이지 정보 + 바로 협업자 편집(초대 · 권한). 일반 액세스(회사 전체)는 없음
+// 헤더 아래 오른쪽에 뜨는 팝오버. 닫기는 ✕ · 바깥 클릭 · Esc(App). 공유 설정은 소유자만 바꾸고, 편집·보기 권한이면 읽기만. 홈으로 가는 건 로고
 import { computed, ref } from "vue";
-import { useCanvas, ALL_MEMBERS, shareOf, ROLE, findPeople, accessText, when, quarterOf, type Access } from "../stores/canvas";
+import { useCanvas, ALL_MEMBERS, shareOf, ROLE, findPeople, when, quarterOf } from "../stores/canvas";
 
 const emit = defineEmits<{ close: [] }>();
 const cv = useCanvas();
-const can = computed(() => cv.role === "owner" || cv.role === "edit");
+const can = computed(() => cv.role === "owner");
 const s = computed(() => shareOf(cv.meta!));
 const q = ref(""), role = ref<"edit" | "view">("edit"), focused = ref(false);
 const has = computed(() => new Set([s.value.ownerId, ...Object.keys(s.value.share)]));
 const found = computed(() => findPeople(q.value, has.value, cv.user!.dept));  // 빈 칸이면 추천
 // 후보를 누르기 전에 목록이 닫히지 않게 포커스가 창 안 다른 곳으로 갈 때만 닫음
 function blur(e: FocusEvent) { if (!(e.relatedTarget as HTMLElement | null)?.closest(".found")) focused.value = false; }
-// 권한 있는 사람: 소유자 + 직접 초대한 사람 (부서·회사 접근으로 보는 사람은 일반 액세스 줄에 묶어 표시)
+/** 권한 있는 사람 목록: 소유자와 직접 초대한 사람. 각 사람에 권한(owner / edit / view)을 붙인다. */
 const people = computed(() => [...has.value].flatMap((id) => {
   const m = ALL_MEMBERS.find((x) => x.id === id); if (!m) return [];
   return [{ ...m, role: id === s.value.ownerId ? "owner" as const : s.value.share[id] }];
 }));
+/** 찾은 사람을 고른 권한으로 초대하고 찾기 칸을 비운다. */
 function invite(id: string) { cv.setShare({ share: { ...s.value.share, [id]: role.value } }); q.value = ""; focused.value = false; }
+/** 초대한 사람의 권한을 바꾸거나("edit" / "view") 권한을 지운다("remove"). */
 function setRole(id: string, v: string) {
   const share = { ...s.value.share };
   if (v === "remove") delete share[id]; else share[id] = v as "edit" | "view";
@@ -33,7 +35,7 @@ function setRole(id: string, v: string) {
       <dl class="pmeta">
         <dt>이름</dt><dd>{{ cv.canvasName }}</dd>
         <dt>기준 시점</dt><dd>{{ quarterOf(cv.meta) }}</dd>
-        <dt>내 권한</dt><dd>{{ ROLE[cv.role!] }} · {{ accessText(cv.meta!) }}</dd>
+        <dt>내 권한</dt><dd>{{ ROLE[cv.role!] }}</dd>
         <dt>수정</dt><dd>{{ cv.meta!.updatedBy }} · {{ when(cv.meta!.updated) }} · 카드 {{ cv.cards.length }}</dd>
       </dl>
       <h3>협업자</h3>
@@ -48,7 +50,7 @@ function setRole(id: string, v: string) {
           <li v-if="!found.length" class="none">찾는 사람이 없거나 이미 권한이 있습니다.</li>
         </ul>
       </div>
-      <p v-else class="note">보기 권한이라 공유 설정을 바꿀 수 없습니다.</p>
+      <p v-else class="note">공유 설정은 소유자만 바꿀 수 있습니다.</p>
 
       <h3>권한 있는 사람</h3>
       <ul class="ppl">
@@ -60,12 +62,6 @@ function setRole(id: string, v: string) {
             <option value="edit">편집 가능</option><option value="view">보기 가능</option><option value="remove">권한 삭제</option></select>
         </li>
       </ul>
-
-      <h3>일반 액세스</h3>
-      <div class="gen">
-        <select :value="s.access" :disabled="!can" aria-label="일반 액세스" @change="cv.setShare({ access: ($event.target as HTMLSelectElement).value as Access })">
-          <option value="invited">초대한 사람만</option><option value="company">회사 전체</option></select>
-      </div>
 
     </section>
   </div>

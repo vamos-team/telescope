@@ -14,8 +14,8 @@ com.telescope.backend
 ├── prediction              예상 질문/답변 관리
 ├── chat                    채팅
 └── infra                   외부 시스템 접근 인터페이스
-    ├── python              Python(AI) 서버 연동
-    ├── storage             파일 저장소 연동
+    ├── python              Python(AI) 서버 연동 (docs/backend/ai-contract.md)
+    ├── storage             파일 저장소 연동 (docs/backend/file-storage.md)
     └── ai                  LLM 등 AI 연동
 ```
 
