@@ -8,15 +8,15 @@ export interface SearchResult { table_id: string; company: string; title: string
   unit: string; score: number; hits: { r: number; label: string; grp: string; why: string }[] }
 export interface Part { card_id: string; cell_id: string; label: string; value_bil: number | null }
 export interface CompareLine { label: string; why: string; values: (Part[] | null)[]; concept_id: string | null;
-  note: string | null; totals?: (number | null)[] }
+  note: string | null; totals?: (number | null)[]; confirmed?: boolean }
 export interface CompareResult { groups: { company: string; basis: string }[]; lines: CompareLine[];
-  unmatched: CompareLine[]; warnings: string[] }
+  unmatched: CompareLine[]; warnings: string[]; rejected?: string[] }
 export const UNIT_TO_BIL: Record<string, number> = { 원: 1e-9, 천원: 1e-6, 백만원: 1e-3, 십억원: 1, 억원: 0.1 };
 export type CanvasEvent = { type: string; [k: string]: unknown };
 // 캔버스에 올리는 비정형 자료 (IR·뉴스·사내 자료). 사내 자료는 파서 모델이 만든 요약본
 export interface DocFigure { label: string; value: number; unit: string; period: string }
 export interface Doc { id: string; kind: "ir" | "ar" | "news" | "internal"; company: string; title: string; publisher: string; date: string;
-  summary: string; figures: DocFigure[]; url: string; tags: string[]; uploaded?: boolean }
+  summary: string; figures: DocFigure[]; url: string; tags: string[]; uploaded?: boolean; img?: string }  // img: 뉴스 썸네일(og:image)
 // 자료 종류 표시 이름. 색은 data-src(공시 회색, IR·AR 초록, 뉴스 주황, 사내 검정)
 export const KIND_LABEL: Record<Doc["kind"], string> = { ir: "IR", ar: "AR", news: "뉴스", internal: "사내 자료" };
 // IR 자료 제목은 회사명 + 분기만 (전체 제목은 title 속성으로). 뉴스·사내 자료는 원래 제목
@@ -52,8 +52,8 @@ export const api = {
   tagName: local.tagName,
   conceptsFor: local.conceptsFor,
   peerFacts: local.peerFacts,
-  context: (sid: string, task: string) => p(() => local.context(sid, task)),
-  evidence: (sid: string) => p(() => local.evidence(sid)),
+  context: (sid: string, task: string, cutoff?: number) => p(() => local.context(sid, task, cutoff)),
+  evidence: (sid: string, cutoff?: number) => p(() => local.evidence(sid, cutoff)),
   cardTags: (sid: string) => p(() => local.cardTags(sid)),
   analysis: local.analysis,
   ask: (_sid: string, _q: string) => Promise.reject(new Error("정적 HTML 버전에서는 LLM 질의를 지원하지 않습니다")),

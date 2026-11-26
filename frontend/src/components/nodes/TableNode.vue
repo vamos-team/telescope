@@ -1,12 +1,14 @@
 <script setup lang="ts">
 // 캔버스 위 원본 슬라이스 카드. 원본 값은 store의 SourceTable, 편집은 card.edits 레이어.
-import { Handle, Position } from "@vue-flow/core";
 import { computed, ref, watch } from "vue";
 import { api, UNIT_TO_BIL, type SourceTable } from "../../api";
 import { useCanvas, type TableCard } from "../../stores/canvas";
-import CardPrompt from "./CardPrompt.vue";
+import CardMemo from "./CardMemo.vue";
+import CardChrome from "./CardChrome.vue";
+import SideHandles from "./SideHandles.vue";
 
-const props = defineProps<{ data: { cardId: string } }>();
+defineOptions({ inheritAttrs: false });  // 장식(CardChrome) + 카드 두 뿌리라 Vue Flow 속성은 넘기지 않음
+const props = defineProps<{ data: { cardId: string; onFlag?: (id: string) => void } }>();
 const cv = useCanvas();
 const card = computed(() => cv.cards.find((c) => c.id === props.data.cardId) as TableCard);
 const t = ref<SourceTable | null>(null);
@@ -53,8 +55,9 @@ function edit(r: number, c: number, e: Event) {
 </script>
 
 <template>
+  <CardChrome v-if="card" :id="card.id" @flag="(id) => data.onFlag?.(id)" />
   <section v-if="t" class="card" data-src="dart" :class="{ focus: cv.focus === card.id }">
-    <Handle type="target" :position="Position.Left" /><Handle type="source" :position="Position.Right" />
+    <SideHandles />
     <header class="drag-handle">
       <span class="co">공시 {{ t.company }}</span><div class="t"><b>{{ t.title }}</b><small>{{ t.basis }} / {{ t.period || t.rcept_no }}</small></div>
       <button class="nodrag txt" @click="cv.openSource(card.tableId, [], card.id)" title="원본 표에서 행 고르기">원본</button>
@@ -78,6 +81,6 @@ function edit(r: number, c: number, e: Event) {
     <footer>단위 {{ unitLabel }} · {{ card.rows.length }}행
       <select class="nodrag" :value="card.vcol" @change="cv.setPeriod(card.id, +($event.target as HTMLSelectElement).value)">
         <option v-for="c in card.cols" :key="c" :value="c">비교 열: {{ t.cols[c] }}</option></select></footer>
-    <CardPrompt :id="card.id" :text="card.prompt" />
+    <CardMemo :id="card.id" :text="card.memo" />
   </section>
 </template>

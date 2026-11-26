@@ -3,16 +3,21 @@
 //   context/compiler.py → context() (문서·메모·연결 층 추가)
 // 임베딩 검색, LLM 질의(ask/warmup), 이벤트 영속화는 없다 (새로고침하면 초기화).
 import data from "./data.json";
-import { panelOf, dashText, dashEvidence } from "./dashboard";
+import NEWS from "./news.json";
+import { shallowReactive } from "vue";
+import { panelOf, tableOf, dashColumnIndices, dashText, dashEvidence } from "./dashboard";
+import { quarterIndex, withinQuarter } from "./period";
 import { UNIT_TO_BIL, type SourceTable, type SearchResult, type CompareResult, type CompareLine, type Part, type CanvasEvent, type Doc, type Evidence, type Context, type Analysis } from "../api";
 
 interface Member { label: string; grp?: string; title?: string; alt?: Member[] }
 interface Concept { id: string; name: string; alias?: string[]; members: Record<string, Member[]>; note?: string }
-interface WCard { card_id: string; kind: "table" | "compare" | "doc" | "prompt" | "dash"; seq: number; doc_id?: string; text?: string; author?: string; panel?: string; table_id?: string; rows: number[]; cols: number[];
-  vcol: number | null; edits: Record<string, number | null>; sort: [string | number, boolean] | null; sources: string[] }
-interface Link { source: string; target: string; rel: string; prompt?: string }
-// prompts: 카드 프롬프트 (화면 전용 시각화 카드 것도 받으려고 카드와 따로 둠)
-interface Workspace { cards: Map<string, WCard>; links: Map<string, Link>; prompts: Map<string, string>; mappings: CanvasEvent[]; seq: number; layers: string[] }
+// view: 비교 계산을 쓰는 카드가 비교표(compare)인지 시각화(chart)인지
+interface WCard { card_id: string; kind: "table" | "compare" | "doc" | "memo" | "dash"; seq: number; doc_id?: string; text?: string; author?: string; panel?: string; table_id?: string; rows: number[]; cols: number[];
+  vcol: number | null; edits: Record<string, number | null>; sort: [string | number, boolean] | null; sources: string[]; view?: string }
+interface Link { source: string; target: string; memo?: string }
+// memos: 카드 메모 (카드와 따로 둠). mappings: "개념|회사" → 확정(true) · 거부(false)
+interface Mapping { concept_id: string; company: string; cells: string[]; accepted: boolean }
+interface Workspace { cards: Map<string, WCard>; links: Map<string, Link>; memos: Map<string, string>; mappings: Map<string, Mapping>; seq: number; layers: string[] }
 
 const TABLES = new Map((data.tables as unknown as SourceTable[]).map((t) => [t.table_id, t]));
 const CONCEPTS = data.concepts as Concept[];
@@ -25,12 +30,13 @@ const memberMatches = (m: Member, t: SourceTable, r: number) => {
   return norm(row.label) === norm(m.label) && (m.grp == null || row.grp === m.grp) && (m.title == null || t.title.includes(m.title));
 };
 export interface Example { cards: { table_id: string; rows: number[] | null; cols?: number[] | null; vcol?: number }[]; compares: number[][];
-  docs: string[]; charts?: number[]; prompts: string[]; links: [string, string, string][] }
+  docs: string[]; charts?: number[]; memos: { author: string; text: string }[]; links: [string, string, string?][] }
 export const meta = { subtitle: (data as { subtitle?: string }).subtitle ?? "",
   example: (data as unknown as { example?: Example }).example ?? null };
 export const analysis = (data as unknown as { analysis: Analysis }).analysis;
 const SRC = (data as unknown as { sources: { docs: Doc[]; internal: Doc[] } }).sources;
-export const docs = new Map<string, Doc>([...SRC.docs, ...SRC.internal].map((d) => [d.id, d]));
+// v01 데모 실제 뉴스 헤드라인(썸네일 포함)도 함께 등록
+export const docs = shallowReactive(new Map<string, Doc>([...SRC.docs, ...SRC.internal, ...(NEWS.items as Doc[])].map((d) => [d.id, d])));
 // 업로드한 사내 자료(파서 요약본)를 등록한다. 실제 서비스에서는 업로드 API → 파서 모델 → 임베딩 적재
 export const registerDoc = (d: Doc) => { docs.set(d.id, d); return d; };
 export const noteTable = (rcept: string, note: string) =>
@@ -93,7 +99,7 @@ export function search(q: string, k = 20): SearchResult[] {
 // ---------- 이벤트 리듀서 ----------
 const sessions = new Map<string, Workspace>();
 const ws = (sid: string) => {
-  if (!sessions.has(sid)) sessions.set(sid, { cards: new Map(), links: new Map(), prompts: new Map(), mappings: [], seq: 0, layers: ["", "", ""] });
+  if (!sessions.has(sid)) sessions.set(sid, { cards: new Map(), links: new Map(), memos: new Map(), mappings: new Map(), seq: 0, layers: ["", "", ""] });
   return sessions.get(sid)!;
 };
 
@@ -111,20 +117,19 @@ function apply(w: Workspace, e: CanvasEvent) {
     case "add_rows": if (c) c.rows = [...new Set([...c.rows, ...ns(e.rows)])].sort((a, b) => a - b); break;
     case "remove_row": if (c) c.rows = c.rows.filter((r) => r !== n(e.r)); break;
     case "remove_card":
-      w.cards.delete(e.card_id as string); w.prompts.delete(e.card_id as string);
+      w.cards.delete(e.card_id as string); w.memos.delete(e.card_id as string);
       for (const o of w.cards.values()) o.sources = o.sources.filter((s) => s !== e.card_id);
       for (const [id, l] of w.links) if (l.source === e.card_id || l.target === e.card_id) w.links.delete(id);
       break;
-    case "add_doc": case "add_prompt": case "add_dash":
-      w.cards.set(e.card_id as string, { card_id: e.card_id as string, kind: e.type === "add_doc" ? "doc" : e.type === "add_dash" ? "dash" : "prompt", seq: w.seq,
+    case "add_doc": case "add_memo": case "add_dash":
+      w.cards.set(e.card_id as string, { card_id: e.card_id as string, kind: e.type === "add_doc" ? "doc" : e.type === "add_dash" ? "dash" : "memo", seq: w.seq,
         doc_id: e.doc_id as string | undefined, text: e.text as string | undefined, author: e.author as string | undefined, panel: e.panel as string | undefined,
         rows: [], cols: [], vcol: null, edits: {}, sort: null, sources: [] });
       break;
-    case "edit_prompt": if (c) c.text = e.text as string; break;
-    case "set_card_prompt": { const t = (e.text as string).trim(); if (t) w.prompts.set(e.card_id as string, t); else w.prompts.delete(e.card_id as string); break; }
-    case "set_link_prompt": { const l = w.links.get(e.link_id as string); if (l) l.prompt = (e.text as string).trim(); break; }
-    case "add_link": w.links.set(e.link_id as string, { source: e.source as string, target: e.target as string, rel: e.rel as string }); break;
-    case "set_link": { const l = w.links.get(e.link_id as string); if (l) l.rel = e.rel as string; break; }
+    case "edit_memo": if (c) c.text = e.text as string; break;
+    case "set_card_memo": { const t = (e.text as string).trim(); if (t) w.memos.set(e.card_id as string, t); else w.memos.delete(e.card_id as string); break; }
+    case "set_link_memo": { const l = w.links.get(e.link_id as string); if (l) l.memo = (e.text as string).trim(); break; }
+    case "add_link": w.links.set(e.link_id as string, { source: e.source as string, target: e.target as string }); break;
     case "remove_link": w.links.delete(e.link_id as string); break;
     case "edit_cell": if (c) c.edits[`${e.r},${e.c}`] = e.value as number | null; break;
     case "revert_card": if (c) c.edits = {}; break;
@@ -132,9 +137,14 @@ function apply(w: Workspace, e: CanvasEvent) {
     case "sort_card": if (c) c.sort = e.key == null ? null : [e.key as string | number, !!e.desc]; break;
     case "create_compare":
       w.cards.set(e.card_id as string, { card_id: e.card_id as string, kind: "compare", seq: w.seq, rows: [], cols: [], vcol: null,
-        edits: {}, sort: null, sources: e.sources as string[] });
+        edits: {}, sort: null, sources: e.sources as string[], view: (e.view as string | undefined) ?? "compare" });
       break;
-    case "confirm_mapping": w.mappings.push(e); break;
+    case "confirm_mapping": {
+      const k = `${e.concept_id}|${e.company}`;
+      if (e.accepted == null) w.mappings.delete(k);
+      else w.mappings.set(k, { concept_id: e.concept_id as string, company: e.company as string, cells: e.cells as string[], accepted: !!e.accepted });
+      break;
+    }
     // move_card: 좌표는 화면(store)에만. 컨텍스트에 영향 없음
   }
 }
@@ -160,9 +170,9 @@ const part = (card: WCard, t: SourceTable, r: number, label: string): Part => {
   const c = card.vcol ?? 0, v = value(card, t, r, c);
   return { card_id: card.card_id, cell_id: cellId(t, r, c), label, value_bil: v == null ? null : v * UNIT_TO_BIL[t.unit] };
 };
-function find(g: Group, m: Member): Part | null {
+function find(g: Group, m: Member) {
   for (const cand of alts(m)) for (const [card, t] of g.cards) for (const r of card.rows)
-    if (memberMatches(cand, t, r)) return part(card, t, r, t.rows[r].label + (cand.grp ? `(${cand.grp})` : ""));
+    if (memberMatches(cand, t, r)) return { key: `${card.card_id}|${r}`, value: part(card, t, r, t.rows[r].label + (cand.grp ? `(${cand.grp})` : "")) };
   return null;
 }
 const total = (ps: Part[] | null) => !ps || ps.every((p) => p.value_bil == null) ? null : ps.reduce((a, p) => a + (p.value_bil ?? 0), 0);
@@ -179,38 +189,53 @@ export function compare(sid: string, cardId: string): CompareResult {
     g.cards.push([card, t]);
   }
   const used = G.map(() => new Set<string>());
-  const lines: CompareLine[] = [];
+  const lines: CompareLine[] = [], rejected: string[] = [], rej = G.map(() => new Map<string, string>());
+  const unmatched: CompareLine[] = [];
   for (const c of CONCEPTS) {
-    const hit = G.map(() => [] as string[]);  // 이 개념에 걸린 행. 대응을 채택했을 때만 used로 확정 (채택 안 하면 "대응 없음"에 남김)
-    const vals = G.map((g, gi) => {
+    const hit = G.map(() => [] as string[]);
+    const picked = G.map((g, gi) => {
       const ms = c.members[g.company] ?? [];
-      const parts = ms.map((m) => find(g, m)).filter((p): p is Part => !!p);
       for (const [card, t] of g.cards) for (const r of card.rows)
         if (ms.some((m) => alts(m).some((x) => memberMatches(x, t, r)))) hit[gi].push(`${card.card_id}|${r}`);
-      return parts.length ? parts : null;
+      return ms.map((m) => find(g, m)).filter((p) => p !== null);
     });
+    const vals = picked.map((parts) => parts.length ? parts.map((p) => p.value) : null);
+    // 사용자가 거부한 대응: 거부한 회사가 하나라도 있으면 이 개념으로 묶지 않음 → 행은 아래 "대응 없음"으로
+    const decided = G.map((g) => w.mappings.get(`${c.id}|${g.company}`)?.accepted);
+    if (decided.includes(false) && hit.some((keys) => keys.length)) { rejected.push(c.name); hit.forEach((ks, gi) => ks.forEach((k) => rej[gi].set(k, c.id))); continue; }
     if (vals.filter(Boolean).length < (G.length > 1 ? 2 : 1)) continue;
-    hit.forEach((ks, gi) => ks.forEach((k) => used[gi].add(k)));
+    picked.forEach((parts, gi) => parts.forEach((p) => used[gi].add(p.key)));
     const labels = new Set(vals.filter(Boolean).map((ps) => norm(ps![0].label.split("(")[0])));
     const same = vals.every((ps) => !ps || ps.length === 1) && labels.size === 1;
-    lines.push({ label: c.name, why: same ? "동일 계정명" : "대응 사전", values: vals, concept_id: c.id, note: c.note ?? null });
+    const confirmed = vals.every((ps, gi) => !ps || decided[gi] === true);
+    lines.push({ label: c.name, why: same ? "동일 계정명" : "대응 사전", values: vals, concept_id: c.id, note: c.note ?? null, confirmed });
   }
   // 사전 밖: 정규화한 계정명 + 구간이 같으면 대응
   const byName = new Map<string, (Part[] | null)[]>();
   G.forEach((g, gi) => { for (const [card, t] of g.cards) for (const r of card.rows) {
     const row = t.rows[r];
     if (used[gi].has(`${card.card_id}|${r}`) || row.values.every((v) => v == null)) continue;
+    if (rej[gi].has(`${card.card_id}|${r}`)) { const vals: (Part[] | null)[] = G.map(() => null); vals[gi] = [part(card, t, r, row.label)];
+      unmatched.push({ label: row.label, why: "거부한 대응", values: vals, concept_id: rej[gi].get(`${card.card_id}|${r}`)!, note: null }); continue; }
     const key = norm(row.label) + "|" + row.grp;
     if (!byName.has(key)) byName.set(key, G.map(() => null));
     const slot = byName.get(key)!;
-    if (!slot[gi]) slot[gi] = [part(card, t, r, row.label)];
+    const value = [part(card, t, r, row.label)];
+    if (!slot[gi]) slot[gi] = value;
+    else {
+      const values: (Part[] | null)[] = G.map(() => null);
+      values[gi] = value;
+      unmatched.push({ label: row.label, why: "대응 없음", values, concept_id: null, note: null });
+    }
   } });
-  const unmatched: CompareLine[] = [];
   for (const vals of byName.values()) {
     const label = vals.find(Boolean)![0].label;
     if (G.length > 1 && vals.filter(Boolean).length >= 2) lines.push({ label, why: "동일 계정명", values: vals, concept_id: null, note: null });
     else unmatched.push({ label, why: "대응 없음", values: vals, concept_id: null, note: null });
   }
+  // 계정이 하나도 안 겹치면 비교를 고집하지 않고 고른 표의 행을 그대로 다 보여 준다
+  if (!lines.length) for (let i = unmatched.length - 1; i >= 0; i--)
+    if (unmatched[i].why === "대응 없음") lines.unshift({ ...unmatched.splice(i, 1)[0], why: "표 그대로" });
   const warnings: string[] = [];
   if (new Set(G.map((g) => g.basis)).size > 1) warnings.push("연결과 별도 기준이 섞여 있습니다.");
   const units = new Set(G.flatMap((g) => g.cards.map(([, t]) => t.unit)));
@@ -218,7 +243,7 @@ export function compare(sid: string, cardId: string): CompareResult {
   warnings.push("비교 시점 — " + G.map((g) => `${g.company}: ` + g.cards.map(([c, t]) => t.cols[c.vcol ?? 0]).join(", ")).join(" / "));
   for (const l of lines) if (l.why === "대응 사전" && l.note) warnings.push(`${l.label}: ${l.note}`);
   return { groups: G.map((g) => ({ company: g.company, basis: g.basis })),
-    lines: lines.map((l) => ({ ...l, totals: l.values.map(total) })), unmatched, warnings };
+    lines: lines.map((l) => ({ ...l, totals: l.values.map(total) })), unmatched, warnings, rejected };
 }
 
 
@@ -229,16 +254,42 @@ const SYSTEM = `당신은 SKT 재무기획 담당자(FP&A)가 사업기획서·�
 - 컨텍스트에 없는 숫자는 만들지 않습니다. 근거가 없는 항목은 "근거 부족"으로 적습니다.
 - 값 유형을 나눠 적습니다: 공시(원본 숫자), 계산(코드로 낸 값), AI 해석.
 - 연결/별도, 단위, 기간이 다르면 먼저 밝힙니다. 편집 레이어(L3)의 값은 사용자가 고친 값이므로 원본과 구분합니다.
-- 프롬프트(프롬프트 카드, 카드 프롬프트, 선 프롬프트)는 사용자의 작성 지시입니다. 사실 근거로 쓰지 않고, 해당 근거를 어떻게 쓸지에만 반영합니다.
+- 메모(카드 메모, 메모 카드, 선 메모)는 팀원이 남긴 글입니다. 각 메모가 작성 지시인지, 근거(숫자 · 출처가 있는 사실)인지, 의견인지 먼저 가립니다.
+  지시는 해당 근거를 어떻게 쓸지에만 반영하고, 의견은 검토할 주장으로 다루며 사실 근거로 쓰지 않습니다. 근거 메모도 카드의 공시 · 문서와 대조합니다.
+- 카드 사이 선은 관계 종류가 정해져 있지 않습니다. 두 카드 내용을 보고 근거 · 설명 · 반박 중 무엇인지 판단합니다.
 - 회사마다 계정명이 다를 수 있습니다. 아래 개념 사전과 사용자가 확정한 대응을 우선합니다.`;
 const LAYERS = ["L0_system", "L1_sources", "L2_workspace", "L3_edits", "L4_task"];
 const fmtN = (v: number | null | undefined) => v == null ? "" : Number.isInteger(v) ? String(v) : v.toFixed(4).replace(/0+$/, "");
 const hash = (s: string) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193); return (h >>> 0).toString(16).padStart(8, "0"); };
 const docKind = { ir: "IR", ar: "AR", news: "뉴스", internal: "사내" } as const;
+// 데모 접수 ID별 원자료 공개일. KT 특수관계자 표도 같은 분기보고서 주석을 참조한다.
+const filingDates = new Map([
+  // https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260515002674
+  ["KT_2026Q1", "2026-05-15"],
+  ["KT_RP_2026Q1", "2026-05-15"],
+  // https://www.sktelecom.com/img/eng/qua/20260507/1Q26InvestorBriefingENG.pdf
+  ["SKT_2026Q1", "2026-05-07"],
+  // https://news.lguplus.com/?p=21797
+  ["LGU_2026Q1", "2026-05-07"],
+]);
+export function tableColumnWithinQuarter(t: SourceTable, col: number, cutoff?: number): boolean {
+  if (cutoff === undefined) return true;
+  const publishedDate = filingDates.get(t.rcept_no);
+  if (!publishedDate || !withinQuarter(publishedDate, cutoff)) return false;
+  const filingPeriod = /_(\d{4})Q([1-4])$/.exec(t.rcept_no);
+  const quarter = quarterIndex(t.cols[col]) ?? (filingPeriod ? Number(filingPeriod[1]) * 4 + Number(filingPeriod[2]) : undefined);
+  return quarter === undefined || quarter <= cutoff;
+}
 
-function compile(w: Workspace, task: string) {
+function compile(w: Workspace, task: string, cutoff?: number) {
   const cards = [...w.cards.values()].sort((a, b) => a.seq - b.seq);
-  const tcards = cards.filter((c) => c.kind === "table"), dcards = cards.filter((c) => c.kind === "doc" && docs.has(c.doc_id!));
+  const tcards = cards.filter((c) => {
+    if (c.kind !== "table") return false;
+    if (cutoff === undefined) return true;
+    const t = table(c.table_id!);
+    return c.cols.some((col) => tableColumnWithinQuarter(t, col, cutoff));
+  });
+  const dcards = cards.filter((c) => c.kind === "doc" && docs.has(c.doc_id!) && withinQuarter(docs.get(c.doc_id!)!.date, cutoff));
   const L: Record<string, string> = {};
   L.L0_system = SYSTEM + "\n\n# 개념 사전\n" + CONCEPTS.map((c) => `- ${c.id} ${c.name}: ` + Object.entries(c.members).sort()
     .map(([co, ms]) => `${co}=` + ms.map((m) => m.label + (m.grp ? `(${m.grp})` : "")).join("+")).join("; ")).join("\n");
@@ -250,44 +301,54 @@ function compile(w: Workspace, task: string) {
 
   const blocks = tcards.map((c) => {
     const t = table(c.table_id!);
-    const rows = c.rows.map((r) => { const row = t.rows[r]; return `r${r}\t${row.label}${row.grp ? `(${row.grp})` : ""}\t` + c.cols.map((k) => fmtN(row.values[k])).join("\t"); });
+    const cols = c.cols.filter((col) => tableColumnWithinQuarter(t, col, cutoff));
+    const rows = c.rows.map((r) => { const row = t.rows[r]; return `r${r}\t${row.label}${row.grp ? `(${row.grp})` : ""}\t` + cols.map((k) => fmtN(row.values[k])).join("\t"); });
     return [`## 카드 ${c.card_id} | 공시 | ${t.company} | ${t.title} | ${t.basis} | 단위 ${t.unit} | 표 ${t.table_id}`,
-      `(셀ID 형식: ${t.table_id}#r<행>c<열>, 열 번호 [${c.cols}])`, "셀ID\t계정\t" + c.cols.map((k) => t.cols[k]).join("\t"), ...rows].join("\n");
+      `(셀ID 형식: ${t.table_id}#r<행>c<열>, 열 번호 [${cols}])`, "셀ID\t계정\t" + cols.map((k) => t.cols[k]).join("\t"), ...rows].join("\n");
   });
   for (const c of dcards) {
     const d = docs.get(c.doc_id!)!;
     blocks.push([`## 카드 ${c.card_id} | ${docKind[d.kind]} | ${d.company} | ${d.title} | doc:${d.id}`, `요약: ${d.summary}`,
-      ...d.figures.map((f, i) => `f${i}\t${f.label}\t${fmtN(f.value)} ${f.unit}\t${f.period}`)].join("\n"));
+      ...d.figures.flatMap((f, i) => withinQuarter(f.period, cutoff) ? [`f${i}\t${f.label}\t${fmtN(f.value)} ${f.unit}\t${f.period}`] : [])].join("\n"));
   }
-  for (const c of cards.filter((c) => c.kind === "dash" && panelOf(c.panel!)))
-    blocks.push(`## 카드 ${c.card_id} | 공시 대시보드 | ${panelOf(c.panel!)!.title} | ${panelOf(c.panel!)!.sub} | 단위 억원 | dash:${c.panel}\n${dashText(c.panel!)}`);
+  for (const c of cards.filter((c) => c.kind === "memo" && c.text?.trim())) blocks.push(`## 메모 카드 ${c.card_id} | 작성 ${c.author}\n${c.text}`);
+  for (const c of cards) {
+    const panel = c.kind === "dash" ? panelOf(c.panel!) : undefined;
+    if (!panel) continue;
+    const t = tableOf(panel), cols = dashColumnIndices(t, cutoff);
+    if (!cols.length) continue;
+    const unit = t.unit ? ` | 단위 ${t.unit}` : "";
+    const title = cols.length < t.cols.length ? panel.title.replace(/ \([^)]*\)$/, "") : panel.title;
+    const heading = panel.ai && !withinQuarter("2025", cutoff) ? panel.sub : [title, panel.sub].filter(Boolean).join(" | ");
+    blocks.push(`## 카드 ${c.card_id} | 공시 대시보드 | ${heading}${unit} | dash:${panel.id}\n${dashText(t, cols)}`);
+  }
   L.L2_workspace = blocks.length ? "# 캔버스 카드\n" + blocks.join("\n\n") : "";
 
   const ed: string[] = [];
   for (const c of tcards) {
     const t = table(c.table_id!);
-    if (c.vcol != null) ed.push(`- 카드 ${c.card_id} 비교 기간: ${t.cols[c.vcol]} (c${c.vcol})`);
+    if (c.vcol != null && tableColumnWithinQuarter(t, c.vcol, cutoff)) ed.push(`- 카드 ${c.card_id} 비교 기간: ${t.cols[c.vcol]} (c${c.vcol})`);
     for (const k of Object.keys(c.edits).sort()) { const [r, col] = k.split(",").map(Number);
-      ed.push(`- 수정 [${cellId(t, r, col)}] ${t.rows[r].label}: ${fmtN(t.rows[r].values[col])} → ${fmtN(c.edits[k])}`); }
+      if (tableColumnWithinQuarter(t, col, cutoff)) ed.push(`- 수정 [${cellId(t, r, col)}] ${t.rows[r].label}: ${fmtN(t.rows[r].values[col])} → ${fmtN(c.edits[k])}`); }
     if (c.sort) ed.push(`- 카드 ${c.card_id} 정렬 기준: ${c.sort[0]} ${c.sort[1] ? "내림차순" : "오름차순"}`);
   }
-  for (const m of w.mappings) ed.push(`- 사용자 ${m.accepted ? "확정" : "거부"} 대응 ${m.concept_id} (${m.company}): ${(m.cells as string[]).join(", ")}`);
-  for (const c of cards.filter((c) => c.kind === "compare")) ed.push(`- 비교 카드 ${c.card_id}: ${c.sources.join(", ")}`);
+  for (const m of [...w.mappings.values()].sort((a, b) => (a.concept_id + a.company).localeCompare(b.concept_id + b.company)))
+    ed.push(`- 사용자 ${m.accepted ? "확정" : "거부"} 대응 ${m.concept_id} (${m.company}): ${m.cells.join(", ")}`);
+  for (const c of cards.filter((c) => c.kind === "compare")) ed.push(`- ${c.view === "chart" ? "시각화" : "비교"} 카드 ${c.card_id}: ${c.sources.join(", ")}`);
   for (const l of [...w.links.values()].sort((a, b) => (a.source + a.target).localeCompare(b.source + b.target)))
-    ed.push(`- 연결 ${l.source} -[${l.rel}]-> ${l.target}`);
-  // 사용자 프롬프트: 프롬프트 카드, 카드 프롬프트, 선 프롬프트 (작성 지시)
+    ed.push(`- 연결 ${l.source} — ${l.target}`);
+  // 메모: 카드 메모, 선 메모 (메모 카드는 L2). 지시 · 근거 · 의견 구분은 에이전트가
   const pr: string[] = [];
-  for (const c of cards.filter((c) => c.kind === "prompt" && c.text?.trim())) pr.push(`- 프롬프트 카드 ${c.card_id}: ${c.text!.trim()}`);
-  for (const [id, t] of [...w.prompts].sort()) pr.push(`- 카드 ${id}에 대한 지시: ${t}`);
-  for (const l of w.links.values()) if (l.prompt) pr.push(`- 연결 ${l.source} -[${l.rel}]-> ${l.target}에 대한 지시: ${l.prompt}`);
-  if (pr.length) ed.push("", "# 사용자 프롬프트", ...pr);
+  for (const [id, t] of [...w.memos].sort()) pr.push(`- 카드 ${id} 메모: ${t}`);
+  for (const l of w.links.values()) if (l.memo) pr.push(`- 연결 ${l.source} — ${l.target} 메모: ${l.memo}`);
+  if (pr.length) ed.push("", "# 메모", ...pr);
   L.L3_edits = ed.length ? "# 사용자 조작과 연결\n" + ed.join("\n") : "";
   L.L4_task = task ? `# 요청\n${task}` : "";
   return { layers: L, hashes: Object.fromEntries(LAYERS.map((k) => [k, hash(L[k] ?? "")])) };
 }
 
-export function context(sid: string, task: string): Context {
-  const { layers: L, hashes } = compile(ws(sid), task);
+export function context(sid: string, task: string, cutoff?: number): Context {
+  const { layers: L, hashes } = compile(ws(sid), task, cutoff);
   const join = (ks: string[]) => ks.map((k) => L[k]).filter(Boolean).join("\n\n");
   return { layers: L, hashes, messages: [{ role: "system", content: join(LAYERS.slice(0, 3)) }, { role: "user", content: join(LAYERS.slice(3)) }] };
 }
@@ -296,24 +357,26 @@ export function context(sid: string, task: string): Context {
 const rowTags = (t: SourceTable, r: number) =>
   CONCEPTS.filter((c) => (c.members[t.company] ?? []).some((m) => alts(m).some((a) => memberMatches(a, t, r)))).map((c) => c.id);
 
-export function evidence(sid: string): Evidence[] {
+export function evidence(sid: string, cutoff?: number): Evidence[] {
   const out: Evidence[] = [];
   for (const c of [...ws(sid).cards.values()].sort((a, b) => a.seq - b.seq)) {
     if (c.kind === "table") {
       const t = table(c.table_id!), col = c.vcol ?? c.cols[0];
+      if (!tableColumnWithinQuarter(t, col, cutoff)) continue;
       for (const r of c.rows) for (const tag of rowTags(t, r)) {
         const v = value(c, t, r, col), edited = `${r},${col}` in c.edits;  // 편집 레이어 값은 원본 공시와 구분
         out.push({ tag, company: t.company, label: t.rows[r].label, value: v == null ? null : +(v * UNIT_TO_BIL[t.unit]).toFixed(1), unit: "십억원",
           period: t.cols[col], cite: cellId(t, r, col), card_id: c.card_id, source: "공시", edited });
       }
     } else if (c.kind === "dash") {
-      for (const e of dashEvidence(c.panel!)) out.push({ ...e, card_id: c.card_id, source: "공시" });
+      for (const e of dashEvidence(c.panel!, cutoff)) out.push({ ...e, card_id: c.card_id, source: "공시" });
     } else if (c.kind === "doc" && docs.has(c.doc_id!)) {
       const d = docs.get(c.doc_id!)!;
+      if (!withinQuarter(d.date, cutoff)) continue;
       for (const tag of d.tags) {
         out.push({ tag, company: d.company, label: d.title, value: null, unit: "", period: d.date, cite: `doc:${d.id}`, card_id: c.card_id, source: docKind[d.kind], text: d.summary });
-        d.figures.forEach((f, i) => out.push({ tag, company: d.company, label: f.label, value: f.value, unit: f.unit, period: f.period,
-          cite: `doc:${d.id}#f${i}`, card_id: c.card_id, source: docKind[d.kind] }));
+        d.figures.forEach((f, i) => { if (withinQuarter(f.period, cutoff)) out.push({ tag, company: d.company, label: f.label, value: f.value, unit: f.unit, period: f.period,
+          cite: `doc:${d.id}#f${i}`, card_id: c.card_id, source: docKind[d.kind] }); });
       }
     }
   }
@@ -351,7 +414,7 @@ export function searchQuestion(q: string): SearchResult[] {
   return [...byTable.values()].filter((r) => !companies.length || companies.includes(r.company)).sort((a, b) => b.score - a.score);
 }
 const COMMON = /3사|업계/;
-const tagsFor = (w: string) => {
+export const tagsFor = (w: string) => {
   const nq = norm(w);
   return new Set([...CONCEPTS.filter((c) => [c.name, ...(c.alias ?? [])].some((a) => { const na = norm(String(a)); return na.length >= 2 && (nq.includes(na) || na.includes(nq)); })).map((c) => c.id),
     ...Object.entries(analysis.tag_names).filter(([, n]) => norm(n).includes(nq) || nq.includes(norm(n))).map(([id]) => id)]);
@@ -389,7 +452,7 @@ export function recommend(companies: string[], tags: string[], kinds: Doc["kind"
 // 3사 비교 사실 표: 개념마다 회사별 1Q26·1Q25 값(십억원). 열 이름으로 기간을 맞춘다 (CSV 1Q26, KT XML 당분기·제 10 기 1분기)
 const CUR = /1Q26|당분기|제 10 기 1분기/, PRV = /1Q25|전분기|제 9 기 1분기/;
 export const PEERS = ["SKT", "KT", "LGU+"];
-export function peerFacts(conceptIds: string[]) {
+export function peerFacts(conceptIds: string[], cutoff?: number) {
   const tables = new Set<string>();
   // 공시 표에 없는 개념(설비투자 등 문서 태그)은 건너뜀
   const facts = conceptIds.flatMap((id) => CONCEPTS.filter((x) => x.id === id)).map((c) => {
@@ -399,7 +462,8 @@ export function peerFacts(conceptIds: string[]) {
         let tot: number | null = null;
         for (const m of c.members[co] ?? []) for (const t of TABLES.values()) {
           if (t.company !== co) continue;
-          const col = t.cols.findIndex((x) => re.test(x)); if (col < 0) continue;
+          const col = t.cols.findIndex((x, i) => re.test(x) && tableColumnWithinQuarter(t, i, cutoff));
+          if (col < 0) continue;
           const r = t.rows.findIndex((_, i) => alts(m).some((a) => memberMatches(a, t, i))); if (r < 0) continue;
           const v = t.rows[r].values[col]; if (v == null) continue;
           tot = (tot ?? 0) + v * UNIT_TO_BIL[t.unit]; if (re === CUR) tables.add(t.table_id); break;

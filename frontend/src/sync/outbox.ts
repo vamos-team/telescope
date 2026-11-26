@@ -54,7 +54,7 @@ export class Outbox {
       const cur = this.versions.get(id) ?? {};
       this.versions.set(id, {
         text: Math.max(cur.text ?? 0, v.text ?? 0) || cur.text,
-        prompt: Math.max(cur.prompt ?? 0, v.prompt ?? 0) || cur.prompt,
+        memo: Math.max(cur.memo ?? 0, v.memo ?? 0) || cur.memo,
       });
     }
   }

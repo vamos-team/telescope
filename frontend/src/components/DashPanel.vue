@@ -1,54 +1,57 @@
 <script setup lang="ts">
-// 대시보드 패널 하나 (자료 검색 화면과 캔버스 대시보드 카드가 함께 씀). 차트는 의존성 없이 SVG
+// 대시보드 패널 본문 하나 (자료 검색 화면과 캔버스 대시보드 카드가 함께 씀). 패널 정의는 local/dashboard.ts
+// compact: 캔버스 카드 안 (자산 계정은 근거 패널 없이)
 import { computed } from "vue";
-import { DASH, opMargin, debtRatio } from "../local/dashboard";
+import { panelOf, com, type Series } from "../local/dashboard";
+import { api } from "../api";
+import SvgChart from "./dash/SvgChart.vue";
+import AssetPanel from "./dash/AssetPanel.vue";
 
-const props = defineProps<{ panel: string }>();
-const Y = DASH.years, COS = DASH.companies;
-const W = 520, H = 190, PL = 52, PR = 76, PT = 14, PB = 24;
-const com = (v: number) => v.toLocaleString("ko-KR");
-const last = (xs: number[]) => xs[xs.length - 1];
-const x = (i: number) => PL + i * (W - PL - PR) / (Y.length - 1);
-
-// 3사 영업이익 선 그래프
-const opi = computed(() => {
-  const all = COS.flatMap((c) => DASH.op_income[c]), mx = Math.ceil(Math.max(...all) / 5000) * 5000;
-  const y = (v: number) => PT + (mx - v) / mx * (H - PT - PB);
-  return { ticks: [0, mx / 2, mx].map((v) => ({ v, y: y(v) })),
-    lines: COS.map((c, k) => ({ c, k, pts: DASH.op_income[c].map((v, i) => `${x(i)},${y(v)}`).join(" "), end: y(last(DASH.op_income[c])), v: last(DASH.op_income[c]) })) };
-});
-// CapEx·감가상각 묶음 막대
-const cap = computed(() => {
-  const a = DASH.capex.SKT, b = DASH.dep_ppe.SKT, mx = Math.ceil(Math.max(...a, ...b) / 10000) * 10000;
-  const y = (v: number) => PT + (mx - v) / mx * (H - PT - PB), gw = (W - PL - 20) / Y.length, bw = 18;
-  return { ticks: [0, mx / 2, mx].map((v) => ({ v, y: y(v) })), bars: Y.map((yr, i) => ({ yr, cx: PL + i * gw + gw / 2,
-    a: { x: PL + i * gw + gw / 2 - bw - 1, y: y(a[i]), h: y(0) - y(a[i]), v: a[i] }, b: { x: PL + i * gw + gw / 2 + 1, y: y(b[i]), h: y(0) - y(b[i]), v: b[i] } })), bw, base: y(0) };
-});
+const props = defineProps<{ panel: string; compact?: boolean }>();
+const p = computed(() => panelOf(props.panel));
+const c = computed(() => p.value?.chart());
+const legend = computed(() => { const x = c.value; if (!x) return [];
+  if (x.type === "bars" || x.type === "lines" || x.type === "stack") return x.series.length > 1 ? x.series.map((s: Series) => [s.name, s.c]) : [];
+  if (x.type === "waterfall") return p.value!.id === "cash_bridge" ? [["기초·기말 현금", "--s1"], ["유출", "--s2"], ["유입", "--s3"]] : [["영업이익", "--s1"], ["감소 요인", "--s2"], ["증가 요인", "--s3"]];
+  if (x.type === "treemap") return x.items.slice(0, 3).map(([n], i) => [n, x.colors[i]]).concat([["그 밖", x.colors[3]]]);
+  return []; });
+// 히트맵: 전년 대비 증감(비율 행은 %p). 셀 농도 = 변화폭(30% 이상 최대)
+const yoy = (v: number[], pctRow?: boolean) => v.map((x, i) => (i ? (pctRow ? x - v[i - 1] : (x / v[i - 1] - 1) * 100) : null));
+function spark(v: number[]) { const w = 72, h = 34, mn = Math.min(...v), mx = Math.max(...v);
+  const pts = v.map((x, i) => [i * (w - 6) / (v.length - 1) + 3, h - 4 - (x - mn) / ((mx - mn) || 1) * (h - 8)]);
+  return { line: pts.map((q) => q.join(",")).join(" "), end: pts[pts.length - 1] }; }
+const fmt = (x: number | string) => typeof x === "number" ? com(x) : x;
+const news = computed(() => (p.value?.news ?? []).map((id) => api.docs.get(id)).filter((d) => !!d));
 </script>
 
 <template>
-  <div class="dpanel">
-    <template v-if="panel === 'opi'">
-      <div class="dleg"><span v-for="c in COS" :key="c"><i :data-i="COS.indexOf(c)" />{{ c }}</span><small>억원</small></div>
-      <svg :viewBox="`0 0 ${W} ${H}`" role="img" aria-label="3사 영업이익 추이">
-        <g class="ax"><template v-for="t in opi.ticks" :key="t.v"><line :x1="PL" :x2="W - PR" :y1="t.y" :y2="t.y" /><text :x="PL - 6" :y="t.y + 4" text-anchor="end">{{ com(t.v) }}</text></template>
-          <text v-for="(yr, i) in Y" :key="yr" :x="x(i)" :y="H - 6" text-anchor="middle">{{ yr }}</text></g>
-        <g v-for="l in opi.lines" :key="l.c" class="ser" :data-i="l.k"><polyline :points="l.pts" /><text :x="W - PR + 6" :y="l.end + 4">{{ com(l.v) }}</text></g>
-      </svg>
-    </template>
-    <template v-else-if="panel === 'capex'">
-      <div class="dleg"><span><i data-i="0" />CapEx</span><span><i data-i="1" />유형자산 감가상각비</span><small>억원</small></div>
-      <svg :viewBox="`0 0 ${W} ${H}`" role="img" aria-label="SKT CapEx와 감가상각비">
-        <g class="ax"><template v-for="t in cap.ticks" :key="t.v"><line :x1="PL" :x2="W - 20" :y1="t.y" :y2="t.y" /><text :x="PL - 6" :y="t.y + 4" text-anchor="end">{{ com(t.v) }}</text></template>
-          <text v-for="b in cap.bars" :key="b.yr" :x="b.cx" :y="H - 6" text-anchor="middle">{{ b.yr }}</text></g>
-        <g v-for="b in cap.bars" :key="'b' + b.yr" class="cbar"><rect :x="b.a.x" :y="b.a.y" :width="cap.bw" :height="b.a.h" rx="2" data-i="0"><title>{{ b.yr }} CapEx {{ com(b.a.v) }}</title></rect>
-          <rect :x="b.b.x" :y="b.b.y" :width="cap.bw" :height="b.b.h" rx="2" data-i="1"><title>{{ b.yr }} 감가상각비 {{ com(b.b.v) }}</title></rect></g>
-      </svg>
-    </template>
-    <table v-else class="g dtab">
-      <thead><tr><th></th><th class="n">매출</th><th class="n">영업이익</th><th class="n">영업이익률</th><th class="n">부채비율</th><th class="n">CapEx</th></tr></thead>
-      <tbody><tr v-for="c in COS" :key="c"><td>{{ c }}</td><td class="n">{{ com(last(DASH.revenue[c])) }}</td><td class="n">{{ com(last(DASH.op_income[c])) }}</td>
-        <td class="n">{{ opMargin(c).toFixed(1) }}%</td><td class="n">{{ debtRatio(c).toFixed(1) }}%</td><td class="n">{{ com(last(DASH.capex[c])) }}</td></tr></tbody>
-    </table>
+  <div v-if="p && c" class="dpanel">
+    <div v-if="legend.length" class="dleg"><span v-for="[n, col] in legend" :key="n"><i :style="{ background: `var(${col})` }" />{{ n }}</span><small>{{ p.unit }}</small></div>
+
+    <div v-if="c.type === 'kpis'" class="dkpis">
+      <div v-for="k in c.items" :key="k.l" class="dkpi"><div class="l">{{ k.l }}
+        <svg viewBox="0 0 72 34" aria-hidden="true"><polyline :points="spark(k.s).line" class="sp" /><circle :cx="spark(k.s).end[0]" :cy="spark(k.s).end[1]" r="3" class="spd" /></svg></div>
+        <div class="v">{{ k.v }}</div><div class="d" :title="k.d">{{ k.d }}</div><span class="tag">{{ k.tag }}</span></div>
+    </div>
+
+    <div v-else-if="c.type === 'heat'" class="tbl"><table class="heat">
+      <thead><tr><th /><th v-for="y in c.cols" :key="y">{{ y }}</th></tr></thead>
+      <tbody><tr v-for="r in c.rows" :key="r.n"><td>{{ r.n }}</td>
+        <td v-for="(x, i) in r.v" :key="i"><span class="cell" :style="{ background: `color-mix(in srgb,var(--s1) ${Math.round(Math.min(Math.abs(yoy(r.v, r.pct)[i] ?? 0) / 30, 1) * 38)}%,transparent)` }">
+          {{ r.pct ? x.toFixed(1) + "%" : com(x) }}<small v-if="yoy(r.v, r.pct)[i] === null">&nbsp;</small>
+          <small v-else>{{ yoy(r.v, r.pct)[i]! >= 0 ? "▲" : "▼" }} {{ Math.abs(yoy(r.v, r.pct)[i]!).toFixed(1) }}{{ r.pct ? "%p" : "%" }}</small></span></td></tr></tbody>
+    </table></div>
+
+    <div v-else-if="c.type === 'table'" class="tbl"><table class="ftbl">
+      <thead><tr><th>{{ c.hl }}</th><th v-for="h in c.cols" :key="h" class="n">{{ h }}</th></tr></thead>
+      <tbody><tr v-for="r in c.rows" :key="r.n" :class="{ b: r.b }"><td>{{ r.n }}</td><td v-for="(x, i) in r.v" :key="i" class="n">{{ typeof x === 'number' && c.metrics?.[i].unit === '%' ? x.toFixed(1) + '%' : fmt(x) }}</td></tr></tbody>
+    </table></div>
+
+    <AssetPanel v-else-if="c.type === 'asset'" :compact="compact" />
+    <SvgChart v-else :chart="c" />
+
+    <div v-if="p.cap" class="cap">{{ p.cap() }}</div>
+    <div v-if="p.ai" class="aip"><div class="ai-lab">AI 해석</div><p>{{ p.ai }}</p>
+      <div class="nrefs"><a v-for="d in news" :key="d!.id" :href="d!.url" target="_blank" rel="noopener" draggable="false">{{ d!.publisher }} {{ d!.date.slice(5) }} · {{ d!.title }}</a></div></div>
   </div>
 </template>

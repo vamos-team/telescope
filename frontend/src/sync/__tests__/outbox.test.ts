@@ -36,27 +36,27 @@ describe("Outbox", () => {
   it("같은 묶음 안의 같은 카드 이동과 같은 글 수정은 마지막 것만 보낸다", async () => {
     const box = new Outbox(ids());
     box.push({ type: "move_card", card_id: "c-1", x: 1, y: 1 });
-    box.push({ type: "set_card_prompt", card_id: "c-1", text: "감" });
+    box.push({ type: "set_card_memo", card_id: "c-1", text: "감" });
     box.push({ type: "move_card", card_id: "c-1", x: 2, y: 2 });
-    box.push({ type: "set_card_prompt", card_id: "c-1", text: "감가상각" });
+    box.push({ type: "set_card_memo", card_id: "c-1", text: "감가상각" });
     let sent: Batch | undefined;
 
     await box.flush(async (b) => { sent = b; return ok(); });
 
     expect(sent!.events).toEqual([
       { type: "move_card", cardId: "c-1", x: 2, y: 2 },
-      { type: "set_card_prompt", cardId: "c-1", text: "감가상각", baseVersion: 0 },
+      { type: "set_card_memo", cardId: "c-1", text: "감가상각", baseVersion: 0 },
     ]);
   });
 
   it("글 수정에는 알고 있는 버전을 baseVersion으로 붙이고, 응답의 새 버전을 기억한다", async () => {
     const box = new Outbox(ids());
-    box.updateVersions({ "c-1": { prompt: 3 } });
-    box.push({ type: "set_card_prompt", card_id: "c-1", text: "a" });
+    box.updateVersions({ "c-1": { memo: 3 } });
+    box.push({ type: "set_card_memo", card_id: "c-1", text: "a" });
     let sent: Batch | undefined;
 
-    await box.flush(async (b) => { sent = b; return ok({ "c-1": { prompt: 4 } }); });
-    box.push({ type: "set_card_prompt", card_id: "c-1", text: "b" });
+    await box.flush(async (b) => { sent = b; return ok({ "c-1": { memo: 4 } }); });
+    box.push({ type: "set_card_memo", card_id: "c-1", text: "b" });
     await box.flush(async (b) => { sent = b; return ok(); });
 
     expect(sent!.events[0]).toMatchObject({ baseVersion: 4 });
@@ -65,8 +65,8 @@ describe("Outbox", () => {
   it("409 K003이면 충돌한 글 수정만 빼고 나머지는 새 묶음으로 다시 보낸다", async () => {
     const box = new Outbox(ids());
     box.push({ type: "move_card", card_id: "c-1", x: 5, y: 5 });
-    box.push({ type: "set_card_prompt", card_id: "c-1", text: "늦게 고친 글" });
-    const conflict = { targetId: "c-1", field: "prompt", text: "먼저 고친 글", version: 1 };
+    box.push({ type: "set_card_memo", card_id: "c-1", text: "늦게 고친 글" });
+    const conflict = { targetId: "c-1", field: "memo", text: "먼저 고친 글", version: 1 };
 
     const result = await box.flush(async () => { throw new SyncError(409, "K003", conflict, "conflict"); });
     let resent: Batch | undefined;
@@ -75,7 +75,7 @@ describe("Outbox", () => {
     expect(result).toEqual({ status: "conflict", conflict });
     expect(resent!.requestId).toBe("req-2");
     expect(resent!.events).toEqual([{ type: "move_card", cardId: "c-1", x: 5, y: 5 }]);
-    expect(box.versions.get("c-1")?.prompt).toBe(1);
+    expect(box.versions.get("c-1")?.memo).toBe(1);
   });
 
   it("권한·형식 오류(4xx)는 다시 보내지 않고 버린다", async () => {

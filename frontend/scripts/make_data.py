@@ -51,7 +51,7 @@ sources = json.loads((DATA / "sources.json").read_text(encoding="utf-8"))
 analysis = json.loads((DATA / "analysis.json").read_text(encoding="utf-8"))
 
 # 상단 바 출처 설명, 예시 불러오기 구성 (data/examples의 카드 a1 a2 b1 a3 b2, 비교 x1 x2와 같음)
-# rows/cols가 null이면 전체, compares는 cards 인덱스 묶음, charts는 시각화할 compares 인덱스, docs는 문서 카드, links는 [출발, 도착, 관계] (카드 순서: 표 → 비교 → 문서 → 메모)
+# rows/cols가 null이면 전체, compares는 cards 인덱스 묶음, charts는 시각화할 compares 인덱스, docs는 문서 카드, links는 [출발, 도착] (관계 태그 없음) (카드 순서: 표 → 비교 → 문서 → 메모)
 subtitle = "SKT·KT·LGU+ 2026년 1분기"
 example = {"cards": [{"table_id": "KT_2026Q1:1:1", "rows": None, "cols": [0, 1], "vcol": 0},
                      {"table_id": "KT_2026Q1:2:1", "rows": None, "cols": [0], "vcol": 0},
@@ -65,9 +65,9 @@ example = {"cards": [{"table_id": "KT_2026Q1:1:1", "rows": None, "cols": [0, 1],
            "compares": [[0, 1, 2, 8], [3, 4], [5, 6, 7]],
            "charts": [2],
            "docs": ["ir-skt-1q26", "int-capex-plan", "news-skt-opi", "ir-skt-aidc"],
-           "memos": [{"author": "김센터", "type": "request", "text": "AI DC 감가상각 증가분은 하반기부터 반영. 회수 기간 근거 보강 필요"}],
-           "links": [["int-capex-plan", "ir-skt-1q26", "근거"], ["news-skt-opi", "SKT_2026Q1:1:1", "설명"],
-                     ["memo:0", "int-capex-plan", "관련"], ["ir-skt-aidc", "int-capex-plan", "근거"]]}
+           "memos": [{"author": "김센터", "text": "AI DC 감가상각 증가분은 하반기부터 반영될 것 같음. 회수 기간 근거 보강 필요"}],
+           "links": [["int-capex-plan", "ir-skt-1q26"], ["news-skt-opi", "SKT_2026Q1:1:1"],
+                     ["memo:0", "int-capex-plan"], ["ir-skt-aidc", "int-capex-plan"]]}
 
 (HERE / "src/local/data.json").write_text(json.dumps({"subtitle": subtitle, "example": example,
                                                       "tables": [t.model_dump() for t in tables], "concepts": concepts, "sources": sources, "analysis": analysis},

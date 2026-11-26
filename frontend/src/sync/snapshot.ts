@@ -6,7 +6,7 @@ import type { CanvasSnapshot, ServerCard } from "./http";
 
 /** 서버 카드 → 화면 카드. 모르는 종류는 버린다. */
 export function toLocalCard(c: ServerCard, authorName: (id: number | undefined) => string): Card | null {
-  const base = { id: c.id, x: c.x, y: c.y, prompt: c.prompt ?? undefined };
+  const base = { id: c.id, x: c.x, y: c.y, memo: c.memo ?? undefined };
   switch (c.kind) {
     case "table": {
       const sort = Array.isArray(c.sort) ? { key: c.sort[0] as string | number, desc: Boolean(c.sort[1]) } : null;
@@ -16,8 +16,8 @@ export function toLocalCard(c: ServerCard, authorName: (id: number | undefined) 
     case "compare": return { ...base, kind: "compare", sources: (c.sources as string[]) ?? [], version: 0 };
     case "doc": return { ...base, kind: "doc", docId: String(c.docId) };
     case "dash": return { ...base, kind: "dash", panel: String(c.panel) };
-    case "chart": return { ...base, kind: "chart", compareId: String(c.compareId) };
-    case "prompt": return { id: c.id, x: c.x, y: c.y, kind: "prompt", author: authorName(c.createdBy?.id), text: c.text ?? "" };
+    case "chart": return { ...base, kind: "chart", sources: (c.sources as string[]) ?? [], version: 0 };
+    case "memo": return { ...base, kind: "memo", author: authorName(c.createdBy?.id), text: c.text ?? "" };
     default: return null;
   }
 }
@@ -26,7 +26,7 @@ export function toLocalCard(c: ServerCard, authorName: (id: number | undefined) 
 export function fromSnapshot(s: CanvasSnapshot, authorName: (id: number | undefined) => string): { cards: Card[]; links: Link[] } {
   return {
     cards: s.cards.map((c) => toLocalCard(c, authorName)).filter((c): c is Card => c !== null),
-    links: s.links.map((l) => ({ id: l.id, source: l.source, target: l.target, rel: l.rel, prompt: l.prompt ?? undefined })),
+    links: s.links.map((l) => ({ id: l.id, source: l.source, target: l.target, memo: l.memo ?? undefined, memoBy: l.memo ? authorName(l.memoBy?.id) : undefined })),
   };
 }
 
@@ -43,14 +43,15 @@ export function replayEvents(cards: Card[], links: Link[]): CanvasEvent[] {
       }
     } else if (c.kind === "doc") events.push({ type: "add_doc", card_id: c.id, doc_id: c.docId });
     else if (c.kind === "dash") events.push({ type: "add_dash", card_id: c.id, panel: c.panel });
-    else if (c.kind === "prompt") events.push({ type: "add_prompt", card_id: c.id, text: c.text });
+    else if (c.kind === "memo") events.push({ type: "add_memo", card_id: c.id, text: c.text, author: c.author });
   }
-  // 비교 카드는 원본 표 카드가 모두 들어간 뒤에 만든다
+  // 비교·시각화 카드는 원본 표 카드가 모두 들어간 뒤에 만든다
   for (const c of cards) if (c.kind === "compare") events.push({ type: "create_compare", card_id: c.id, sources: c.sources });
-  for (const c of cards) if (c.prompt) events.push({ type: "set_card_prompt", card_id: c.id, text: c.prompt });
+  for (const c of cards) if (c.kind === "chart") events.push({ type: "create_compare", card_id: c.id, sources: c.sources, view: "chart" });
+  for (const c of cards) if (c.memo) events.push({ type: "set_card_memo", card_id: c.id, text: c.memo });
   for (const l of links) {
-    events.push({ type: "add_link", link_id: l.id, source: l.source, target: l.target, rel: l.rel });
-    if (l.prompt) events.push({ type: "set_link_prompt", link_id: l.id, text: l.prompt });
+    events.push({ type: "add_link", link_id: l.id, source: l.source, target: l.target });
+    if (l.memo) events.push({ type: "set_link_memo", link_id: l.id, text: l.memo });
   }
   return events;
 }

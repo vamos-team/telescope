@@ -8,12 +8,12 @@
 flowchart LR
   subgraph FE["화면 (Vue)"]
     L[로그인]
-    H[캔버스 홈 · 새 캔버스 창]
-    SH[메뉴 팝업 · 공유 창]
-    T[상단 바 · 왼쪽 사이드바]
-    C[캔버스 카드 · 프롬프트]
-    S[자료 검색]
-    R[오른쪽 결과 패널]
+    H[페이지 홈 · 새 페이지 창]
+    SH[페이지 정보 · 협업자]
+    T[헤더 · 왼쪽 사이드바]
+    C[캔버스 카드 · 메모 · 다중 선택]
+    S[자료 검색 사이드바 · 데이터 입력]
+    R[분석 화면]
   end
 
   subgraph API["backend /api/v1"]
@@ -24,7 +24,7 @@ flowchart LR
     CMP["/canvases/{id}/compares · card-tags"]
     FL["/filings · /insights · /dashboard"]
     DC["/documents"]
-    OUT["/canvases/{id}/context · evidence<br/>drafts · questions · evaluations"]
+    OUT["/canvases/{id}/analyses<br/>/analyses/{id}/evaluations"]
     JB["/jobs/{id}"]
   end
 
@@ -44,11 +44,11 @@ flowchart LR
   R --> JB
   S -. 업로드 완료 확인 .-> JB
   DC -- 자료 준비 --> AI
-  OUT -- 초안 · 질문 --> AI
+  OUT -- 검토 · 질문 --> AI
   JB -- 상태 조회 --> AI
 ```
 
-## 2. 로그인, 캔버스 홈, 캔버스 열기
+## 2. 로그인, 페이지 홈, 페이지 열기
 
 ```mermaid
 sequenceDiagram
@@ -60,31 +60,31 @@ sequenceDiagram
   F->>B: POST /auth/login
   B-->>F: accessToken, user
   F->>B: GET /canvases?filter=all
-  B-->>F: 볼 수 있는 캔버스 목록 (myRole, 미리보기)
-  Note over F: 캔버스 홈 (C00)
+  B-->>F: 볼 수 있는 페이지 목록 (myRole, 미리보기)
+  Note over F: 페이지 홈 (C00)
   alt 타일 클릭
-    U->>F: 캔버스 고르기
-  else + 새 캔버스 (C14)
+    U->>F: 페이지 고르기
+  else + 새 페이지 (C14)
     F->>B: GET /users?q= (편집할 사람 추천 · 찾기)
     F->>B: POST /canvases (name, quarter, editorIds)
-    B-->>F: 새 캔버스 (소유자 = 나, 편집할 사람 초대됨)
+    B-->>F: 새 페이지 (소유자 = 나, 편집할 사람 초대됨)
   end
   F->>B: GET /canvases/{id}
   B-->>F: meta(myRole), cards, links, lastSeq
   Note over F: myRole이 view면 편집 도구를 숨김
   F->>B: GET /canvases/{id}/card-tags
-  Note over F: 오른쪽 결과 패널은 생성하기 전까지 없음
+  F->>B: GET /canvases/{id}/analyses (내 세션, 최신 세션의 지적 박스)
 ```
 
-## 2-1. 공유 (C13)
+## 2-1. 페이지 정보 · 협업자 (C13)
 
 ```mermaid
 sequenceDiagram
   actor U as 소유자
-  participant F as 공유 창
+  participant F as 페이지 정보
   participant B as backend
 
-  U->>F: 로고 → 메뉴 팝업(C15) → 정보 수정
+  U->>F: 헤더 정보 아이콘
   F->>B: GET /canvases/{id}/shares
   B-->>F: ownerId, members, people
   U->>F: 찾기 칸 클릭
@@ -109,14 +109,14 @@ sequenceDiagram
   participant F as 화면
   participant B as backend
 
-  U->>F: 카드 올리기 · 연결 · 값 수정 · 카드 · 선 프롬프트
+  U->>F: 카드 올리기 · 연결 · 값 수정 · 메모(카드 · 메모 카드 · 선) · 표 생성 · 시각화 생성 · 대응 확정/거부
   F->>F: 로컬 상태 반영, 큐에 이벤트 추가
   Note over F: 150ms 동안 묶음
   F->>B: POST /canvases/{id}/events (requestId, events, 글 수정은 baseVersion)
   alt 성공
     B-->>F: lastSeq, firstChangedLayer, textVersions
     F->>B: GET /canvases/{id}/card-tags
-    F->>B: GET /canvases/{id}/compares/{cardId} (비교 카드마다)
+    F->>B: GET /canvases/{id}/compares/{cardId} (비교 · 시각화 카드마다)
   else 409 K003 (다른 사람이 같은 글을 먼저 고침)
     B-->>F: data: 지금 글과 버전
     F->>F: 그 글을 최신으로 바꾸고 안내, 나머지 조작은 새 requestId로 다시 보냄
@@ -163,45 +163,56 @@ sequenceDiagram
   participant A as ai
 
   rect rgba(128,128,128,0.08)
-  Note over U,B: 검색 탭
-  F->>B: GET /dashboard (입력 없음: 대시보드 3개)
-  U->>F: 검색어 + Enter
-  F->>B: GET /filings/search?q= (재무 데이터 리스트)
-  F->>B: GET /documents?kind=ir,ar&q= (IR·AR 리스트)
-  U->>F: 재무 행 · 행 고르기
+  Note over U,B: 캔버스 오른쪽 사이드바. 입력 없음: 대시보드 · 회사 재무 · 인사이트 탭
+  F->>B: GET /dashboard (패널 목록 · 배치)
+  F->>B: GET /insights?asOfDate= (3사 비교, 인사이트 탭)
+  F->>B: GET /documents?kind=news&canvasId= (관련 뉴스 추천, 썸네일 img)
+  end
+
+  rect rgba(128,128,128,0.08)
+  Note over U,B: 통합 검색 (입력하는 즉시, 150ms 묶음)
+  U->>F: 검색어 입력
+  par 같은 q로 함께
+    F->>B: GET /filings/search?q= (공시 재무 데이터)
+  and
+    F->>B: GET /documents?kind=ir,ar&q= (IR·AR)
+  and
+    F->>B: GET /documents?kind=news&q= (뉴스)
+  end
+  U->>F: Esc (검색어 지우고 탭 화면으로)
+  U->>F: 행 고르기
   F->>B: GET /filings/tables/{tableId}
-  Note over F: 고른 행 · 열은 선택 칩에 담음 (아직 이벤트 없음)
+  Note over F: 고른 행 · 열은 캔버스에 올리기로 바로 카드
   end
 
   rect rgba(128,128,128,0.08)
-  Note over U,B: 인사이트 탭 (Tab)
-  U->>F: 주제 + Enter
-  F->>B: GET /insights?q=&asOfDate=
-  F->>B: GET /documents?kind=news&q= (입력 없으면 캔버스 기준 추천)
+  Note over U,A: 검색창 + → 데이터 입력 (C16)
+  U->>F: 대상 회사 선택 · 발행일 선택(선택 사항) · 파일 여러 개 선택
+  loop 파일마다 한 요청
+    F->>B: POST /documents/uploads (file, canvasId, company, publishedDate?)
+    alt 업로드 접수
+      B->>A: 자료 준비 작업
+      B-->>F: 202 jobId, documentIds
+      loop 완료까지 2초, RUNNING 1분 뒤 5초
+        F->>B: GET /jobs/{jobId}
+      end
+      alt SUCCEEDED
+        F->>B: GET /documents/{documentIds[0]}
+        B-->>F: Doc
+      else FAILED
+        Note over F: 파일 줄에 errorMessage 표시
+      end
+    else 요청 거절
+      B-->>F: 오류 코드와 메시지 (D001이면 data.reason 포함)
+    end
+  end
   end
 
-  rect rgba(128,128,128,0.08)
-  Note over U,A: 입력창 +
-  U->>F: 파일 선택
-  F->>B: POST /documents/uploads
-  B->>A: 자료 준비 작업 시작
-  B-->>F: 202 jobId, documentIds
-  loop SUCCEEDED · FAILED까지
-    F->>B: GET /jobs/{id}
-  end
-  F->>B: GET /documents/{id}
-  Note over F: 선택 칩에 담음
-  end
-
-  alt 추가하기 (선택 칩 전부)
-    U->>F: 추가하기
-  else 길게 눌러 끌기 (그 항목만)
-    U->>F: 캔버스에 놓기
-  end
+  U->>F: 패널 · 항목을 캔버스로 끌어 놓기 (또는 두 번 누르기)
   F->>B: POST /canvases/{id}/events (add_card · add_doc · add_dash · create_compare)
 ```
 
-## 5. 생성하기 (결과물 → 질문 → 평가)
+## 5. 분석 (검토 → 질문 → 평가)
 
 ```mermaid
 sequenceDiagram
@@ -210,39 +221,30 @@ sequenceDiagram
   participant B as backend
   participant A as ai
 
-  F->>B: GET /deliverables
-  U->>F: 생성하기 (결과물 종류: 예산서 · 사업기획서)
-  Note over F: 남은 이벤트(프롬프트 포함)를 먼저 보내고 결과 패널을 엶
-  F->>B: GET /canvases/{id}/evidence (근거 ID → 카드 찾기)
-
-  Note over F: 프로세스 바 1 결과물
-  F->>B: POST /canvases/{id}/drafts (deliverableId, asOfDate)
-  B->>A: 분석 작업 시작 (컨텍스트 L0~L4, 사용자 프롬프트 포함)
-  B-->>F: 202 jobId
-  loop SUCCEEDED · FAILED까지
+  U->>F: 캔버스 하단 분석하기 (세션이 없을 때) 또는 새로 분석하기 / 업데이트(POST, baseAnalysisId = 같은 세션의 새 버전)
+  Note over F: 남은 이벤트(메모 포함)를 먼저 보내고 분석 화면(C20)으로
+  F->>B: POST /canvases/{id}/analyses (asOfDate)
+  B->>A: 분석 작업 (컨텍스트 L0~L4: 카드 · 연결 · 메모 3종)
+  B-->>F: 202 jobId, analysisId
+  loop SUCCEEDED · FAILED까지 (step: REVIEW → QUESTIONS로 프로세스 바 진행)
     F->>B: GET /jobs/{id}
   end
-  F->>B: GET /drafts/{draftId}
+  F->>B: GET /canvases/{id}/analyses
+  B-->>F: 세션 (review: 메모 분류 · 주장 · 판정 · findings · insights · note, questions, assumptions)
+  Note over F: C21 검토, C10 카드에 지적 박스, C22 질문 리포트. 평가는 회색 대기
 
-  Note over F: 프로세스 바 2 질문
-  F->>B: POST /canvases/{id}/questions (asOfDate)
-  B->>A: 예측 작업 시작
-  B-->>F: 202 jobId
-  loop SUCCEEDED · FAILED까지
-    F->>B: GET /jobs/{id}
+  opt 다음 분기 자료가 들어온 뒤 (데모: 버튼)
+    U->>F: 다음 분기 자료 반영
+    F->>B: POST /analyses/{id}/evaluations
+    B-->>F: hit, off, missed, checks, precision, recall
   end
-  F->>B: GET /question-sets/{id}
 
-  Note over F: 프로세스 바 3 평가
-  F->>B: POST /canvases/{id}/evaluations (questionSetId, draftId)
-  B-->>F: hit, off, missed, checks, precision, recall
-
-  opt 내보내기 · 부가 기능
-    U->>F: 결과물 PDF · Markdown, 질문 Markdown (화면에서 만듦)
-    U->>F: 프롬프트 복사
-    F->>B: POST /canvases/{id}/context
-    B-->>F: layers L0~L4, messages
+  opt 화면에서만
+    U->>F: 정리 글 복사 · Markdown, 질문 리포트 Markdown, 근거 ID → 캔버스 카드
   end
+  Note over F: 보고 있는 세션의 canvasSig가 지금과 다르면 "캔버스가 변경되었습니다." 업데이트 · 새로 분석하기
+  U->>F: 세션 목록 휴지통
+  F->>B: POST /canvases/{id}/analyses/{analysisId}/hide (목록에서 숨김, 결과는 보존)
 ```
 
 ## 6. 작업 상태 (job)

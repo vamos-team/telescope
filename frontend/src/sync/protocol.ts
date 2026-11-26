@@ -6,14 +6,14 @@ import type { CanvasEvent } from "../api";
 /** 서버 이벤트 한 건. 필드는 camelCase. */
 export type ServerEvent = { type: string; [k: string]: unknown };
 
-/** 글 버전. text는 프롬프트 카드 본문, prompt는 카드·선 프롬프트. */
-export interface TextVersions { text?: number; prompt?: number }
+/** 글 버전. text는 메모 카드 본문, memo는 카드 메모·선 메모. */
+export interface TextVersions { text?: number; memo?: number }
 
 /** POST /canvases/{id}/events 성공 응답의 data. */
 export interface EventsResponse { lastSeq: number; firstChangedLayer: string | null; textVersions: Record<string, TextVersions> }
 
 /** 409 K003 응답의 data: 지금 서버에 저장된 글. */
-export interface TextConflict { targetId: string; field: "text" | "prompt"; text: string | null; version: number }
+export interface TextConflict { targetId: string; field: "text" | "memo"; text: string | null; version: number }
 
 /** /topic/canvases/{id}/events: 커밋된 이벤트 묶음. */
 export interface EventsMessage {
@@ -38,7 +38,8 @@ const TO_LOCAL: Record<string, string> = Object.fromEntries(Object.entries(TO_SE
 /** 화면에만 있는 필드. 작성자는 서버가 토큰으로 정한다. */
 const LOCAL_ONLY = new Set(["author"]);
 /** 카드를 새로 만드는 이벤트. 서버에 위치(x, y)를 함께 보낸다. */
-export const ADD_TYPES = new Set(["add_card", "add_doc", "add_dash", "add_prompt", "create_compare", "add_chart"]);
+/** 시각화 카드는 create_compare(view: "chart")로 만든다. */
+export const ADD_TYPES = new Set(["add_card", "add_doc", "add_dash", "add_memo", "create_compare"]);
 
 /**
  * 화면 이벤트를 서버 이벤트로 바꾼다.
@@ -70,11 +71,11 @@ export function fromServerEvent(e: ServerEvent): CanvasEvent {
 
 /**
  * 글을 고치는 이벤트면 대상과 글 종류를 돌려준다. 기준 버전을 붙이고 충돌을 고를 때 쓴다.
- * 프롬프트 카드 본문(edit_prompt) → text, 카드 프롬프트(set_card_prompt)·선 프롬프트(set_link_prompt) → prompt.
+ * 메모 카드 본문(edit_memo) → text, 카드 메모(set_card_memo)·선 메모(set_link_memo) → memo.
  */
-export function textTarget(e: CanvasEvent): { id: string; field: "text" | "prompt" } | null {
-  if (e.type === "edit_prompt") return { id: String(e.card_id), field: "text" };
-  if (e.type === "set_card_prompt") return { id: String(e.card_id), field: "prompt" };
-  if (e.type === "set_link_prompt") return { id: String(e.link_id), field: "prompt" };
+export function textTarget(e: CanvasEvent): { id: string; field: "text" | "memo" } | null {
+  if (e.type === "edit_memo") return { id: String(e.card_id), field: "text" };
+  if (e.type === "set_card_memo") return { id: String(e.card_id), field: "memo" };
+  if (e.type === "set_link_memo") return { id: String(e.link_id), field: "memo" };
   return null;
 }
