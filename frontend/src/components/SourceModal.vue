@@ -1,13 +1,13 @@
 <script setup lang="ts">
-// 자료 검색 화면 (상단 "자료 검색", ⌘K). 하단 탭 두 개(검색 / 인사이트, Tab으로 전환)와 입력창
-// - 검색: 입력이 비면 대시보드 3개. Enter → 재무 데이터 리스트(공시 임베딩 검색 자리) + IR·AR 리스트. 재무 행을 누르면 원본 창에서 행을 골라 선택 목록에 담음
-// - 인사이트: 입력이 비면 3사 비교 인사이트 + 관련 뉴스. Enter(확인) → 질문 개념에 닿는 AI 해석 비교 테이블 + 뉴스
-// - 누르면 선택(입력창 위 칩 목록), "추가하기"로 캔버스에 올림. 길게 누르면 그 항목만 집어 캔버스로 바로 끌어 놓음(선택 목록과 별개)
+// 자료 검색 화면 (상단 "자료 검색", ⌘K)
+// - 입력이 비면 하단 탭 3개 (Tab · Shift+Tab 순환): 대시보드(한눈에 + 자산 계정) / 회사 재무(손익 · 재무상태 · 현금흐름 · 설비투자 · 동종사 비교) / 인사이트(3사 비교 + 관련 뉴스)
+// - 입력하는 즉시 통합 검색: 공시 재무 데이터 + IR·AR + 뉴스 (실제 서비스는 임베딩 검색 자리. 화면은 공시 검색과 문서 검색을 같은 q로 함께 부름)
+// - 누르면 선택(입력창 위 칩), 입력창 오른쪽 "추가하기"로 캔버스에 올림. 길게 누르면 그 항목만 집어 캔버스로 끌어 놓음
 // - 입력창 왼쪽 +: 사내 자료 파일을 골라 선택 목록에 담음
 import { ref, watch, computed, nextTick, onMounted, onUnmounted } from "vue";
 import { api, docTitle, KIND_LABEL, type SearchResult, type Doc, type Insight } from "../api";
 import { useCanvas } from "../stores/canvas";
-import { DASH_PANELS } from "../local/dashboard";
+import { LAYOUT, panelOf } from "../local/dashboard";
 import DashPanel from "./DashPanel.vue";
 import SourceOverlay from "./SourceOverlay.vue";
 
@@ -19,9 +19,11 @@ const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{ close: []; add: [items: Pick[]]; example: [] }>();
 const cv = useCanvas();
 const A = api.analysis;
-const tab = ref<"search" | "insight">("search");
+const TABS = [["dash", "대시보드"], ["fin", "회사 재무"], ["insight", "인사이트"]] as const;
+type Tab = typeof TABS[number][0];
+const tab = ref<Tab>("dash"), ftab = ref("pl"), period = ref<"y" | "q">("y");
 const q = ref(""), sq = ref(""), input = ref<HTMLInputElement>(), file = ref<HTMLInputElement>();
-const dart = ref<SearchResult[]>([]), irar = ref<Doc[]>([]), news = ref<{ doc: Doc; why: string }[]>([]);
+const dart = ref<SearchResult[]>([]), irar = ref<Doc[]>([]), found = ref<Doc[]>([]);
 const basis = ref<{ companies: string[]; tags: string[] }>({ companies: [], tags: [] });
 const nf = ref("전체");
 const busy = ref(false), err = ref("");
@@ -35,41 +37,42 @@ async function refreshBasis() {
   }
   basis.value = { companies: cos.size ? [...cos] : [A.focus], tags: [...new Set(Object.values(cv.tags).flat())] };
 }
-// Enter(확인)를 누르면 검색어 확정. 입력을 다 지우면 대시보드·인사이트 홈으로
-async function submit() {
-  sq.value = q.value.trim();
-  if (tab.value === "search" && sq.value) { dart.value = await api.searchQuestion(sq.value); irar.value = (await api.searchDocs(sq.value, ["ir", "ar"])).map((x) => x.doc); }
-  news.value = sq.value ? await api.searchDocs(sq.value, ["news"]) : api.recommend(basis.value.companies, basis.value.tags, ["news"]);
+// 통합 검색: 입력하는 즉시(짧게 묶어서) 공시 · IR·AR · 뉴스를 함께 찾음. 입력을 다 지우면 탭 화면으로
+let timer = 0;
+async function search() {
+  const s = q.value.trim(); sq.value = s;
+  if (!s) return;
+  const [d, ir, nw] = await Promise.all([api.searchQuestion(s), api.searchDocs(s, ["ir", "ar"]), api.searchDocs(s, ["news"])]);
+  if (q.value.trim() !== s) return;  // 그사이 입력이 바뀜
+  dart.value = d; irar.value = ir.map((x) => x.doc); found.value = nw.map((x) => x.doc);
 }
-watch(q, (v) => { if (!v.trim() && sq.value) submit(); });
-watch(tab, () => { if (q.value.trim() !== sq.value) submit(); });
+watch(q, () => { clearTimeout(timer); if (!q.value.trim()) { sq.value = ""; return; } timer = window.setTimeout(search, 150); });
 watch(() => props.open, async (open) => {
   if (!open) return;
-  q.value = ""; sq.value = ""; tab.value = "search"; sel.value = []; dragging.value = false;
-  await refreshBasis(); await submit();
+  q.value = ""; sq.value = ""; tab.value = "dash"; sel.value = []; dragging.value = false;
+  await refreshBasis();
   nextTick(() => input.value?.focus());
 }, { immediate: true });
 
-const coOk = (co: string) => nf.value === "전체" || (nf.value === "3사 공통" ? /3사|업계/.test(co) : co === nf.value);
+// 인사이트 탭: 관련 뉴스는 캔버스 회사 · 개념과 겹치는 순, 회사 필터
 const NF = ["전체", "SKT", "KT", "LGU+", "3사 공통"];
-const newsShown = computed(() => news.value.filter((x) => coOk(x.doc.company)));
-// 3사 비교 인사이트: 캔버스 개념과 겹치는 수로 정렬. 확정한 질문이 있으면 질문 개념에 닿는 것만
-const insights = computed(() => {
-  const qc = api.conceptsFor(sq.value);
-  const scored = A.insights.map((i) => ({ i, s: i.concepts.filter((c) => basis.value.tags.includes(c)).length, hit: i.concepts.some((c) => qc.has(c)) }));
-  return (sq.value ? scored.filter((x) => x.hit) : scored).sort((a, b) => b.s - a.s).map((x) => x.i);
-});
+const coOk = (co: string) => nf.value === "전체" || (nf.value === "3사 공통" ? /3사|업계/.test(co) : co === nf.value);
+const news = computed(() => api.recommend(basis.value.companies, basis.value.tags, ["news"]).map((x) => x.doc).filter((d) => coOk(d.company)));
+// 3사 비교 인사이트(분기, 공시 표 → 비교 카드): 캔버스 개념과 겹치는 수로 정렬
+const insights = computed(() => A.insights.map((i) => ({ i, s: i.concepts.filter((c) => basis.value.tags.includes(c)).length })).sort((a, b) => b.s - a.s).map((x) => x.i));
 const facts = (i: Insight) => api.peerFacts(i.concepts.slice(0, 2));
 const pct = (a: number | null, b: number | null) => a == null || b == null || !a ? "—" : `${b >= a ? "+" : ""}${((b - a) / Math.abs(a) * 100).toFixed(1)}%`;
 const num = (v: number | null) => v == null ? "—" : v.toLocaleString("ko-KR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const date = (d: string) => d.slice(2).replace(/-/g, ".");
+const finPanels = computed(() => { const t = LAYOUT.fin[ftab.value]; return period.value === "q" && t.q ? t.q : t.y; });
+const span = (id: string) => `s${panelOf(id)?.span ?? 12}`;
 
 // ---------- 항목 → Pick ----------
 const docPick = (d: Doc): Pick => ({ key: "doc:" + d.id, label: docTitle(d), tag: KIND_LABEL[d.kind], src: d.kind, kind: "doc", id: d.id });
 const tablePick = (r: SearchResult, rows = r.hits.map((h) => h.r), cols?: number[]): Pick =>
   ({ key: "tbl:" + r.table_id, label: `${r.company} ${r.title}`, tag: "공시", src: "dart", kind: "table", tableId: r.table_id, rows, cols });
 const insPick = (i: Insight): Pick => ({ key: "ins:" + i.id, label: i.title, tag: "3사 비교", src: "viz", kind: "compare", tables: facts(i).tables });
-const dashPick = (p: typeof DASH_PANELS[number]): Pick => ({ key: "dash:" + p.id, label: p.title, tag: "대시보드", src: "viz", kind: "dash", panel: p.id });
+const dashPick = (id: string): Pick => ({ key: "dash:" + id, label: panelOf(id)?.title ?? id, tag: "대시보드", src: "viz", kind: "dash", panel: id });
 
 // ---------- 선택 (칩 목록) ----------
 const sel = ref<Pick[]>([]);
@@ -83,16 +86,18 @@ const detail = ref<SearchResult | null>(null);
 function picked(_: string, rows: number[], cols: number[]) { put(tablePick(detail.value!, rows, cols)); detail.value = null; }
 
 // ---------- 짧게 누르기 = 선택, 길게 누르기(400ms) = 그 항목만 집어 캔버스로 끌기 ----------
+// 차트 안의 조작 버튼(보기 전환 등)은 .nodrag 안에 있어 선택하지 않음
 const hold = ref(""), armed = ref(""), dragging = ref(false);
-let timer = 0;
+let htimer = 0;
+const inner = (e: Event) => !!(e.target as HTMLElement).closest("a,button,input,label,.nodrag");
 function down(p: Pick, e: PointerEvent) {
-  if (e.button !== 0 || (e.target as HTMLElement).closest("a,button")) return;
+  if (e.button !== 0 || inner(e)) return;
   hold.value = p.key; armed.value = "";
-  clearTimeout(timer); timer = window.setTimeout(() => { armed.value = p.key; }, 400);
+  clearTimeout(htimer); htimer = window.setTimeout(() => { armed.value = p.key; }, 400);
 }
-function up() { clearTimeout(timer); hold.value = ""; }
+function up() { clearTimeout(htimer); hold.value = ""; }
 function click(p: Pick, e: MouseEvent) {
-  if ((e.target as HTMLElement).closest("a,button")) return;
+  if (inner(e)) return;
   if (armed.value === p.key) { armed.value = ""; return; }  // 길게 눌렀다 놓은 것은 선택이 아님
   toggle(p);
 }
@@ -103,10 +108,10 @@ function dragStart(p: Pick, e: DragEvent) {
   setTimeout(() => { dragging.value = true; hold.value = ""; });  // 같은 틱에 화면을 바꾸면 브라우저가 끌기를 취소함
 }
 function dragEnd() { dragging.value = false; armed.value = ""; }
-// 항목마다 붙이는 속성·이벤트 묶음
 const pk = (p: Pick) => ({ class: ["pickable", { on: isSel(p.key), lift: hold.value === p.key && armed.value === p.key }], draggable: true, "data-src": p.src,
   onPointerdown: (e: PointerEvent) => down(p, e), onPointerup: up, onPointerleave: up, onClick: (e: MouseEvent) => click(p, e),
   onDragstart: (e: DragEvent) => dragStart(p, e), onDragend: dragEnd });
+const noImg = (e: Event) => { const el = e.target as HTMLImageElement; el.parentElement?.classList.add("noimg"); el.remove(); };
 
 // ---------- 사내 자료 업로드 (+): 실제 서비스는 파서 모델이 본문·표를 요약하고 임베딩해 적재. 데모는 텍스트 파일만 읽어 앞부분을 요약으로 ----------
 const KEYWORDS: Record<string, string[]> = { capex: ["capex", "설비투자", "설비"], ai_dc: ["데이터센터", "aidc", "gpu"], da: ["감가상각"],
@@ -132,44 +137,33 @@ async function upload(e: Event) {
   finally { busy.value = false; el.value = ""; }
 }
 
-const PH = { search: "공시 재무 데이터와 IR·AR을 검색하고 Enter (예: SKT 감가상각비, KT 영업이익)",
-  insight: "비교할 주제를 입력하고 Enter (예: 3사 영업이익, 감가상각비)" };
-// ---------- 키보드: Tab·Shift+Tab 으로 검색 ↔ 인사이트 (Esc 닫기는 App) ----------
+const PH = "공시 · IR · AR · 뉴스를 한 번에 검색 (예: SKT 감가상각비, KT 영업이익)";
+// ---------- 키보드: 입력이 비었을 때 Tab · Shift+Tab 으로 탭 순환 (Esc 닫기는 App) ----------
 function onKey(e: KeyboardEvent) {
-  if (!props.open || detail.value) return;
-  if (e.key === "Tab" && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); tab.value = tab.value === "search" ? "insight" : "search"; }
+  if (!props.open || detail.value || sq.value) return;
+  if (e.key === "Tab" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    e.preventDefault();
+    const i = TABS.findIndex(([k]) => k === tab.value);
+    tab.value = TABS[(i + (e.shiftKey ? TABS.length - 1 : 1)) % TABS.length][0];
+  }
 }
 onMounted(() => window.addEventListener("keydown", onKey));
 onUnmounted(() => window.removeEventListener("keydown", onKey));
 </script>
 
 <template>
-  <div v-if="open" class="adder" :class="[dragging ? 'drag' : 'dim', 'tab-' + tab]" role="dialog" aria-label="자료 검색">
+  <div v-if="open" class="adder" :class="[dragging ? 'drag' : 'dim']" role="dialog" aria-label="자료 검색">
     <div class="dimbg" />
     <div class="corner">
       <button v-if="api.meta.example" class="ex" @click="emit('example')">예시 불러오기</button>
       <button class="x" aria-label="닫기 (Esc)" title="닫기 (Esc)" @click="emit('close')">✕</button>
     </div>
-    <div v-if="tab === 'insight'" class="cofilter seg" role="radiogroup" aria-label="뉴스 회사">
-      <button v-for="x in NF" :key="x" :aria-pressed="nf === x" @click="nf = x">{{ x }}</button></div>
 
     <main class="stage" :aria-hidden="dragging">
-      <div class="inner">
-        <!-- 검색: 대시보드 -->
-        <template v-if="tab === 'search' && !sq">
-          <div class="sech first"><h3>대시보드 <small>DART 공시, 억원</small></h3></div>
-          <div class="dgrid">
-            <section v-for="p in DASH_PANELS" :key="p.id" class="dcell" v-bind="pk(dashPick(p))">
-              <span class="lk">대시보드</span>
-              <header><b>{{ p.title }}</b><small>{{ p.sub }}</small></header>
-              <DashPanel :panel="p.id" />
-            </section>
-          </div>
-        </template>
-
-        <!-- 검색: 결과 리스트 (재무 데이터 + IR·AR) -->
-        <template v-else-if="tab === 'search'">
-          <div class="sech first"><h3>재무 데이터 <small>{{ dart.length }}</small></h3></div>
+      <div class="inner dz">
+        <!-- 통합 검색 결과 -->
+        <template v-if="sq">
+          <div class="sech first"><h3>공시 재무 데이터 <small>{{ dart.length }}</small></h3></div>
           <div class="ilist">
             <article v-for="r in dart" :key="r.table_id" class="irow" v-bind="pk(tablePick(r))">
               <span class="lk">공시</span>
@@ -191,11 +185,51 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
             </article>
             <p v-if="!irar.length" class="none">맞는 IR·AR 자료가 없습니다.</p>
           </div>
+          <div class="sech"><h3>뉴스 <small>{{ found.length }}</small></h3></div>
+          <div class="news">
+            <article v-for="d in found" :key="d.id" class="ncard" v-bind="pk(docPick(d))">
+              <span class="lk">뉴스</span>
+              <div class="nimg"><img v-if="d.img" :src="d.img" alt="" loading="lazy" referrerpolicy="no-referrer" draggable="false" @error="noImg"><span>{{ d.publisher.slice(0, 1) }}</span></div>
+              <div class="ntext"><div class="nm">{{ d.publisher }}<span class="dotsep">·</span>{{ date(d.date) }}</div>
+                <div class="nt" :title="d.title">{{ d.title }}</div>
+                <div class="nft"><span class="tag">{{ /3사|업계/.test(d.company) ? "3사 공통" : d.company }}</span><a v-if="d.url" :href="d.url" target="_blank" rel="noopener" draggable="false">원본</a></div></div>
+            </article>
+            <p v-if="!found.length" class="none">맞는 뉴스가 없습니다.</p>
+          </div>
         </template>
 
-        <!-- 인사이트: AI 해석 비교 테이블 + 관련 뉴스 -->
+        <!-- 대시보드 -->
+        <template v-else-if="tab === 'dash'">
+          <div class="sech first"><h3>SK텔레콤 <small>017670 · 2021–2025 · DART 공시, 단위 억원</small></h3></div>
+          <div class="dgrid">
+            <section v-for="id in LAYOUT.dash" :key="id" class="dk" :class="span(id)" v-bind="pk(dashPick(id))">
+              <span class="lk">대시보드</span>
+              <header><b>{{ panelOf(id)!.title }}</b><span class="tag">{{ panelOf(id)!.sub }}</span></header>
+              <DashPanel :panel="id" />
+            </section>
+          </div>
+        </template>
+
+        <!-- 회사 재무 -->
+        <template v-else-if="tab === 'fin'">
+          <div class="sech first"><h3>SK텔레콤 회사 재무 <small>DART 공시, 단위 억원</small></h3>
+            <div class="seg" role="tablist" aria-label="재무 보기">
+              <button v-for="(t, k) in LAYOUT.fin" :key="k" role="tab" :aria-selected="ftab === k" @click="ftab = String(k)">{{ t.label }}</button></div>
+            <div v-if="LAYOUT.fin[ftab].q" class="seg" role="radiogroup" aria-label="기간">
+              <button :aria-pressed="period === 'y'" @click="period = 'y'">연간</button><button :aria-pressed="period === 'q'" @click="period = 'q'">분기</button></div>
+          </div>
+          <div class="dgrid">
+            <section v-for="id in finPanels" :key="id" class="dk" :class="span(id)" v-bind="pk(dashPick(id))">
+              <span class="lk">대시보드</span>
+              <header><b>{{ panelOf(id)!.title }}</b><span v-if="panelOf(id)!.sub" class="tag">{{ panelOf(id)!.sub }}</span></header>
+              <DashPanel :panel="id" />
+            </section>
+          </div>
+        </template>
+
+        <!-- 인사이트: 3사 비교(분기 · 연간) + 관련 뉴스 -->
         <template v-else>
-          <div class="sech first"><h3>{{ sq ? `'${sq}' 비교 분석` : "3사 비교 인사이트" }} <small>{{ insights.length }}</small></h3><span class="tag ai">AI 해석</span></div>
+          <div class="sech first"><h3>3사 비교 인사이트 <small>1Q26 · {{ insights.length }}</small></h3><span class="tag ai">AI 해석</span></div>
           <div class="icards row">
             <section v-for="i in insights" :key="i.id" class="icard" v-bind="pk(insPick(i))">
               <span class="lk">3사 비교</span>
@@ -212,40 +246,49 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
                 <div class="nrefs"><template v-for="n in i.news.slice(0, 2)" :key="n"><a v-if="api.docs.get(n)" :href="api.docs.get(n)!.url" target="_blank" rel="noopener" draggable="false">
                   {{ api.docs.get(n)!.publisher }} {{ api.docs.get(n)!.date.slice(5) }} · {{ api.docs.get(n)!.title }}</a></template></div></div>
             </section>
-            <p v-if="!insights.length" class="none">입력한 주제와 닿는 비교 분석이 없습니다.</p>
           </div>
-          <div class="sech"><h3>관련 뉴스 <small>{{ newsShown.length }}</small></h3></div>
-          <div class="hs">
-            <article v-for="{ doc: d, why } in newsShown" :key="d.id" class="dcard" v-bind="pk(docPick(d))">
+          <div class="sech"><h3>연간 인사이트 <small>2025 · {{ LAYOUT.insights.length }}</small></h3><span class="tag ai">AI 해석</span></div>
+          <div class="dgrid">
+            <section v-for="id in LAYOUT.insights" :key="id" class="dk icard2" :class="span(id)" v-bind="pk(dashPick(id))">
+              <span class="lk">대시보드</span>
+              <header><b>{{ panelOf(id)!.title }}</b></header>
+              <div class="lab2">사실 <span class="tag">공시</span><span class="tag">계산</span><small>{{ panelOf(id)!.sub }}</small></div>
+              <DashPanel :panel="id" />
+            </section>
+          </div>
+          <div class="sech"><h3>관련 뉴스 <small>{{ news.length }}</small></h3>
+            <div class="seg" role="radiogroup" aria-label="뉴스 회사"><button v-for="x in NF" :key="x" :aria-pressed="nf === x" @click="nf = x">{{ x }}</button></div></div>
+          <div class="news">
+            <article v-for="d in news" :key="d.id" class="ncard" v-bind="pk(docPick(d))">
               <span class="lk">뉴스</span>
-              <b class="ti" :title="d.title">{{ docTitle(d) }}</b>
-              <p class="su">{{ d.summary }}</p>
-              <small class="why">{{ why }}</small>
-              <div class="ft"><span class="meta">{{ d.company }} · {{ d.publisher }} · {{ date(d.date) }}</span>
-                <a v-if="d.url" :href="d.url" target="_blank" rel="noopener" draggable="false">원본</a></div>
+              <div class="nimg"><img v-if="d.img" :src="d.img" alt="" loading="lazy" referrerpolicy="no-referrer" draggable="false" @error="noImg"><span>{{ d.publisher.slice(0, 1) }}</span></div>
+              <div class="ntext"><div class="nm">{{ d.publisher }}<span class="dotsep">·</span>{{ date(d.date) }}</div>
+                <div class="nt" :title="d.title">{{ d.title }}</div>
+                <div class="nft"><span class="tag">{{ /3사|업계/.test(d.company) ? "3사 공통" : d.company }}</span><a v-if="d.url" :href="d.url" target="_blank" rel="noopener" draggable="false">원본</a></div></div>
             </article>
-            <p v-if="!newsShown.length" class="none">맞는 뉴스가 없습니다.</p>
+            <p v-if="!news.length" class="none">맞는 뉴스가 없습니다.</p>
           </div>
         </template>
       </div>
     </main>
 
-    <!-- 하단: 탭 + 선택 칩 + 입력창 (+ 업로드 / 추가하기) -->
+    <!-- 하단: 탭(입력이 비었을 때) + 선택 칩 + [+ 입력창] [추가하기] -->
     <div class="dock">
-      <div class="tabs3" role="tablist" aria-label="자료 검색 보기">
-        <button role="tab" :aria-selected="tab === 'search'" @click="tab = 'search'">검색</button>
-        <button role="tab" :aria-selected="tab === 'insight'" @click="tab = 'insight'">인사이트</button>
+      <div v-if="!sq" class="tabs3" role="tablist" aria-label="자료 검색 보기">
+        <button v-for="[k, l] in TABS" :key="k" role="tab" :aria-selected="tab === k" @click="tab = k">{{ l }}</button>
       </div>
       <div v-if="sel.length" class="chips2" aria-label="선택한 항목">
         <span v-for="p in sel" :key="p.key" class="chip" :data-src="p.src"><b :title="p.label">{{ p.label }}</b>
           <button :aria-label="p.label + ' 선택 해제'" @click="toggle(p)">✕</button></span>
       </div>
-      <form class="cin" @submit.prevent="submit">
-        <button type="button" class="plus" :title="busy ? '요약하는 중' : '사내 자료 첨부'" aria-label="사내 자료 첨부" @click="file?.click()">+</button>
-        <input ref="file" class="hide" type="file" multiple accept=".txt,.md,.csv,.json,.pdf,.xlsx,.docx,.hwp" @change="upload" />
-        <input ref="input" v-model="q" type="search" :placeholder="PH[tab]" :aria-label="PH[tab]" autocomplete="off" />
+      <div class="cinrow">
+        <form class="cin" @submit.prevent="search">
+          <button type="button" class="plus" :title="busy ? '요약하는 중' : '사내 자료 첨부'" aria-label="사내 자료 첨부" @click="file?.click()">+</button>
+          <input ref="file" class="hide" type="file" multiple accept=".txt,.md,.csv,.json,.pdf,.xlsx,.docx,.hwp" @change="upload" />
+          <input ref="input" v-model="q" type="search" :placeholder="PH" :aria-label="PH" autocomplete="off" />
+        </form>
         <button type="button" class="addb" :disabled="!sel.length" @click="addAll">추가하기{{ sel.length ? ` ${sel.length}` : "" }}</button>
-      </form>
+      </div>
       <small v-if="err" class="err">{{ err }}</small>
     </div>
     <SourceOverlay v-if="detail" :table-id="detail.table_id" :match="detail.hits.map((h) => h.r)" pick @close="detail = null" @add="picked" />

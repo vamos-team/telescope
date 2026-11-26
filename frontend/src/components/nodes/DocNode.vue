@@ -18,7 +18,8 @@ const d = computed(() => api.docs.get(card.value.docId));
     <header class="drag-handle"><span class="kind" :data-kind="d.kind">{{ KIND_LABEL[d.kind] }}</span>
       <div class="t"><b :title="d.title">{{ docTitle(d) }}</b><small>{{ d.company }} / {{ d.publisher }} / {{ d.date }}</small></div>
       <button class="nodrag" @click="cv.remove(card.id)" aria-label="카드 닫기">✕</button></header>
-    <p class="sum">{{ d.summary }}</p>
+    <div v-if="d.img" class="nimg"><img :src="d.img" alt="" loading="lazy" referrerpolicy="no-referrer" draggable="false" @error="($event.target as HTMLElement).remove()"><span>{{ d.publisher.slice(0, 1) }}</span></div>
+    <p v-if="d.summary !== d.title" class="sum">{{ d.summary }}</p>
     <table v-if="d.figures.length" class="g"><tbody>
       <tr v-for="(f, i) in d.figures" :key="i"><td>{{ f.label }}<small>{{ f.period }}</small></td>
         <td>{{ f.value.toLocaleString("ko-KR") }} {{ f.unit }}</td><td class="fid">f{{ i }}</td></tr>

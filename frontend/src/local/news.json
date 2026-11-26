@@ -1,0 +1,203 @@
+{
+ "_note": "v01-stella 데모 실제 기사 헤드라인(corp-finance-agent 뉴스 수집 백업). 발행일은 기준 시점 2026-03-17 이전. img는 기사 og:image(2026-11-13 확인), 원본 서버 이미지를 그대로 불러옴. summary는 헤드라인과 같음(본문 요약 없음)",
+ "items": [
+  {
+   "id": "news-v01-0",
+   "kind": "news",
+   "company": "3사",
+   "title": "[기획] 통신사 CAPEX 전략 변화… 5G 이후 투자 우선순위 재편",
+   "publisher": "투데이e코노믹",
+   "date": "2026-03-11",
+   "summary": "[기획] 통신사 CAPEX 전략 변화… 5G 이후 투자 우선순위 재편",
+   "figures": [],
+   "url": "https://www.todayeconomic.com/news/article.html?no=29854",
+   "img": "https://www.todayeconomic.com/data/photos/20260311/art_17732153020454_8806ab.png",
+   "tags": [
+    "capex"
+   ]
+  },
+  {
+   "id": "news-v01-1",
+   "kind": "news",
+   "company": "SKT",
+   "title": "영업익 40% 급감 SKT, 정석근 CTO 앞세워 '돈 버는 AI' 만든다",
+   "publisher": "인사이트코리아",
+   "date": "2026-02-19",
+   "summary": "영업익 40% 급감 SKT, 정석근 CTO 앞세워 '돈 버는 AI' 만든다",
+   "figures": [],
+   "url": "https://www.insightkorea.co.kr/news/articleView.html?idxno=241397",
+   "img": "https://cdn.insightkorea.co.kr/news/thumbnail/202602/241397_249466_70_v150.jpg",
+   "tags": [
+    "opi",
+    "ai_dc"
+   ]
+  },
+  {
+   "id": "news-v01-2",
+   "kind": "news",
+   "company": "3사",
+   "title": "이통3사, 2025년 성적표 희비교차..누가 웃었을까",
+   "publisher": "뉴스락",
+   "date": "2026-02-11",
+   "summary": "이통3사, 2025년 성적표 희비교차..누가 웃었을까",
+   "figures": [],
+   "url": "http://www.newslock.co.kr/news/articleView.html?idxno=125065",
+   "img": "https://cdn.newslock.co.kr/news/thumbnail/202602/125065_113452_1953_v150.jpg",
+   "tags": [
+    "opi"
+   ]
+  },
+  {
+   "id": "news-v01-3",
+   "kind": "news",
+   "company": "LGU+",
+   "title": "[Rating Watch] 나신평, LG유플 등급 AA+로 상향…SKT·KT와 한노치 차",
+   "publisher": "더벨",
+   "date": "2026-02-11",
+   "summary": "[Rating Watch] 나신평, LG유플 등급 AA+로 상향…SKT·KT와 한노치 차",
+   "figures": [],
+   "url": "https://www.thebell.co.kr/free/content/ArticleView.asp?key=202602091625297720101215",
+   "img": "https://image.thebell.co.kr/news/photo/2026/02/09/20260209162623264_n.png",
+   "tags": [
+    "debt"
+   ]
+  },
+  {
+   "id": "news-v01-4",
+   "kind": "news",
+   "company": "KT",
+   "title": "KT, 해킹 여파에도 영업익 2.5조 '트리플업' 깜짝실적",
+   "publisher": "디지털타임스",
+   "date": "2026-02-10",
+   "summary": "KT, 해킹 여파에도 영업익 2.5조 '트리플업' 깜짝실적",
+   "figures": [],
+   "url": "https://www.dt.co.kr/article/12046089",
+   "img": "https://wimg.dt.co.kr/news/cms/2026/02/10/news-p.v1.20260210.9c412a3fbe6244078f57cf693a6ab6b4_R.jpg",
+   "tags": [
+    "opi"
+   ]
+  },
+  {
+   "id": "news-v01-5",
+   "kind": "news",
+   "company": "3사",
+   "title": "통신3사, 해킹에도 영업익 4兆…KT '부동산·구조조정'에 선방(종합)",
+   "publisher": "뉴스웨이",
+   "date": "2026-02-10",
+   "summary": "통신3사, 해킹에도 영업익 4兆…KT '부동산·구조조정'에 선방(종합)",
+   "figures": [],
+   "url": "https://www.newsway.co.kr/news/view?ud=2026021017085795373",
+   "img": "https://nimage.newsway.co.kr/photo/2026/02/10/20260210000068_1200.png",
+   "tags": [
+    "opi"
+   ]
+  },
+  {
+   "id": "news-v01-6",
+   "kind": "news",
+   "company": "SKT",
+   "title": "SKT, 2026년 통신·AI로 실적 회복 집중",
+   "publisher": "블로터",
+   "date": "2026-02-09",
+   "summary": "SKT, 2026년 통신·AI로 실적 회복 집중",
+   "figures": [],
+   "url": "https://www.bloter.net/news/articleView.html?idxno=653745",
+   "img": "https://cdn.bloter.net/news/thumbnail/202602/653745_264504_247_v150.jpg",
+   "tags": [
+    "opi",
+    "ai_dc"
+   ]
+  },
+  {
+   "id": "news-v01-7",
+   "kind": "news",
+   "company": "3사",
+   "title": "해킹사태 겪은 통신 3사... 보안 강화, AI 인프라 확장 관건",
+   "publisher": "이코리아",
+   "date": "2026-02-06",
+   "summary": "해킹사태 겪은 통신 3사... 보안 강화, AI 인프라 확장 관건",
+   "figures": [],
+   "url": "https://www.ekoreanews.co.kr/news/articleView.html?idxno=84426",
+   "img": "https://cdn.ekoreanews.co.kr/news/photo/202602/84426_105384_3440.jpg",
+   "tags": [
+    "ai_dc"
+   ]
+  },
+  {
+   "id": "news-v01-8",
+   "kind": "news",
+   "company": "LGU+",
+   "title": "LG유플러스, 2026년 '영업이익 1조 클럽' 입성 하나",
+   "publisher": "경인방송",
+   "date": "2026-02-06",
+   "summary": "LG유플러스, 2026년 '영업이익 1조 클럽' 입성 하나",
+   "figures": [],
+   "url": "https://news.ifm.kr/news/articleView.html?idxno=464255",
+   "img": "https://cdn.news.ifm.kr/news/thumbnail/202602/464255_141320_5539_v150.jpg",
+   "tags": [
+    "opi"
+   ]
+  },
+  {
+   "id": "news-v01-9",
+   "kind": "news",
+   "company": "SKT",
+   "title": "SKT, 해킹 여파에 영업이익 40% 감소…4분기 현금배당 안 하기로",
+   "publisher": "노컷뉴스",
+   "date": "2026-02-05",
+   "summary": "SKT, 해킹 여파에 영업이익 40% 감소…4분기 현금배당 안 하기로",
+   "figures": [],
+   "url": "https://www.nocutnews.co.kr/news/6467814",
+   "img": "https://file2.nocutnews.co.kr/newsroom/image/2026/02/05/202602051800400662_0.jpg",
+   "tags": [
+    "opi",
+    "dividend"
+   ]
+  },
+  {
+   "id": "news-v01-10",
+   "kind": "news",
+   "company": "SKT",
+   "title": "[컨콜] [SK텔레콤] 올해 최우선 경영 과제 '실적 정상화'",
+   "publisher": "딜사이트경제TV",
+   "date": "2026-02-05",
+   "summary": "[컨콜] [SK텔레콤] 올해 최우선 경영 과제 '실적 정상화'",
+   "figures": [],
+   "url": "https://news.dealsitetv.com/articles/165161",
+   "img": "https://d2k8i5ah8p7h3l.cloudfront.net/photos/49afe86acbe2758326d7d82b2959d865/thumb.jpg",
+   "tags": [
+    "opi"
+   ]
+  },
+  {
+   "id": "news-v01-11",
+   "kind": "news",
+   "company": "LGU+",
+   "title": "LGU+, 작년매출 15조 돌파…서비스수익 4년 내 최고 성장",
+   "publisher": "조세일보",
+   "date": "2026-02-05",
+   "summary": "LGU+, 작년매출 15조 돌파…서비스수익 4년 내 최고 성장",
+   "figures": [],
+   "url": "http://www.joseilbo.com/news/news_read.php?uid=562350&class=17&grp=",
+   "img": "https://www.joseilbo.com/gisa_img/17702678691770267869_godisrain.jpg",
+   "tags": [
+    "rev"
+   ]
+  },
+  {
+   "id": "news-v01-12",
+   "kind": "news",
+   "company": "LGU+",
+   "title": "[컨콜] LG유플러스 \"연내 5G SA 상용화...SW 업그레이드로 대규모 투자 없어\"",
+   "publisher": "뉴스핌",
+   "date": "2026-02-05",
+   "summary": "[컨콜] LG유플러스 \"연내 5G SA 상용화...SW 업그레이드로 대규모 투자 없어\"",
+   "figures": [],
+   "url": "https://www.newspim.com/news/view/20260205000525",
+   "img": "https://img.newspim.com/news/2026/01/25/2601250940477090_t1.jpg",
+   "tags": [
+    "capex"
+   ]
+  }
+ ]
+}
