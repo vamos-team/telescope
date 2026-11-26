@@ -32,7 +32,7 @@ reviews:
   # 빌드 산출물·외부 의존성·macOS Finder 메타데이터만 제외합니다.
   # lock 파일, DB 마이그레이션, CI 설정은 리뷰 대상에 유지합니다.
   path_filters:
-    - "!**/Icon\r"
+    - "!**/Icon?"
     - "!**/node_modules/**"
     - "!**/dist/**"
     - "!**/build/**"
