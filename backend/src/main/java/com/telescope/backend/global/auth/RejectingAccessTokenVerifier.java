@@ -4,8 +4,7 @@ import com.telescope.backend.global.exception.BusinessException;
 import com.telescope.backend.global.exception.ErrorCode;
 
 /**
- * 인증 구현(#34)이 붙기 전의 기본 구현. 어떤 토큰도 믿지 않는다.
- * WebSocket 연결도 #34 전까지는 모두 거절된다.
+ * 토큰 검증 구현 빈이 없을 때의 기본 구현. 어떤 토큰도 믿지 않아 WebSocket 연결도 모두 거절된다.
  */
 public class RejectingAccessTokenVerifier implements AccessTokenVerifier {
 
