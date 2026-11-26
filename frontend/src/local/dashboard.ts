@@ -145,12 +145,15 @@ const PANELS: Panel[] = [
 export const panelOf = (id: string) => PANELS.find((p) => p.id === id);
 // 자료 검색 화면 배치: 탭(대시보드 · 회사 재무 하위 탭 · 인사이트) → 패널 id
 export const LAYOUT = {
-  dash: ["kpis", "op_bridge", "peer_scatter", "cash_bridge", "capex_ratio", "yoy_heat", "asset"],
+  // DART 탭: 주요 지표 전년 대비 히트맵 · 자산 계정
+  dash: ["yoy_heat", "asset"],
+  // 회사 재무 탭 맨 위(하위 탭과 상관없이): 주요 지표, 영업이익 증감 요인, 3사 영업이익률 · 부채비율, 현금 증감, CapEx/감가상각비
+  finTop: ["kpis", "op_bridge", "peer_scatter", "cash_bridge", "capex_ratio"],
   fin: {
     pl: { label: "손익", y: ["pl_rev", "pl_op", "pl_opm", "pl_opex_mix", "pl_opex_tree", "pl_table"], q: ["plq_rev", "plq_op", "plq_opm", "plq_sep"] },
     bs: { label: "재무상태", y: ["bs_le", "bs_dr", "bs_cur", "bs_assets", "bs_sep_dr", "bs_table"] },
     cf: { label: "현금흐름", y: ["cf_act", "cf_fcf", "cf_cash", "cf_dps", "cf_table"] },
-    capex: { label: "설비투자", y: ["cx_stack", "capex", "capex_ratio", "cx_cum", "cx_dep3", "cx_table"] },
+    capex: { label: "설비투자", y: ["cx_stack", "capex", "cx_cum", "cx_dep3", "cx_table"] },
     peer: { label: "동종사 비교", y: ["opi", "peer_rev_idx", "peer_opm", "peer_dr", "peer_capex", "peer"] },
   } as Record<string, { label: string; y: string[]; q?: string[] }>,
   insights: ANNUAL_INSIGHTS.map((x) => x.id) as string[],
