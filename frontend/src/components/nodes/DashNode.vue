@@ -17,9 +17,9 @@ const p = computed(() => panelOf(card.value?.panel ?? ""));
   <section v-if="card && p" class="card chart dash" :class="{ focus: cv.focus === card.id }">
     <Handle type="target" :position="Position.Left" /><Handle type="source" :position="Position.Right" />
     <header class="drag-handle"><span class="co">대시보드</span>
-      <div class="t"><b>{{ p.title }}</b><small>{{ p.sub }} · DART 공시</small></div>
+      <div class="t"><b>{{ p.title }}</b><small>{{ [p.sub, "DART 공시"].filter(Boolean).join(" · ") }}</small></div>
       <button class="nodrag" @click="cv.remove(card.id)" aria-label="카드 닫기">✕</button></header>
-    <DashPanel :panel="card.panel" />
+    <DashPanel :panel="card.panel" compact />
     <CardPrompt :id="card.id" :text="card.prompt" />
   </section>
 </template>

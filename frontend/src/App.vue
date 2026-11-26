@@ -8,7 +8,7 @@ import SourceOverlay from "./components/SourceOverlay.vue";
 import TableNode from "./components/nodes/TableNode.vue";
 import CompareNode from "./components/nodes/CompareNode.vue";
 import DocNode from "./components/nodes/DocNode.vue";
-import PromptNode from "./components/nodes/PromptNode.vue";
+import MemoNode from "./components/nodes/MemoNode.vue";
 import DashNode from "./components/nodes/DashNode.vue";
 import MenuDrawer from "./components/MenuDrawer.vue";
 import ChartNode from "./components/nodes/ChartNode.vue";
@@ -29,7 +29,8 @@ const shareOpen = ref(false);  // 공유 창
 const renaming = ref(false);  // 상단 캔버스 제목 이름 바꾸기
 const vFocus = { mounted: (el: HTMLInputElement) => el.select() };
 const menuOpen = ref(false);  // 로고를 누르면 뜨는 사이드 팝업
-const run = ref(0);  // 생성하기 횟수. 0이면 오른쪽 결과 패널 없음, 누르면 열려 결과물·질문·평가를 한 번에 만듦
+const run = ref(0);  // 생성하기 횟수. 0이면 오른쪽 결과 패널 없음, 누르면 열려 캔버스 정리 글(컨텍스트)·질문·평가를 한 번에 만듦
+const rpOpen = ref(true);  // 결과 패널 펼침 / 얇은 레일로 접힘
 const selLink = ref<string | null>(null);
 
 // 카드를 고르면 그 카드와 선 하나로 이어진 카드만 밝게, 나머지 카드·선은 흐리게 (빈 곳 클릭·Esc로 해제)
@@ -135,8 +136,8 @@ function onDrop(e: DragEvent) {
 }
 const center = (dx = 0, dy = 0) => { const el = document.querySelector(".flow")!.getBoundingClientRect();
   return flow.screenToFlowCoordinate({ x: el.left + el.width / 2 - dx, y: el.top + el.height / 2 - dy }); };
-function addPrompt() {
-  const id = cv.addPrompt("", center(150, 80));
+function addMemo() {
+  const id = cv.addMemo("", center(140, 60));
   setTimeout(() => (document.querySelector(`[data-id="${id}"] textarea`) as HTMLElement | null)?.focus(), 50);
 }
 
@@ -159,7 +160,7 @@ function focusCard(id: string) {
 const GAP = 60;
 function arrange() {
   const size = (id: string) => flow.findNode(id)?.dimensions ?? { width: 400, height: 300 };
-  const side = cv.cards.filter((c) => c.kind === "doc" || c.kind === "prompt");
+  const side = cv.cards.filter((c) => c.kind === "doc" || c.kind === "memo");
   const tables = cv.cards.filter((c) => c.kind === "table" || c.kind === "dash"), cmps = cv.cards.filter((c) => c.kind === "compare");
   let sy = 40, sideW = 0;
   for (const c of side) { cv.move(c.id, 40, sy); sy += size(c.id).height + 40; sideW = Math.max(sideW, size(c.id).width); }
@@ -198,7 +199,7 @@ async function loadExample() {
   const key: Record<string, string> = {};
   ex.cards.forEach((e, i) => (key[e.table_id] ??= ids[i]));
   for (const d of ex.docs) key[d] = cv.addDocCard(d);
-  ex.prompts.forEach((t, i) => (key[`prompt:${i}`] = cv.addPrompt(t)));
+  ex.memos.forEach((m, i) => (key[`memo:${i}`] = cv.addMemo(m.text, { x: 0, y: 0 }, m.author, m.type)));
   for (const [s, t, rel] of ex.links) if (key[s] && key[t]) cv.addLink(key[s], key[t], rel);
   setTimeout(() => same() && arrange(), 500); // ponytail: 이벤트 전송(150ms)과 비교 결과 렌더 뒤 배치하도록 고정 지연
 }
@@ -211,7 +212,7 @@ const key = (e: KeyboardEvent) => {
   if (e.key === "Escape") { if (shareOpen.value) shareOpen.value = false; else if (menuOpen.value) menuOpen.value = false; else if (srcOpen.value) srcOpen.value = false; else { selLink.value = null; active.value = null; } }
 };
 // 다른 캔버스(세션)를 열면 화면을 그 캔버스에 맞춘다
-watch(() => cv.canvasId, () => { selLink.value = null; active.value = null; shareOpen.value = false; menuOpen.value = false; run.value = 0; setTimeout(() => flow.fitView({ padding: 0.1, duration: 300 }), 300); });
+watch(() => cv.canvasId, () => { selLink.value = null; active.value = null; shareOpen.value = false; menuOpen.value = false; run.value = 0; rpOpen.value = true; setTimeout(() => flow.fitView({ padding: 0.1, duration: 300 }), 300); });
 // 열어 둔 캔버스에 대한 권한이 사라지면(공유 창에서 내 권한 삭제 등) 홈으로
 watch(() => !!cv.canvasId && !cv.meta, (lost) => { if (lost) { shareOpen.value = false; cv.goHome(); } });
 onMounted(() => { cv.restoreUser(); window.addEventListener("keydown", key); (window as unknown as Record<string, unknown>).__aiSelfCheck = () => selfCheck(api.analysis); });
@@ -233,9 +234,9 @@ onUnmounted(() => window.removeEventListener("keydown", key));
       <span v-if="cv.readOnly" class="ro-note">보기 전용</span>
       <template v-else>
         <button class="grey" title="자료 검색 (⌘K)" @click="srcOpen = true">자료 검색</button>
-        <button class="pline" @click="addPrompt">프롬프트</button>
+        <button class="line" @click="addMemo">메모</button>
       </template>
-      <button class="primary" :disabled="!cv.cards.length" title="캔버스 컨텍스트로 결과물·질문·평가를 한 번에 생성" @click="run++">생성하기</button>
+      <button class="primary" :disabled="!cv.cards.length" title="캔버스 내용을 컨텍스트 글로 정리하고 질문·평가까지 한 번에 진행" @click="rpOpen = true; run++">생성하기</button>
     </div>
   </div>
   <div class="main">
@@ -246,7 +247,7 @@ onUnmounted(() => window.removeEventListener("keydown", key));
         <template #node-table="p"><TableNode v-bind="p" /></template>
         <template #node-compare="p"><CompareNode v-bind="p" /></template>
         <template #node-doc="p"><DocNode v-bind="p" /></template>
-        <template #node-prompt="p"><PromptNode v-bind="p" /></template>
+        <template #node-memo="p"><MemoNode v-bind="p" /></template>
         <template #node-dash="p"><DashNode v-bind="p" /></template>
         <template #node-chart="p"><ChartNode v-bind="p" /></template>
         <Panel v-if="cv.error" position="top-center" class="linkbar err-bar" role="alert">
@@ -283,7 +284,7 @@ onUnmounted(() => window.removeEventListener("keydown", key));
       </VueFlow>
     </div>
     <!-- 생성하기를 누르기 전에는 없음. 캔버스가 바뀌면 key로 새로 만들어 다른 캔버스 결과가 섞이지 않게 -->
-    <ResultPanel v-if="run" :key="cv.canvasId" :run="run" @cite="focusCite" />
+    <ResultPanel v-if="run" :key="cv.canvasId" :run="run" :open="rpOpen" @cite="focusCite" @toggle="rpOpen = !rpOpen" />
   </div>
   <SourceModal :open="srcOpen" @close="srcOpen = false" @add="(items) => place(items, center(300, 200))"
     @example="srcOpen = false; loadExample()" />
