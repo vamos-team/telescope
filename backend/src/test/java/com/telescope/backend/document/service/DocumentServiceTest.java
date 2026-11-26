@@ -314,7 +314,7 @@ class DocumentServiceTest {
     private Long user() {
         String loginId = "t-" + UUID.randomUUID();
         return jdbc.queryForObject(
-                "insert into app.users (login_id, password_hash, name, role) values (?, 'x', ?, 'USER') returning id",
+                "insert into app.users (employee_no, password_hash, name, role) values (?, 'x', ?, 'USER') returning id",
                 Long.class, loginId, loginId);
     }
 
