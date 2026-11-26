@@ -55,7 +55,7 @@ const sub = computed(() => res.value ? [new Set(res.value.groups.map((g) => g.ba
       <thead><tr><th>계정 (근거)</th><th v-for="g in res.groups" :key="g.company + g.basis">{{ g.company }}</th>
         <th v-if="res.groups.length === 2">{{ res.groups[1].company }} − {{ res.groups[0].company }}</th><th v-if="!plain">확정</th></tr></thead>
       <tbody>
-        <tr v-for="l in res.lines" :key="l.label" :class="{ okrow: l.confirmed }">
+        <tr v-for="(l, i) in res.lines" :key="l.label + i" :class="{ okrow: l.confirmed }">
           <td :title="l.note ?? ''">{{ l.label }} <small v-if="l.why !== '표 그대로'">{{ l.why }}</small></td>
           <td v-for="(_, i) in res.groups" :key="i" :title="tip(l, i)">{{ fmt(l.totals?.[i]) }}<small v-if="(l.values[i]?.length ?? 0) > 1"> Σ{{ l.values[i]!.length }}</small></td>
           <td v-if="res.groups.length === 2">{{ fmt(diff(l)) }}</td>
@@ -63,7 +63,7 @@ const sub = computed(() => res.value ? [new Set(res.value.groups.map((g) => g.ba
             <small v-else-if="l.why === '동일 계정명'">이름 같음</small></td>
         </tr>
         <tr v-if="res.unmatched.length" class="grp"><td :colspan="res.groups.length + (plain ? 2 : 3)">대응 없음 — 한쪽 회사에만 있는 계정 ({{ res.unmatched.length }})</td></tr>
-        <tr v-for="l in res.unmatched" :key="'u' + l.label" :class="{ rej: l.why === '거부한 대응' }"><td>{{ l.label }} <small v-if="l.why === '거부한 대응'">거부함</small></td>
+        <tr v-for="(l, i) in res.unmatched" :key="'u' + l.label + i" :class="{ rej: l.why === '거부한 대응' }"><td>{{ l.label }} <small v-if="l.why === '거부한 대응'">거부함</small></td>
           <td v-for="(_, i) in res.groups" :key="i">{{ fmt(l.values[i]?.[0]?.value_bil) }}</td>
           <td v-if="res.groups.length === 2" />
           <td v-if="!plain" class="cf"><button v-if="l.why === '거부한 대응' && l.concept_id" title="거부 취소" @click="restore(l)">되돌리기</button></td></tr>

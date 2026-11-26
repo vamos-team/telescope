@@ -4,12 +4,12 @@ import { defineStore } from "pinia";
 import { api, docTitle, type CanvasEvent, type Doc } from "../api";
 import { panelOf } from "../local/dashboard";
 import type { Session } from "../local/ai";
-import { SYNC_MODE } from "../sync/config";
+import { setAccessToken, SYNC_MODE } from "../sync/config";
 import { Outbox } from "../sync/outbox";
 import { SeqTracker } from "../sync/seq";
 import { applyRemote } from "../sync/apply";
 import { fromServerEvent, type CanvasNotice, type CursorMessage, type EventsMessage, type PresenceMessage } from "../sync/protocol";
-import { openCanvas, postEvents as postServerEvents, versionsOf } from "../sync/http";
+import { getDocument, openCanvas, postEvents as postServerEvents, versionsOf } from "../sync/http";
 import { connectCanvas, type RealtimeConnection } from "../sync/realtime";
 import { fromSnapshot, replayEvents } from "../sync/snapshot";
 
@@ -17,6 +17,8 @@ import { fromSnapshot, replayEvents } from "../sync/snapshot";
 let outbox: Outbox | null = null;
 let tracker: SeqTracker | null = null;
 let connection: RealtimeConnection | null = null;
+const serverDocIds = new Set<string>();
+let serverReload = 0;
 /** 서버 사용자 ID로 이름을 찾는다. 사용자 API(#34) 전이라 ID만 보인다. */
 const nameOfUser = (id: number | undefined) => (id == null ? "다른 사용자" : `사용자 ${id}`);
 
@@ -251,26 +253,52 @@ export const useCanvas = defineStore("canvas", {
     /** 서버 모드: 캔버스를 서버에서 다시 읽어 화면을 맞춘다(처음 열 때, 재접속, 번호 누락). 보내지 못한 조작을 먼저 보낸다. */
     async reloadFromServer() {
       if (!this.canvasId) return;
+      const canvasId = this.canvasId, reload = ++serverReload;
       await this.flushServer();
+      if (reload !== serverReload) return;
       tracker?.reset();
       let snapshot;
       try {
-        snapshot = await openCanvas(this.canvasId);
+        snapshot = await openCanvas(canvasId);
       } catch (err) {
+        if (reload !== serverReload) return;
+        for (const id of serverDocIds) api.docs.delete(id);
+        serverDocIds.clear();
+        this.analyses = [];
+        this.serverRole = null;
         console.error("캔버스 열기 실패", err);
         this.error = "캔버스를 열지 못했습니다. 권한이 없거나 연결이 끊겼을 수 있습니다.";
         return;
       }
+      if (reload !== serverReload) return;
       const { cards, links } = fromSnapshot(snapshot, nameOfUser);
-      Object.assign(this, { cards, links, canvasName: snapshot.meta.name, serverRole: snapshot.meta.myRole });
+      const docIds = cards.flatMap((c) => c.kind === "doc" ? [c.docId] : []);
+      await this.loadServerDocs(docIds);
+      if (reload !== serverReload) return;
+      Object.assign(this, { cards, links, canvasName: snapshot.meta.name, serverRole: snapshot.meta.myRole, analyses: this.readAnalyses() });
       outbox?.updateVersions(versionsOf(snapshot));
       if (snapshot.warnings.length) this.error = `'${snapshot.meta.name}' 캔버스 일부를 복원하지 못했습니다. 자료가 바뀌었을 수 있습니다.`;
       // 비교·태그는 아직 목업이 계산하므로 새 목업 세션에 지금 상태를 넣는다
-      this.sessionId = crypto.randomUUID();
-      await api.postEvents(this.sessionId, replayEvents(cards, links)).catch((err) => console.error(err));
-      this.tags = await api.cardTags(this.sessionId).catch(() => this.tags);
+      const sessionId = this.sessionId = crypto.randomUUID();
+      await api.postEvents(sessionId, replayEvents(cards, links)).catch((err) => console.error(err));
+      const tags = await api.cardTags(sessionId).catch(() => this.tags);
+      if (reload !== serverReload) return;
+      this.tags = tags;
       for (const c of this.cards) if (c.kind === "compare" || c.kind === "chart") c.version++;
       for (const d of tracker?.start(snapshot.lastSeq) ?? []) this.handleSeq(d);
+    },
+    cacheServerDoc(doc: Doc) {
+      serverDocIds.add(doc.id);
+      return api.registerDoc(doc);
+    },
+    async loadServerDocs(ids: string[], refresh = true) {
+      const reload = serverReload;
+      await Promise.all([...new Set(ids)].filter((id) => /^[1-9]\d*$/.test(id) && (refresh || !api.docs.has(id))).map(async (id) => {
+        const doc = await getDocument(id).catch(() => null);
+        if (reload !== serverReload) return;
+        if (doc) this.cacheServerDoc(doc);
+        else if (serverDocIds.delete(id)) api.docs.delete(id);
+      }));
     },
     /** 서버 모드: 받은 이벤트 메시지를 번호 확인 후 반영한다. */
     onRemoteEvents(message: EventsMessage) {
@@ -291,8 +319,12 @@ export const useCanvas = defineStore("canvas", {
       if (!changed) return;
       if (local.some((e) => e.type !== "move_card")) this.rev++;
       // 비교·태그 계산용 목업에도 같은 변경을 넣는다
-      api.postEvents(this.sessionId, local).then(async () => {
-        this.tags = await api.cardTags(this.sessionId).catch(() => this.tags);
+      const sessionId = this.sessionId;
+      const docs = this.loadServerDocs(local.flatMap((e) => e.type === "add_doc" ? [String(e.doc_id)] : []), false);
+      Promise.all([api.postEvents(sessionId, local), docs]).then(async () => {
+        const tags = await api.cardTags(sessionId).catch(() => this.tags);
+        if (sessionId !== this.sessionId) return;
+        this.tags = tags;
         for (const c of this.cards) if (c.kind === "compare" || c.kind === "chart") c.version++;
       }).catch((err) => console.error(err));
     },
@@ -333,6 +365,9 @@ export const useCanvas = defineStore("canvas", {
     },
     /** 서버 모드: 실시간 연결과 대기열을 닫는다(캔버스를 닫거나 바꿀 때). */
     closeServer() {
+      serverReload++;
+      for (const id of serverDocIds) api.docs.delete(id);
+      serverDocIds.clear();
       connection?.close();
       connection = null; outbox = null; tracker = null;
       Object.assign(this, { serverRole: null, cursors: {}, present: [] });
@@ -346,7 +381,10 @@ export const useCanvas = defineStore("canvas", {
       return this.restoreCanvas();  // 로그인하면 캔버스 홈. 새로고침이면 보던 캔버스로
     },
     restoreCanvas() {
-      try { const id = sessionStorage.getItem(KEY + ":canvas"); if (id && this.canvases.some((m) => m.id === id)) return this.open(id); } catch { /* 무시 */ }
+      try {
+        const id = sessionStorage.getItem(KEY + ":canvas");
+        if (id && (SYNC_MODE === "server" ? /^[1-9]\d*$/.test(id) : this.canvases.some((m) => m.id === id))) return this.open(id);
+      } catch { /* 무시 */ }
     },
     async goHome() {
       await this.flush(); this.save(); this.reset(); this.canvasId = ""; this.canvasName = "";
@@ -355,6 +393,7 @@ export const useCanvas = defineStore("canvas", {
     async logout() {  // 대기 중인 조작을 지금 사용자 이름으로 저장한 뒤 캔버스 상태를 비움 (다음 사용자가 이전 캔버스를 덮어쓰지 않게)
       await this.flush(); this.save();
       this.reset(); this.canvasId = ""; this.canvasName = ""; this.user = null;
+      if (SYNC_MODE === "server") setAccessToken(null);
       try { sessionStorage.removeItem(KEY + ":user"); sessionStorage.removeItem(KEY + ":canvas"); } catch { /* 무시 */ }
     },
     restoreUser() { try { const u = JSON.parse(sessionStorage.getItem(KEY + ":user") ?? "null"); if (u?.id) return this.login(u.id); } catch { /* 무시 */ } },
@@ -365,7 +404,7 @@ export const useCanvas = defineStore("canvas", {
       all[this.canvasId] = { meta: { id: this.canvasId, name: this.canvasName, dept: prev?.dept ?? this.user.dept, owner: prev?.owner ?? this.author,
         updated: now(), updatedBy: this.author, count: this.cards.length, quarter: prev?.quarter, ...(prev ? shareOf(prev) : { ownerId: this.user.id, share: {} }) },
         cards: JSON.parse(JSON.stringify(this.cards)), links: this.links, seq: this.seq, activity: this.activity.slice(0, 200), log: this.log,
-        uploads: this.cards.flatMap((c) => { const d = c.kind === "doc" ? api.docs.get(c.docId) : undefined; return d?.uploaded ? [d] : []; }) };
+        uploads: SYNC_MODE === "local" ? this.cards.flatMap((c) => { const d = c.kind === "doc" ? api.docs.get(c.docId) : undefined; return d?.uploaded ? [d] : []; }) : undefined };
       writeAll(all); this.saved++;
     },
     reset() {

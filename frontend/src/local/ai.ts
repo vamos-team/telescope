@@ -2,7 +2,7 @@
 // 여기서는 같은 입력(캔버스 카드 · 연결 · 메모 + data/demo/analysis.json 양식)으로 항상 같은 결과를 만든다.
 // 분석하기 = ① 검토(메모 분류 · 주장 추출 · 근거 충분/부족 · 점검 지적 · AI 인사이트) → ② 예상 질문(애널리스트 리포트) → ③ 평가(다음 분기 자료가 들어온 뒤)
 import { api, docTitle, UNIT_TO_BIL, type Analysis, type Evidence, type Doc } from "../api";
-import { panelOf, tableOf } from "./dashboard";
+import { panelOf, tableOf, dashCite, dashColumns } from "./dashboard";
 import { ANNUAL_INSIGHTS } from "./dart";
 import { tagsFor } from "./server";
 import { checkUpload, COMPANIES4 } from "./validate";
@@ -69,11 +69,13 @@ export async function contextNote(x: NoteInput): Promise<string> {
   const db: string[] = [];
   for (const c of by("dash")) {
     const p = c.kind === "dash" ? panelOf(c.panel) : undefined; if (!p) continue;
-    const t = tableOf(p), lastCol = t.cols.length - 1;
+    const t = tableOf(p);
     db.push("", `### ${p.title}${p.sub ? ` (${p.sub})` : ""}`);
-    for (const r of t.rows.slice(0, 12)) {
-      const v = r.v[lastCol] ?? r.v[r.v.length - 1];
-      db.push(`- ${r.n}: ${typeof v === "number" ? num(v) + (t.unit && !/%$/.test(String(v)) ? t.unit : "") : v}${t.cols.length > 1 ? ` (${t.cols[lastCol]})` : ""} [dash:${p.id}#${encodeURIComponent(r.n)}]`);
+    for (const r of t.rows.slice(0, 12)) for (const i of dashColumns(t, r)) {
+      const v = r.v[i], unit = t.units?.[i] ?? r.unit ?? t.unit;
+      if (v == null) continue;
+      const label = t.units ? `${r.n} ${t.cols[i].replace(/\(.*$/, "")}` : r.n;
+      db.push(`- ${label}: ${typeof v === "number" ? num(v) + unit : v}${!t.units && t.cols.length > 1 ? ` (${t.cols[i]})` : ""} [${dashCite(p.id, r.n, i)}]`);
     }
     if (p.ai) db.push(`- AI 해석(사실 아님): ${p.ai}`);
     db.push(...hint(c.id));
@@ -149,9 +151,12 @@ export async function review(a: Analysis, x: ReviewInput): Promise<Review> {
   }
   for (const c of x.cards) {
     if (c.kind !== "doc") continue;
-    const d = api.docs.get(c.docId); if (!d || !d.summary || d.summary === d.title) continue;
-    const s = sentences(d.summary)[0];
-    claims.push(judge({ id: "doc:" + c.id, text: s, from: `${SRC_OF[d.kind]} · ${docTitle(d)}`, source: SRC_OF[d.kind], cardId: c.id, tags: d.tags.filter((t) => tagsOf(s).includes(t)).length ? d.tags.filter((t) => tagsOf(s).includes(t)) : d.tags,
+    const d = api.docs.get(c.docId); if (!d) continue;
+    const summary = d.summary?.trim(), titleOnly = !summary || summary === d.title.trim();
+    if (titleOnly && d.kind !== "news") continue;
+    const s = sentences(titleOnly ? d.title : summary)[0];
+    if (!s) continue;
+    claims.push(judge({ id: "doc:" + c.id, text: s, from: `${SRC_OF[d.kind]}${titleOnly ? " 제목" : ""} · ${docTitle(d)}`, source: SRC_OF[d.kind], cardId: c.id, tags: d.tags.filter((t) => tagsOf(s).includes(t)).length ? d.tags.filter((t) => tagsOf(s).includes(t)) : d.tags,
       company: /3사|업계/.test(d.company) ? undefined : d.company }, linked(c.id), SRC_OF[d.kind]));
   }
   const cnt = (v: Verdict) => claims.filter((c) => c.verdict === v).length;

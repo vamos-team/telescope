@@ -4,7 +4,8 @@
 // 임베딩 검색, LLM 질의(ask/warmup), 이벤트 영속화는 없다 (새로고침하면 초기화).
 import data from "./data.json";
 import NEWS from "./news.json";
-import { panelOf, dashText, dashEvidence } from "./dashboard";
+import { shallowReactive } from "vue";
+import { panelOf, tableOf, dashText, dashEvidence } from "./dashboard";
 import { UNIT_TO_BIL, type SourceTable, type SearchResult, type CompareResult, type CompareLine, type Part, type CanvasEvent, type Doc, type Evidence, type Context, type Analysis } from "../api";
 
 interface Member { label: string; grp?: string; title?: string; alt?: Member[] }
@@ -34,7 +35,7 @@ export const meta = { subtitle: (data as { subtitle?: string }).subtitle ?? "",
 export const analysis = (data as unknown as { analysis: Analysis }).analysis;
 const SRC = (data as unknown as { sources: { docs: Doc[]; internal: Doc[] } }).sources;
 // v01 데모 실제 뉴스 헤드라인(썸네일 포함)도 함께 등록
-export const docs = new Map<string, Doc>([...SRC.docs, ...SRC.internal, ...(NEWS.items as Doc[])].map((d) => [d.id, d]));
+export const docs = shallowReactive(new Map<string, Doc>([...SRC.docs, ...SRC.internal, ...(NEWS.items as Doc[])].map((d) => [d.id, d])));
 // 업로드한 사내 자료(파서 요약본)를 등록한다. 실제 서비스에서는 업로드 API → 파서 모델 → 임베딩 적재
 export const registerDoc = (d: Doc) => { docs.set(d.id, d); return d; };
 export const noteTable = (rcept: string, note: string) =>
@@ -168,9 +169,9 @@ const part = (card: WCard, t: SourceTable, r: number, label: string): Part => {
   const c = card.vcol ?? 0, v = value(card, t, r, c);
   return { card_id: card.card_id, cell_id: cellId(t, r, c), label, value_bil: v == null ? null : v * UNIT_TO_BIL[t.unit] };
 };
-function find(g: Group, m: Member): Part | null {
+function find(g: Group, m: Member) {
   for (const cand of alts(m)) for (const [card, t] of g.cards) for (const r of card.rows)
-    if (memberMatches(cand, t, r)) return part(card, t, r, t.rows[r].label + (cand.grp ? `(${cand.grp})` : ""));
+    if (memberMatches(cand, t, r)) return { key: `${card.card_id}|${r}`, value: part(card, t, r, t.rows[r].label + (cand.grp ? `(${cand.grp})` : "")) };
   return null;
 }
 const total = (ps: Part[] | null) => !ps || ps.every((p) => p.value_bil == null) ? null : ps.reduce((a, p) => a + (p.value_bil ?? 0), 0);
@@ -190,19 +191,19 @@ export function compare(sid: string, cardId: string): CompareResult {
   const lines: CompareLine[] = [], rejected: string[] = [], rej = G.map(() => new Map<string, string>());
   const unmatched: CompareLine[] = [];
   for (const c of CONCEPTS) {
-    const hit = G.map(() => [] as string[]);  // 이 개념에 걸린 행. 대응을 채택했을 때만 used로 확정 (채택 안 하면 "대응 없음"에 남김)
-    const vals = G.map((g, gi) => {
+    const hit = G.map(() => [] as string[]);
+    const picked = G.map((g, gi) => {
       const ms = c.members[g.company] ?? [];
-      const parts = ms.map((m) => find(g, m)).filter((p): p is Part => !!p);
       for (const [card, t] of g.cards) for (const r of card.rows)
         if (ms.some((m) => alts(m).some((x) => memberMatches(x, t, r)))) hit[gi].push(`${card.card_id}|${r}`);
-      return parts.length ? parts : null;
+      return ms.map((m) => find(g, m)).filter((p) => p !== null);
     });
+    const vals = picked.map((parts) => parts.length ? parts.map((p) => p.value) : null);
     if (vals.filter(Boolean).length < (G.length > 1 ? 2 : 1)) continue;
     // 사용자가 거부한 대응: 거부한 회사가 하나라도 있으면 이 개념으로 묶지 않음 → 행은 아래 "대응 없음"으로
     const decided = G.map((g) => w.mappings.get(`${c.id}|${g.company}`)?.accepted);
     if (decided.some((d) => d === false)) { rejected.push(c.name); hit.forEach((ks, gi) => ks.forEach((k) => rej[gi].set(k, c.id))); continue; }
-    hit.forEach((ks, gi) => ks.forEach((k) => used[gi].add(k)));
+    picked.forEach((parts, gi) => parts.forEach((p) => used[gi].add(p.key)));
     const labels = new Set(vals.filter(Boolean).map((ps) => norm(ps![0].label.split("(")[0])));
     const same = vals.every((ps) => !ps || ps.length === 1) && labels.size === 1;
     const confirmed = vals.every((ps, gi) => !ps || decided[gi] === true);
@@ -218,7 +219,13 @@ export function compare(sid: string, cardId: string): CompareResult {
     const key = norm(row.label) + "|" + row.grp;
     if (!byName.has(key)) byName.set(key, G.map(() => null));
     const slot = byName.get(key)!;
-    if (!slot[gi]) slot[gi] = [part(card, t, r, row.label)];
+    const value = [part(card, t, r, row.label)];
+    if (!slot[gi]) slot[gi] = value;
+    else {
+      const values: (Part[] | null)[] = G.map(() => null);
+      values[gi] = value;
+      unmatched.push({ label: row.label, why: "대응 없음", values, concept_id: null, note: null });
+    }
   } });
   for (const vals of byName.values()) {
     const label = vals.find(Boolean)![0].label;
@@ -279,8 +286,12 @@ function compile(w: Workspace, task: string) {
       ...d.figures.map((f, i) => `f${i}\t${f.label}\t${fmtN(f.value)} ${f.unit}\t${f.period}`)].join("\n"));
   }
   for (const c of cards.filter((c) => c.kind === "memo" && c.text?.trim())) blocks.push(`## 메모 카드 ${c.card_id} | 작성 ${c.author}\n${c.text}`);
-  for (const c of cards.filter((c) => c.kind === "dash" && panelOf(c.panel!)))
-    blocks.push(`## 카드 ${c.card_id} | 공시 대시보드 | ${panelOf(c.panel!)!.title} | ${panelOf(c.panel!)!.sub} | 단위 억원 | dash:${c.panel}\n${dashText(c.panel!)}`);
+  for (const c of cards) {
+    const panel = c.kind === "dash" ? panelOf(c.panel!) : undefined;
+    if (!panel) continue;
+    const t = tableOf(panel), unit = t.unit ? ` | 단위 ${t.unit}` : "";
+    blocks.push(`## 카드 ${c.card_id} | 공시 대시보드 | ${panel.title} | ${panel.sub}${unit} | dash:${panel.id}\n${dashText(t)}`);
+  }
   L.L2_workspace = blocks.length ? "# 캔버스 카드\n" + blocks.join("\n\n") : "";
 
   const ed: string[] = [];

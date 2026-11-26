@@ -160,39 +160,51 @@ export const LAYOUT = {
 };
 
 // ---------- 패널 → 표 (컨텍스트 글 · 컨텍스트 층 · 근거 줄이 함께 씀) ----------
-export interface PanelTable { cols: string[]; rows: { n: string; v: (number | string)[] }[]; unit: string }
+interface PanelRow { n: string; v: (number | string)[]; unit?: string }
+export interface PanelTable { cols: string[]; rows: PanelRow[]; unit: string; units?: string[] }
 export function tableOf(p: Panel): PanelTable {
   const c = p.chart(), u = p.unit;
   switch (c.type) {
     case "bars": case "lines": case "stack": return { cols: c.labels, rows: c.series.map((s) => ({ n: s.name || p.title.replace(/ \(.*$/, ""), v: s.v.map((x) => +x.toFixed(2)) })), unit: u };
     case "waterfall": return { cols: ["값"], rows: c.steps.map(([n, v]) => ({ n, v: [v] })), unit: u };
-    case "scatter": return { cols: [c.xl + "(%)", c.yl + "(%)", "매출(억원)"], rows: c.points.map((x) => ({ n: x.n, v: [+x.x.toFixed(1), +x.y.toFixed(1), x.r] })), unit: "" };
+    case "scatter": return { cols: [c.xl + "(%)", c.yl + "(%)", "매출(억원)"], rows: c.points.map((x) => ({ n: x.n, v: [+x.x.toFixed(1), +x.y.toFixed(1), x.r] })), unit: "", units: ["%", "%", "억원"] };
     case "hbars": return { cols: ["2025"], rows: c.items.map((x) => ({ n: x.n, v: [+x.v.toFixed(1)] })), unit: u };
     case "treemap": return { cols: ["2025"], rows: c.items.map(([n, v]) => ({ n, v: [v] })), unit: u };
-    case "heat": return { cols: c.cols, rows: c.rows.map((r) => ({ n: r.n, v: r.v.map((x) => (r.pct ? fp(x) : x)) })), unit: u };
+    case "heat": return { cols: c.cols, rows: c.rows.map((r) => ({ n: r.n, v: r.v, unit: r.pct ? "%" : u })), unit: "" };
     case "table": return { cols: c.cols, rows: c.rows, unit: u };
-    case "kpis": return { cols: ["2025", "전년 대비"], rows: c.items.map((k) => ({ n: k.l, v: [k.unit === "%" ? fp(k.raw) : k.raw, k.d.replace(/^2025 · 전년 대비 /, "")] })), unit: u };
+    case "kpis": return { cols: ["2025", "전년 대비"], rows: c.items.map((k) => ({ n: k.l, v: [k.raw, k.d.replace(/^2025 · 전년 대비 /, "")], unit: k.unit })), unit: "" };
     case "asset": return { cols: AQ, rows: AAC.map(([, , n, v]) => ({ n, v })), unit: u };
   }
 }
-export function dashText(id: string) {
-  const p = panelOf(id); if (!p) return "";
-  const t = tableOf(p);
-  return [`항목\t${t.cols.join("\t")}`, ...t.rows.map((r) => `${r.n}\t${r.v.map((x) => (typeof x === "number" ? String(x) : x)).join("\t")}`)].join("\n");
+// 인용 ID = 패널#행@열. 카드 이동은 패널만 봄, 같은 행의 다른 열(값 · 증감)을 구분
+export const dashCite = (id: string, row: string, col: number) => `dash:${id}#${encodeURIComponent(row)}@${col}`;
+export function dashText(t: PanelTable) {
+  return [`항목\t${t.cols.join("\t")}`, ...t.rows.map((r) => {
+    const cells = r.v.map((v) => typeof v === "number" && r.unit ? `${v}${r.unit}` : v);
+    return `${r.n}\t${cells.join("\t")}`;
+  })].join("\n");
 }
-// 패널 → 근거 줄: 행마다 마지막 숫자 열. 억원 → 십억원은 코드로 환산. 개념 태그는 행·패널 이름으로 붙임 (질문 생성 입력)
-const TAG: [RegExp, string][] = [[/CapEx/i, "capex"], [/감가상각/, "da"], [/배당/, "dividend"], [/순이익/, "ni"], [/영업이익/, "opi"], [/영업비용|비용 구성/, "opex"],
+export function dashColumns(t: PanelTable, row: PanelRow) {
+  if (t.units) return t.cols.map((_, i) => i);
+  const latest = row.v.map((v) => typeof v === "number").lastIndexOf(true);
+  return [latest < 0 ? row.v.length - 1 : latest];
+}
+// 패널 → 근거 줄: 행마다 마지막 숫자 열(열마다 단위가 다르면 열마다 한 줄). 억원 → 십억원은 코드로 환산. 개념 태그는 행·열·패널 이름으로 붙임 (질문 생성 입력)
+// 비율은 금액 태그와 따로 둠: 금액 주장의 직접 근거로 쓰이지 않게
+const TAG: [RegExp, string][] = [[/CapEx\/감가상각/i, "capex_ratio"], [/영업이익률/, "opm"], [/부채비율/, "debt_ratio"], [/배당성향/, "payout"], [/CapEx/i, "capex"], [/감가상각/, "da"], [/배당/, "dividend"], [/순이익/, "ni"], [/영업이익/, "opi"], [/영업비용|비용 구성/, "opex"],
   [/수수료/, "comm"], [/종업원급여|인건비/, "labor"], [/부채/, "debt"], [/매출|수익/, "rev"]];
 const tagOf = (s: string) => TAG.find(([re]) => re.test(s))?.[1];
 const CO = (n: string) => (/^SKT/.test(n) ? "SKT" : /^KT/.test(n) ? "KT" : /^LG/.test(n) ? "LGU+" : null);
 export function dashEvidence(id: string) {
   const p = panelOf(id); if (!p) return [];
-  const t = tableOf(p), bil = p.unit === "억원" || t.unit === "억원";
-  return t.rows.flatMap((r) => {
-    const i = r.v.map((x) => typeof x === "number").lastIndexOf(true); if (i < 0) return [];
-    const tag = tagOf(r.n) ?? tagOf(p.title); if (!tag) return [];
-    const co = CO(r.n), raw = r.v[i] as number;
-    return [{ tag, company: co ?? "SKT", label: co ? p.title.replace(/ \(.*$/, "") : r.n, value: bil ? +(raw / 10).toFixed(1) : raw, unit: bil ? "십억원" : p.unit,
-      period: t.cols[i] ?? "2025", cite: `dash:${id}#${encodeURIComponent(r.n)}` }];
-  });
+  const t = tableOf(p);
+  return t.rows.flatMap((r) => dashColumns(t, r).flatMap((i) => {
+    const col = t.cols[i], raw = r.v[i];
+    const tag = t.units ? tagOf(col) : tagOf(r.n) ?? tagOf(p.title);
+    if (!tag || typeof raw !== "number") return [];
+    const co = CO(r.n), unit = t.units?.[i] ?? r.unit ?? t.unit, bil = unit === "억원";
+    const label = t.units ? `${r.n} ${col.replace(/\(.*$/, "")}` : co ? p.title.replace(/ \(.*$/, "") : r.n;
+    return [{ tag, company: co ?? "SKT", label, value: bil ? +(raw / 10).toFixed(1) : raw, unit: bil ? "십억원" : unit,
+      period: t.units ? "2025" : col ?? "2025", cite: dashCite(id, r.n, i) }];
+  }));
 }

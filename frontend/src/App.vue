@@ -50,6 +50,12 @@ const sp = ref<InstanceType<typeof SourcePanel>>();
 
 // 카드를 고르면 그 카드와 선 하나로 이어진 카드만 밝게(카드 성격색), 나머지는 흐리게 (빈 곳 클릭 · Esc로 해제)
 const { active } = storeToRefs(cv);
+function selectLink(id: string) {
+  selLink.value = id; active.value = null; cv.selected = [];
+}
+function selectCard(id: string) {
+  selLink.value = null; active.value = id; cv.selected = [id];
+}
 // 선 종류: 사용자 연결, 비교 원본(비교 · 시각화 카드와 원본 표), 같은 개념(자동 점선)
 const SRC_KIND = "비교 원본", LINK_KIND = "연결";
 const shown = new Set<string>([LINK_KIND, SRC_KIND]);
@@ -66,7 +72,7 @@ const allEdges = computed<Edge[]>(() => {
   // 사용자 선: 관계 태그 없음. 선 메모가 있으면 "메모" 라벨
   // 사용자 선: 메모 없으면 점선, 메모 있으면 진한 실선 + 가운데 작성자 아바타 (LinkEdge)
   for (const l of cv.links) out.push({ id: l.id, type: "link", source: l.source, target: l.target, ...sides(l.source, l.target), markerEnd: MarkerType.ArrowClosed,
-    data: { kind: LINK_KIND, memo: l.memo, by: l.memoBy ?? (l.memo ? cv.author : undefined), onOpen: (id: string) => { selLink.value = id; active.value = null; cv.selected = []; } },
+    data: { kind: LINK_KIND, memo: l.memo, by: l.memoBy ?? (l.memo ? cv.author : undefined), onOpen: selectLink },
     class: [selLink.value === l.id ? "sel" : "", l.memo ? "hasm" : "nomemo"].filter(Boolean).join(" "), style: { strokeWidth: l.memo ? 2.2 : 1.6, opacity: 1 } });
   // 같은 개념 자동 점선은 없앰 (카드 태그는 분석 · 검색 추천에만 씀)
   return out;
@@ -90,7 +96,7 @@ const nodes = computed<Node[]>(() => cv.cards.map((c) => {
 }));
 const onDragStop = (e: NodeDragEvent) => { for (const n of e.nodes) cv.move(n.id, n.position.x, n.position.y); };
 flow.onConnect((c) => cv.addLink(c.source, c.target));
-const onEdgeClick = ({ edge }: EdgeMouseEvent) => { if (cv.links.some((l) => l.id === edge.id)) { selLink.value = edge.id; active.value = null; cv.selected = []; } };
+const onEdgeClick = ({ edge }: EdgeMouseEvent) => { if (cv.links.some((l) => l.id === edge.id)) selectLink(edge.id); };
 watch(selLink, () => { linkMemo.value = !!cv.links.find((l) => l.id === selLink.value)?.memo; });
 const link = computed(() => cv.links.find((l) => l.id === selLink.value) ?? null);
 // 카드 누르기: 그냥 누르면 그 카드 하나(이어진 카드 강조), Shift를 누른 채면 여러 장 고르기
@@ -100,7 +106,7 @@ function onNodeClick({ node, event }: NodeMouseEvent) {
     const base = cv.selected.length ? cv.selected : active.value ? [active.value] : [];
     cv.selected = base.includes(node.id) ? base.filter((x) => x !== node.id) : [...base, node.id];
     active.value = cv.selected.length === 1 ? cv.selected[0] : null;
-  } else { cv.selected = [node.id]; active.value = node.id; }
+  } else selectCard(node.id);
 }
 const clearSel = () => { selLink.value = null; active.value = null; cv.selected = []; trashOpen.value = false; };
 const pickedTables = computed(() => cv.selected.filter((id) => cv.cards.find((c) => c.id === id)?.kind === "table"));
@@ -114,7 +120,7 @@ function makeChart() { const id = cv.addChartFrom(pickedTables.value); if (id) {
 // 왼쪽 메모 목록에서 선 메모를 누르면: 양 끝 카드를 화면에 맞추고 그 선을 선택
 function focusLink(id: string) {
   const l = cv.links.find((x) => x.id === id); if (!l) return;
-  view.value = "canvas"; selLink.value = id; active.value = null;
+  view.value = "canvas"; selectLink(id);
   nextTick(() => flow.fitView({ nodes: [l.source, l.target], padding: 0.4, duration: 300, maxZoom: 1.1 }));
 }
 
@@ -173,7 +179,7 @@ function addMemo() {
 function openSearch() { spOpen.value = true; nextTick(() => { fitSp(); sp.value?.focusSearch(); }); }
 function analyze() { if (!cv.cards.length) return; view.value = "analysis"; run.value++; }
 
-// 근거 ID → 캔버스 화면으로 바꾸고 카드로 이동 · 강조. [셀ID] = 표ID#r행c열, [doc:ID#f번호], [dash:패널#행]
+// 근거 ID → 캔버스 화면으로 바꾸고 카드로 이동 · 강조. [셀ID] = 표ID#r행c열, [doc:ID#f번호], [dash:패널#행@열]
 function focusCite(c: string) {
   let id: string | undefined;
   if (c.startsWith("dash:")) { const panel = c.slice(5).split("#")[0]; id = cv.cards.find((x) => x.kind === "dash" && x.panel === panel)?.id; }
@@ -184,7 +190,7 @@ function focusCite(c: string) {
 }
 function focusCard(id: string) {
   view.value = "canvas";
-  cv.focus = id; active.value = id; cv.selected = [id];
+  cv.focus = id; selectCard(id);
   nextTick(() => flow.fitView({ nodes: [id], padding: 0.6, duration: 300, maxZoom: 1.1 }));
   setTimeout(() => { if (cv.focus === id) cv.focus = null; }, 2000);
 }
@@ -236,14 +242,14 @@ async function loadExample() {
   for (const [s, t] of ex.links) if (key[s] && key[t]) cv.addLink(key[s], key[t]);
   setTimeout(() => same() && arrange(), 500); // ponytail: 이벤트 전송(150ms)과 비교 결과 렌더 뒤 배치하도록 고정 지연
 }
-// 휴지통 메뉴: 전체 지우기 / 근거 부족 지우기(최신 분석에서 AI가 지적한 카드를 모두 지움)
+// 휴지통 메뉴: 전체 지우기 / 근거 부족 지우기(최신 분석에서 근거 부족(bad)으로 지적한 카드만 지움)
 const trashOpen = ref(false);
-const flaggedIds = computed(() => Object.keys(cv.flags));
+const flaggedIds = computed(() => Object.keys(cv.flags).filter((id) => cv.flags[id].some((f) => f.level === "bad")));
 function clearAll() { trashOpen.value = false; if (cv.cards.length && confirm("캔버스의 카드를 모두 지울까요?")) cv.clear(); }
 function clearFlagged() {
   trashOpen.value = false;
   const ids = flaggedIds.value; if (!ids.length) return;
-  if (confirm(`AI가 근거 부족 · 지적한 카드 ${ids.length}장을 지울까요?`)) { for (const id of ids) cv.remove(id); clearSel(); }
+  if (confirm(`AI가 근거 부족으로 지적한 카드 ${ids.length}장을 지울까요?`)) { for (const id of ids) cv.remove(id); clearSel(); }
 }
 
 const zoom = computed(() => Math.round(flow.viewport.value.zoom * 100));
@@ -280,7 +286,7 @@ watch(() => cv.canvasId, () => { clearSel(); infoOpen.value = false; view.value 
 watch(view, (v) => { if (v === "canvas") nextTick(() => { fitSp(); flow.updateNodeInternals(); }); });
 watch(() => cv.canvasId, () => nextTick(fitSp));
 // 열어 둔 페이지에 대한 권한이 사라지면(정보 창에서 내 권한 삭제 등) 홈으로
-watch(() => !!cv.canvasId && !cv.meta, (lost) => { if (lost) { infoOpen.value = false; cv.goHome(); } });
+watch(() => !realtime && !!cv.canvasId && !cv.meta, (lost) => { if (lost) { infoOpen.value = false; cv.goHome(); } });
 onMounted(() => { nextTick(fitSp); cv.restoreUser(); window.addEventListener("keydown", key); (window as unknown as Record<string, unknown>).__aiSelfCheck = () => selfCheck(api.analysis); });
 onUnmounted(() => window.removeEventListener("keydown", key));
 const staleDot = computed(() => !!cv.latest && cv.latest.sig !== cv.sig);
@@ -363,7 +369,7 @@ const staleDot = computed(() => !!cv.latest && cv.latest.sig !== cv.sig);
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h12M8 6V4.5h4V6M6 6l.8 10h6.4L14 6M8.5 9v4.5M11.5 9v4.5" /></svg></button>
               <div v-if="trashOpen" class="tmenu" role="menu">
                 <button role="menuitem" @click="clearAll">전체 지우기<small>카드 {{ cv.cards.length }}장</small></button>
-                <button role="menuitem" :disabled="!flaggedIds.length" @click="clearFlagged">근거 부족 지우기<small>{{ flaggedIds.length ? `AI가 지적한 카드 ${flaggedIds.length}장` : "지적한 카드 없음" }}</small></button>
+                <button role="menuitem" :disabled="!flaggedIds.length" @click="clearFlagged">근거 부족 지우기<small>{{ flaggedIds.length ? `근거 부족 카드 ${flaggedIds.length}장` : "지적한 카드 없음" }}</small></button>
               </div>
             </div>
           </Panel>

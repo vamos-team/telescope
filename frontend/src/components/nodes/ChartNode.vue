@@ -29,7 +29,7 @@ const fmt = (v: number | null | undefined) => v == null ? "—" : v.toLocaleStri
     <div class="legend2"><span v-for="(g, i) in res.groups" :key="g.company"><i :data-i="i" />{{ g.company }}</span></div>
     <p v-if="!shown.length" class="cempty">고른 표에 그릴 값이 없어요.</p>
     <div v-else class="bars nodrag nowheel">
-      <div v-for="l in shown" :key="l.label" class="bl">
+      <div v-for="(l, i) in shown" :key="l.label + i" class="bl">
         <b>{{ l.label }}</b>
         <div v-for="(g, i) in res.groups" :key="g.company" class="br">
           <span class="n">{{ g.company }}</span>
