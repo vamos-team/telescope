@@ -10,6 +10,7 @@ import com.telescope.backend.canvas.service.CanvasAccessService;
 import com.telescope.backend.document.dto.DocumentResponse;
 import com.telescope.backend.document.dto.DocumentUploadCommand;
 import com.telescope.backend.document.dto.DocumentUploadResponse;
+import com.telescope.backend.document.dto.UploadRejection;
 import com.telescope.backend.document.entity.DocumentVersion;
 import com.telescope.backend.document.repository.DocumentPreparationResultRepository;
 import com.telescope.backend.document.repository.DocumentRepository;
@@ -154,21 +155,54 @@ class DocumentServiceTest {
     }
 
     @Test
-    void 허용하지_않는_형식은_저장하기_전에_거절한다() {
+    void 허용하지_않는_형식은_저장하기_전에_D001_FORMAT_MISMATCH로_거절한다() {
         assertThatThrownBy(() -> upload(editor, "script.exe", null)).isInstanceOfSatisfying(BusinessException.class,
                 e -> {
-                    assertThat(e.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT);
-                    assertThat(e.getMessage()).contains("pdf");
+                    assertThat(e.getErrorCode()).isEqualTo(ErrorCode.DOCUMENT_UPLOAD_REJECTED);
+                    assertThat(e.getData()).isEqualTo(UploadRejection.format());
+                    assertThat(e.getMessage()).contains(".exe").contains("pdf");
                 });
         assertThat(storage.files).isEmpty();
     }
 
     @Test
-    void 빈_파일과_확장자_없는_파일은_거절한다() {
+    void 빈_파일과_확장자_없는_파일도_FORMAT_MISMATCH다() {
         assertThatThrownBy(() -> documentService.upload(editor,
                 new DocumentUploadCommand(canvasId, "SKT", null, "a.pdf", 0), new ByteArrayInputStream(new byte[0])))
-                .isInstanceOf(BusinessException.class).hasMessageContaining("빈 파일");
-        assertThatThrownBy(() -> upload(editor, "README", null)).isInstanceOf(BusinessException.class);
+                .isInstanceOfSatisfying(BusinessException.class, e -> {
+                    assertThat(e.getData()).isEqualTo(UploadRejection.format());
+                    assertThat(e.getMessage()).contains("빈 파일");
+                });
+        assertThatThrownBy(() -> upload(editor, "README", null)).isInstanceOfSatisfying(BusinessException.class,
+                e -> assertThat(e.getData()).isEqualTo(UploadRejection.format()));
+    }
+
+    @Test
+    void 대상_회사가_아니면_저장하기_전에_D001_COMPANY_MISMATCH로_거절한다() {
+        assertThatThrownBy(() -> uploadAs(editor, "삼성전자")).isInstanceOfSatisfying(BusinessException.class, e -> {
+            assertThat(e.getErrorCode()).isEqualTo(ErrorCode.DOCUMENT_UPLOAD_REJECTED);
+            assertThat(e.getData()).isEqualTo(UploadRejection.company());
+            assertThat(e.getMessage()).contains("SKT").contains("SKB");
+        });
+        assertThat(storage.files).isEmpty();
+    }
+
+    @Test
+    void 회사가_비어_있으면_C001이다() {
+        assertThatThrownBy(() -> uploadAs(editor, " ")).isInstanceOfSatisfying(BusinessException.class,
+                e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT));
+    }
+
+    @Test
+    void 고른_회사는_목록의_표기로_저장한다() {
+        Long documentId = uploadAs(editor, " lgu+ ").documentIds().getFirst();
+
+        assertThat(documentRepository.findById(documentId).orElseThrow().getCompany()).isEqualTo("LGU+");
+    }
+
+    @Test
+    void SKB도_대상_회사다() {
+        assertThat(uploadAs(editor, "SKB").documentIds()).hasSize(1);
     }
 
     @Test
@@ -266,6 +300,11 @@ class DocumentServiceTest {
     private DocumentUploadResponse upload(Long userId, String filename, LocalDate publishedDate) {
         return documentService.upload(userId,
                 new DocumentUploadCommand(canvasId, "SKT", publishedDate, filename, 3), bytes("abc"));
+    }
+
+    private DocumentUploadResponse uploadAs(Long userId, String company) {
+        return documentService.upload(userId,
+                new DocumentUploadCommand(canvasId, company, null, "a.pdf", 3), bytes("abc"));
     }
 
     private static InputStream bytes(String s) {
