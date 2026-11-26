@@ -1,18 +1,21 @@
 <script setup lang="ts">
 // 데이터 입력 창 (검색창 왼쪽 +): 사내 자료 파일을 골라 검증한 뒤 캔버스에 올림
 // 검증(MVP): 포맷 불일치 / 회사 불일치(SKT · SKB · KT · LGU+). 통과한 파일만 올릴 수 있음
-// 서버 모드: 파일마다 POST /documents/uploads(회사 = 분석 대상 회사) → 작업 폴링 → GET /documents/{id}로 카드 데이터. 로컬 모드는 텍스트 파일만 읽어 앞부분을 요약으로
+// 서버 모드: 고른 회사로 파일마다 업로드하고 작업이 끝나면 카드 데이터를 받는다.
 import { ref, computed, onUnmounted, watch } from "vue";
 import { api, docTitle, KIND_LABEL, type Doc } from "../api";
-import { checkUpload, FORMATS, ACCEPT, TEXT_FORMATS, type UploadCode } from "../local/validate";
+import { checkUpload, FORMATS, ACCEPT, COMPANIES4, TEXT_FORMATS, type UploadCode } from "../local/validate";
 import { SYNC_MODE } from "../sync/config";
-import { uploadDocument, waitJob, getDocument } from "../sync/http";
+import { uploadDocument, uploadRejectionReason, waitJob, getDocument } from "../sync/http";
 import { SyncError } from "../sync/outbox";
 import { useCanvas } from "../stores/canvas";
 import type { Pick } from "./SourcePanel.vue";
 
 const emit = defineEmits<{ close: []; add: [items: Pick[]] }>();
 const file = ref<HTMLInputElement>(), over = ref(false), busy = ref(false);
+const selectedCompany = ref("");
+const companies = COMPANIES4.map(([company]) => company);
+const needsCompany = computed(() => SYNC_MODE === "server" && !selectedCompany.value);
 const publishedDate = ref("");
 const upload = new AbortController();
 onUnmounted(() => upload.abort());
@@ -38,7 +41,7 @@ async function serverUpload(f: File, canvasId: string, company: string, date: st
   } catch (err) {
     const msg = err instanceof SyncError && err.status === 413 ? "파일이 너무 큽니다 (최대 50MB)."
       : err instanceof Error && err.message ? err.message : "파일을 올리지 못했습니다.";
-    return { ...it, code: "UPLOAD_FAILED", msg };
+    return { ...it, code: uploadRejectionReason(err) ?? "UPLOAD_FAILED", msg };
   }
   return it;
 }
@@ -47,9 +50,9 @@ const KEYWORDS: Record<string, string[]> = { capex: ["capex", "설비투자", "�
   rp_purch: ["특수관계자", "내부거래", "계열사"] };
 
 async function read(fs: FileList | File[]) {
-  if (busy.value || !cv.canEdit) return;
+  if (busy.value || !cv.canEdit || needsCompany.value) return;
   busy.value = true;
-  const canvasId = cv.canvasId, company = api.analysis.focus, date = publishedDate.value;
+  const canvasId = cv.canvasId, company = selectedCompany.value, date = publishedDate.value;
   try {
     for (const f of Array.from(fs)) {
       if (upload.signal.aborted || !cv.canEdit) break;
@@ -95,8 +98,16 @@ function add() {
     <section class="modal sm dinput" role="dialog" aria-modal="true" aria-labelledby="dit">
       <div class="mh"><h3 id="dit">사내 자료 입력</h3><button class="btn grey sm" @click="emit('close')">닫기</button></div>
       <div v-if="bad" class="warnbar" role="status"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3l8 14H2z" /><path d="M10 8v4M10 14.5v.1" /></svg>올릴 수 없는 자료가 {{ bad }}개 있어요</div>
-      <div class="drop"><h4>사내 자료 <small>{{ SYNC_MODE === "server" ? api.analysis.focus : "SKT · SKB · KT · LGU+" }} 자료, 여러 개</small></h4>
-        <label v-if="SYNC_MODE === 'server'">발행일 (선택) <input v-model="publishedDate" type="date" :disabled="busy" /></label>
+      <div class="drop"><h4>사내 자료 <small>여러 개 선택 가능</small></h4>
+        <div v-if="SYNC_MODE === 'server'" class="upload-fields">
+          <label>대상 회사
+            <select v-model="selectedCompany" required :disabled="busy || !cv.canEdit">
+              <option disabled value="">회사를 선택하세요</option>
+              <option v-for="company in companies" :key="company" :value="company">{{ company }}</option>
+            </select>
+          </label>
+          <label>발행일 (선택) <input v-model="publishedDate" type="date" :disabled="busy || !cv.canEdit" /></label>
+        </div>
         <div class="zone" :class="{ over }" @dragover.prevent="over = true" @dragleave="over = false" @drop.prevent="drop">
           <div v-for="(i, index) in items" :key="index" class="frow" :class="{ w: i.code }">
             <span class="k">{{ ext(i.name) }}</span>
@@ -105,9 +116,9 @@ function add() {
             <div v-if="i.code" class="wmsg" role="alert"><b>{{ CODE[i.code] }}</b><span>{{ i.msg }}</span>
               <button class="btn grey sm" @click="items = items.filter((x) => x !== i)">빼기</button></div>
           </div>
-          <button class="dz" :disabled="busy || !cv.canEdit" @click="file?.click()">
+          <button class="dz" :disabled="busy || !cv.canEdit || needsCompany" @click="file?.click()">
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 13V3M6 7l4-4 4 4M4 13v3h12v-3" /></svg>
-            {{ busy ? (SYNC_MODE === "server" ? "올리고 정리하는 중…" : "확인하는 중…") : "클릭하거나 파일을 끌어 놓으세요" }}<small>{{ FORMATS.map((f) => f.toUpperCase()).join(", ") }}</small></button>
+            {{ busy ? (SYNC_MODE === "server" ? "올리고 정리하는 중…" : "확인하는 중…") : needsCompany ? "대상 회사를 먼저 선택하세요" : "클릭하거나 파일을 끌어 놓으세요" }}<small>{{ FORMATS.map((f) => f.toUpperCase()).join(", ") }}</small></button>
         </div>
       </div>
       <input ref="file" class="hide" type="file" multiple :accept="ACCEPT" @change="pick" />

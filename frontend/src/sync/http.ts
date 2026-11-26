@@ -2,6 +2,7 @@
 import { accessToken, API_BASE } from "./config";
 import { SyncError, type Batch } from "./outbox";
 import type { Doc } from "../api";
+import type { UploadCode } from "../local/validate";
 import type { EventsResponse, TextVersions } from "./protocol";
 
 /** 캔버스 열기 응답의 카드 한 장(공통 필드 + 종류별 필드). */
@@ -64,6 +65,13 @@ export function versionsOf(snapshot: CanvasSnapshot): Record<string, TextVersion
 
 // ---------- 사내 자료 업로드 (한 요청에 파일 하나) ----------
 export interface Job { id: number; jobType: string; status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED"; startedAt: string | null; finishedAt: string | null; errorMessage: string | null }
+
+export function uploadRejectionReason(err: unknown): UploadCode {
+  if (!(err instanceof SyncError) || err.code !== "D001") return null;
+  const data = err.data;
+  if (!data || typeof data !== "object" || !("reason" in data)) return null;
+  return data.reason === "FORMAT_MISMATCH" || data.reason === "COMPANY_MISMATCH" ? data.reason : null;
+}
 
 /** POST /documents/uploads: 202 + { jobId, documentIds }. publishedDate(yyyy-MM-dd)가 없으면 서버가 올린 날로 저장. */
 export function uploadDocument(canvasId: string, file: File, company: string, publishedDate?: string, signal?: AbortSignal): Promise<{ jobId: number; documentIds: number[] }> {

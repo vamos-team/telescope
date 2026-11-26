@@ -1241,6 +1241,9 @@ body.resizing .vue-flow,body.resizing iframe{pointer-events:none}
 .dinput .warnbar svg{width:18px;height:18px;fill:none;stroke:var(--yel);stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
 .dinput .drop h4{margin:0 0 8px;font-size:14px;font-weight:700;color:var(--t-strong);display:flex;gap:8px;align-items:baseline}
 .dinput .drop h4 small{font-size:12px;color:var(--t-cap);font-weight:400}
+.dinput .upload-fields{display:flex;flex-wrap:wrap;gap:8px 16px;margin:0 0 12px}
+.dinput .upload-fields label{display:grid;gap:4px;font-size:12px;color:var(--t-sub)}
+.dinput .upload-fields :is(select,input){min-height:32px;padding:4px 8px;border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--surface);color:var(--t-strong);font:inherit}
 .dinput .zone{border:1.5px dashed var(--line-2);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;min-height:240px;transition:background .15s,border-color .15s}
 .dinput .zone.over{background:var(--hover);border-color:var(--t-sub)}
 .dinput .frow{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:var(--surface);border:1px solid var(--line)}

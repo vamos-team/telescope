@@ -187,7 +187,7 @@ sequenceDiagram
 
   rect rgba(128,128,128,0.08)
   Note over U,A: 검색창 + → 데이터 입력 (C16)
-  U->>F: 발행일 선택(선택 사항), 파일 여러 개 선택
+  U->>F: 대상 회사 선택 · 발행일 선택(선택 사항) · 파일 여러 개 선택
   loop 파일마다 한 요청
     F->>B: POST /documents/uploads (file, canvasId, company, publishedDate?)
     alt 업로드 접수
@@ -203,7 +203,7 @@ sequenceDiagram
         Note over F: 파일 줄에 errorMessage 표시
       end
     else 요청 거절
-      B-->>F: 오류 코드와 메시지
+      B-->>F: 오류 코드와 메시지 (D001이면 data.reason 포함)
     end
   end
   end

@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { api } from "../../api";
 import { useCanvas } from "../../stores/canvas";
-import { getDocument, uploadDocument, waitJob } from "../http";
+import { getDocument, uploadDocument, uploadRejectionReason, waitJob } from "../http";
 
 vi.mock("../config", () => ({ SYNC_MODE: "server", API_BASE: "", accessToken: () => "test-token", setAccessToken: vi.fn() }));
 vi.mock("../realtime", () => ({ connectCanvas: () => ({ close() {} }) }));
@@ -22,7 +22,7 @@ it("파일마다 multipart 요청을 한 번 보내고 발행일을 선택적으
   vi.stubGlobal("fetch", fetch);
   const first = new File(["one"], "budget.pdf"), second = new File(["two"], "budget.pdf");
   await expect(uploadDocument("13", first, "SKT", "2026-11-26")).resolves.toEqual({ jobId: 11, documentIds: [21] });
-  await uploadDocument("13", second, "SKT");
+  await uploadDocument("13", second, "SKB");
 
   expect(fetch).toHaveBeenCalledTimes(2);
   expect(fetch.mock.calls.map(([url, init]) => [url, init.method, init.headers])).toEqual([
@@ -31,7 +31,19 @@ it("파일마다 multipart 요청을 한 번 보내고 발행일을 선택적으
   ]);
   const [form1, form2] = fetch.mock.calls.map(([, init]) => init.body as FormData);
   expect([...form1.entries()]).toEqual([["file", first], ["canvasId", "13"], ["company", "SKT"], ["publishedDate", "2026-11-26"]]);
-  expect([...form2.entries()]).toEqual([["file", second], ["canvasId", "13"], ["company", "SKT"]]);
+  expect([...form2.entries()]).toEqual([["file", second], ["canvasId", "13"], ["company", "SKB"]]);
+});
+
+it.each([
+  ["D001", "FORMAT_MISMATCH", "지원하지 않는 형식입니다.", "FORMAT_MISMATCH"],
+  ["D001", "COMPANY_MISMATCH", "지원하지 않는 회사입니다.", "COMPANY_MISMATCH"],
+  ["D001", "UNKNOWN", "문서를 올리지 못했습니다.", null],
+  ["C001", "FORMAT_MISMATCH", "필수 값이 없습니다.", null],
+])("업로드 오류 %s의 응답 data.reason %s를 분류한다", async (code, reason, message, expected) => {
+  vi.stubGlobal("fetch", async () => Response.json({ data: { reason }, error: { code, message } }, { status: 400 }));
+  const result = await uploadDocument("13", new File(["data"], "report.txt"), "SKB").catch((error: unknown) => error);
+  expect(result).toMatchObject({ code, message });
+  expect(uploadRejectionReason(result)).toBe(expected);
 });
 
 it("대기 시간과 실행 시간을 따로 세고 실패 메시지를 반환한다", async () => {
