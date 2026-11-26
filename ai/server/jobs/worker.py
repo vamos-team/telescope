@@ -92,6 +92,10 @@ class JobWorker:
     def is_accepting(self) -> bool:
         return self._accepting
 
+    def supports(self, job_type: JobType) -> bool:
+        """이 작업 종류를 실행할 파이프라인이 등록돼 있는지."""
+        return self._registry.supports(job_type)
+
     def start(self) -> None:
         self._loop = asyncio.get_running_loop()
         self._stopping = asyncio.Event()
