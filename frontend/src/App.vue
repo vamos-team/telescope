@@ -19,6 +19,7 @@ import HomeView from "./components/HomeView.vue";
 import ShareDialog from "./components/ShareDialog.vue";
 import NewCanvasDialog from "./components/NewCanvasDialog.vue";
 import { useCanvas, RELS, quarterOf, type TableCard } from "./stores/canvas";
+import { SYNC_MODE } from "./sync/config";
 import { api } from "./api";
 import { selfCheck } from "./local/ai";
 
@@ -205,6 +206,22 @@ async function loadExample() {
 function clearAll() { if (cv.cards.length && confirm("캔버스의 카드를 모두 지울까요?")) cv.clear(); }
 
 const zoom = computed(() => Math.round(flow.viewport.value.zoom * 100));
+
+// ---- 서버 모드: 다른 사람 커서와 접속자 (docs/backend/api-spec.md 5.6) ----
+const realtime = SYNC_MODE === "server";
+/** 다른 사람 커서를 화면 좌표로 바꾼다(캔버스 좌표 × 확대 + 이동). 사람마다 색을 고정한다. */
+const remoteCursors = computed(() => {
+  const { x: vx, y: vy, zoom: z } = flow.viewport.value;
+  return Object.entries(cv.cursors).map(([id, c]) => ({
+    id, left: c.x * z + vx, top: c.y * z + vy, color: `hsl(${(Number(id) * 67) % 360} 70% 45%)`, label: `사용자 ${id}`,
+  }));
+});
+/** 내 마우스 위치를 캔버스 좌표로 바꿔 보낸다(보내는 빈도는 연결 쪽에서 50ms로 제한). */
+function onPointerMove(e: MouseEvent) {
+  if (!realtime) return;
+  const p = flow.screenToFlowCoordinate({ x: e.clientX, y: e.clientY });
+  cv.sendCursor(p.x, p.y);
+}
 const key = (e: KeyboardEvent) => {
   if (!cv.canvasId) return;  // 캔버스 홈에서는 캔버스 단축키 없음
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k" && !cv.readOnly) { e.preventDefault(); srcOpen.value = !srcOpen.value; }
@@ -230,6 +247,8 @@ onUnmounted(() => window.removeEventListener("keydown", key));
     <b v-else class="ctitle" :title="cv.readOnly ? cv.canvasName : '두 번 눌러 이름 바꾸기'" @dblclick="renaming = !cv.readOnly">{{ cv.canvasName }}</b>
     <span class="sub">{{ quarterOf(cv.meta) }}</span>
     <div class="acts">
+      <span v-if="realtime && cv.present.length" class="presence" :title="cv.present.map((id) => `사용자 ${id}`).join(', ')">
+        접속 {{ cv.present.length }}명</span>
       <span v-if="cv.readOnly" class="ro-note">보기 전용</span>
       <template v-else>
         <button class="grey" title="자료 검색 (⌘K)" @click="srcOpen = true">자료 검색</button>
@@ -240,7 +259,7 @@ onUnmounted(() => window.removeEventListener("keydown", key));
   </div>
   <div class="main">
     <LeftPanel @focus="focusCard" @link="focusLink" />
-    <div class="flow-wrap" :class="{ ro: cv.readOnly }" @dragover.prevent @drop.prevent="onDrop">
+    <div class="flow-wrap" :class="{ ro: cv.readOnly }" @dragover.prevent @drop.prevent="onDrop" @mousemove="onPointerMove">
       <VueFlow id="canvas" class="flow" :nodes-draggable="!cv.readOnly" :nodes-connectable="!cv.readOnly" :nodes="nodes" :edges="edges" :min-zoom="0.2" :max-zoom="2" :default-edge-options="{ type: 'default' }" :delete-key-code="null"
         @node-drag-stop="onDragStop" @edge-click="onEdgeClick" @node-click="({ node }) => (active = node.id)" @pane-click="selLink = null; active = null">
         <template #node-table="p"><TableNode v-bind="p" /></template>
@@ -275,6 +294,12 @@ onUnmounted(() => window.removeEventListener("keydown", key));
             <button :aria-pressed="cv.unit === 'bil'" @click="cv.unit = 'bil'">십억원</button>
           </div>
         </Panel>
+        <!-- 다른 사람 커서: 눌리지 않는 층으로 띄움 -->
+        <div v-if="realtime" class="cursors" aria-hidden="true">
+          <div v-for="c in remoteCursors" :key="c.id" class="cursor" :style="{ left: c.left + 'px', top: c.top + 'px', '--c': c.color }">
+            <svg width="14" height="18" viewBox="0 0 14 18"><path d="M1 1l12 7-5 1.5L5.5 17z" /></svg><span>{{ c.label }}</span>
+          </div>
+        </div>
         <Panel position="bottom-right" class="zoom">
           <button aria-label="축소" @click="flow.zoomOut({ duration: 150 })">−</button>
           <button title="화면에 맞추기" @click="flow.fitView({ padding: 0.1, duration: 300 })">{{ zoom }}%</button>

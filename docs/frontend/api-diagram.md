@@ -112,15 +112,45 @@ sequenceDiagram
   U->>F: 카드 올리기 · 연결 · 값 수정 · 카드 · 선 프롬프트
   F->>F: 로컬 상태 반영, 큐에 이벤트 추가
   Note over F: 150ms 동안 묶음
-  F->>B: POST /canvases/{id}/events
+  F->>B: POST /canvases/{id}/events (requestId, events, 글 수정은 baseVersion)
   alt 성공
-    B-->>F: lastSeq, firstChangedLayer
+    B-->>F: lastSeq, firstChangedLayer, textVersions
     F->>B: GET /canvases/{id}/card-tags
     F->>B: GET /canvases/{id}/compares/{cardId} (비교 카드마다)
-  else 실패
-    B-->>F: error
-    F->>F: 묶음을 큐 앞에 되돌림, 안내 문구
+  else 409 K003 (다른 사람이 같은 글을 먼저 고침)
+    B-->>F: data: 지금 글과 버전
+    F->>F: 그 글을 최신으로 바꾸고 안내, 나머지 조작은 새 requestId로 다시 보냄
+  else 네트워크 · 5xx
+    F->>F: 같은 requestId로 다음에 다시 보냄
   end
+```
+
+## 3-1. 실시간 (다른 사람 변경 · 커서 · 접속자)
+
+서버 연동 모드(`VITE_CANVAS_SYNC=server`)에서만 쓴다. 규약은 `docs/backend/api-spec.md` 5.5·5.6.
+
+```mermaid
+sequenceDiagram
+  participant A as 화면 (나)
+  participant B as backend
+  participant C as 화면 (다른 사람)
+
+  A->>B: CONNECT /api/v1/ws (Authorization: Bearer)
+  A->>B: SUBSCRIBE /topic/canvases/{id}/events · cursors · presence, /user/queue/canvases
+  A->>B: SUBSCRIBE /app/canvases/{id}/presence
+  B-->>A: 지금 접속자 목록
+  A->>B: GET /canvases/{id}
+  B-->>A: cards, links, lastSeq
+  C->>B: POST /canvases/{id}/events
+  B-->>A: (커밋 뒤) firstSeq · lastSeq · events
+  alt firstSeq = 내 lastSeq + 1
+    A->>A: 화면에 반영 (내 requestId면 번호만 올림)
+  else 번호가 빔 · 재접속
+    A->>B: GET /canvases/{id} (다시 조회)
+  end
+  C->>B: SEND /app/canvases/{id}/cursor (50ms마다 최대 1번)
+  B-->>A: 커서 (user.id가 나면 무시)
+  B-->>A: /user/queue/canvases revoked · deleted → 캔버스 홈
 ```
 
 ## 4. 자료 검색

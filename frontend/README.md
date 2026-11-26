@@ -42,6 +42,7 @@ npm run electron       # 배포용 빌드(dist/) 후 그 결과를 Electron 창�
 | `npm run build` | 타입 검사 + `dist/` | 배포(`Dockerfile`의 nginx), `npm run electron` |
 | `npm run build:html` | 타입 검사 + `docs/frontend/demo.html` 한 파일 | 기획 문서에 붙이는 공유용. 서버 없이 더블클릭으로 열림 |
 | `npm run type-check` | 타입 검사만 | — |
+| `npm test` | 단위 테스트(vitest). 서버 연동 계층(`src/sync/`)의 묶음·재전송·글 충돌·번호 확인·원격 반영 | — |
 
 빌드는 상대 경로(`base: './'`)로 나와서 nginx 루트 배포와 Electron 파일 열기에 모두 쓸 수 있습니다.
 
@@ -118,7 +119,7 @@ npm run electron       # 배포용 빌드(dist/) 후 그 결과를 Electron 창�
 
 | 지금 (`src/local/`) | backend 연결 후 |
 |---|---|
-| 캔버스와 공유 설정을 localStorage에 저장 (같은 브라우저 안에서만 공유) | 서버 이벤트 저장소, 서버가 권한 검사 |
+| 캔버스와 공유 설정을 localStorage에 저장 (같은 브라우저 안에서만 공유) | 서버 이벤트 저장소, 서버가 권한 검사. 캔버스 열기·조작 저장·실시간 반영은 `VITE_CANVAS_SYNC=server`로 켤 수 있다(`src/sync/`, 로그인 #34 전에는 서버가 거절) |
 | 로그인은 사번 + 아무 비밀번호 | JWT 로그인. 사내 SSO는 이후 확장 |
 | 다른 사람 입장은 다른 사번으로 다시 로그인해 확인 | 서버 이벤트 로그로 여러 사람 화면을 맞춤 |
 | 초안·질문·평가는 규칙 기반 (`src/local/ai.ts`) | ai 서비스(LLM) 호출 |
