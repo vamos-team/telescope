@@ -150,7 +150,9 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 ### 3.5 카드·연결 타입
 
-좌표(`x`, `y`)는 화면 배치용이며 컨텍스트에 들어가지 않는다.
+좌표(`x`, `y`)는 화면 배치용이며 컨텍스트에 들어가지 않는다. 카드·연결 ID는 화면이 UUID로 만든다(여러 사람이 동시에 만들어도 겹치지 않게).
+
+여러 사람이 고칠 수 있는 글은 버전을 갖는다: 프롬프트 카드 본문 `textVersion`, 카드 프롬프트 `promptVersion`, 선 프롬프트 `promptVersion`(캔버스 열기 응답에 함께 온다).
 
 | `kind` | 필드 | 설명 |
 |---|---|---|
@@ -159,7 +161,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | `doc` | `docId` | IR·AR·뉴스·사내 자료 카드 |
 | `prompt` | `author`, `text` | 프롬프트 카드. 작성 지시, 사실 근거로 쓰지 않음 |
 | `dash` | `panel` | 대시보드 카드. `panel`: `opi`(3사 영업이익 추이) / `capex`(SKT CapEx·감가상각비) / `peer`(3사 주요 지표) |
-| `chart` | `compareId` | 시각화 카드 (화면 전용) |
+| `chart` | `compareId` | 시각화 카드. `add_chart`로 저장해 새로고침 뒤에도 남는다(컨텍스트에는 넣지 않음) |
 
 프롬프트 카드를 뺀 모든 카드는 `prompt`(카드 프롬프트, 이 근거를 어떻게 활용할지)를 가질 수 있다.
 
@@ -167,20 +169,24 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 ### 3.6 `POST /api/v1/canvases/{id}/events`
 
-카드·연결 조작을 묶어 보낸다. 화면은 150ms 동안 모은 이벤트를 한 번에 보낸다. 실패하면 화면이 같은 묶음을 다음에 다시 보낸다.
+카드·연결 조작을 묶어 보낸다. 화면은 150ms 동안 모은 이벤트를 한 번에 보낸다. 실패하면 화면이 같은 묶음을 **같은 `requestId`로** 다시 보낸다(서버는 한 번만 저장).
+저장 규칙은 `docs/backend/api-spec.md` 5장, 결정 이유는 `docs/backend/canvas.md`.
 
 | 요청 | 설명 | 타입 |
 |---|---|---|
+| `requestId` | 묶음마다 화면이 만드는 UUID. 같은 묶음을 다시 보낼 때는 같은 값 | string |
 | `events` | 이벤트 목록. 작성자는 토큰의 사용자 | Event[] |
 
 | HTTP | 상황 | 화면 문구 |
 |---|---|---|
-| 403 | 보기 권한 | "보기 권한만 있습니다." (화면은 보기 권한이면 편집 도구를 숨기고 보내지 않음) |
+| 403 | 보기 권한 (`K002`) | "보기 권한만 있습니다." (화면은 보기 권한이면 편집 도구를 숨기고 보내지 않음) |
+| 409 | 다른 사람이 같은 글을 먼저 고침 (`K003`). `data`: `{ targetId, field, text, version }` | "다른 사람이 먼저 고쳤습니다. 최신 글로 바꿨으니 확인한 뒤 다시 고쳐 주세요." 충돌한 글만 최신으로 바꾸고 나머지 조작은 새 `requestId`로 다시 보냄 |
 
 | 응답 `data` | 설명 | 타입 |
 |---|---|---|
 | `lastSeq` | 반영 후 마지막 이벤트 번호 | number |
 | `firstChangedLayer` | 처음 바뀐 컨텍스트 층 (`L1_sources` / `L2_workspace` / `L3_edits` / `null`) | string \| null |
+| `textVersions` | 이번 묶음으로 바뀐 글의 새 버전 `{ 카드·연결 ID: { text?, prompt? } }` | object |
 
 이벤트 종류 (`type`과 필드):
 
@@ -196,9 +202,10 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | `add_doc` | `cardId`, `docId` | 자료를 올림 |
 | `add_dash` | `cardId`, `panel` | 대시보드를 올림 |
 | `add_prompt` | `cardId`, `text` | 프롬프트 카드를 만듦 |
-| `edit_prompt` | `cardId`, `text` | 프롬프트를 고침 |
-| `set_card_prompt` | `cardId`, `text` | 카드 프롬프트를 고침. 빈 값이면 지움 |
-| `set_link_prompt` | `linkId`, `text` | 선 프롬프트를 고침. 빈 값이면 지움 |
+| `edit_prompt` | `cardId`, `text`, `baseVersion` | 프롬프트를 고침 |
+| `set_card_prompt` | `cardId`, `text`, `baseVersion` | 카드 프롬프트를 고침. 빈 값이면 지움 |
+| `set_link_prompt` | `linkId`, `text`, `baseVersion` | 선 프롬프트를 고침. 빈 값이면 지움 |
+| `add_chart` | `cardId`, `compareId` | 시각화 카드를 만듦 |
 | `create_compare` | `cardId`, `sources` | 비교 카드를 만듦 |
 | `confirm_mapping` | `conceptId`, `company`, `cells`, `accepted` | 계정 대응을 확정함 |
 | `add_link` | `linkId`, `source`, `target`, `rel` | 카드를 연결함 |
@@ -210,13 +217,16 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 예전 저장본의 `add_memo` · `edit_memo`는 `add_prompt` · `edit_prompt`로 읽고, `set_memo_type`은 버린다.
 
 ```json
-{ "events": [
-  { "type": "add_card", "cardId": "c1", "tableId": "SKT_2026Q1_is", "rows": [3, 5], "cols": [0, 1] },
-  { "type": "add_link", "linkId": "l2", "source": "c1", "target": "c3", "rel": "근거" }
+{ "requestId": "6f1c2a1e-6c1e-4d0f-9a43-7d3f8a0b9c21",
+  "events": [
+  { "type": "add_card", "cardId": "0d9f…", "tableId": "SKT_2026Q1_is", "rows": [3, 5], "cols": [0, 1], "x": 120, "y": 80 },
+  { "type": "set_card_prompt", "cardId": "0d9f…", "text": "감가상각비 추이 확인", "baseVersion": 0 }
 ] }
 ```
 
-카드·연결 ID(`c{n}`, `l{n}`)는 데모처럼 화면이 만든다. 여러 사람이 동시에 고칠 때 ID가 겹치지 않게 하는 방식은 backend와 정한다.
+- 새 카드를 만드는 이벤트(`add_card`, `add_doc`, `add_dash`, `add_prompt`, `create_compare`, `add_chart`)는 위치(`x`, `y`)를 함께 보낸다.
+- `baseVersion`은 고치기 시작할 때 알고 있던 그 글의 버전이다. 한 묶음 안에서 같은 글을 여러 번 고쳤으면 마지막 것만 보낸다(같은 카드의 이동도 마지막 위치만).
+- 화면 안(목업 계산 엔진)에서는 기존 snake_case 형식(`card_id`)을 쓰고, 서버로 보낼 때만 이 형식으로 바꾼다(`frontend/src/sync/protocol.ts`).
 
 ### 3.7 `GET /api/v1/canvases/{id}/activities`
 
@@ -255,6 +265,21 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 |---|---|---|
 | 403 | 소유자가 아닌 사람(편집 · 보기 권한)이 `PUT` | 화면은 공유 창을 읽기 전용으로 보여 줌 ("공유 설정은 소유자만 바꿀 수 있습니다.") |
 | 404 | 없는 사번 | "찾는 사람이 없거나 이미 권한이 있습니다." |
+
+### 3.10 실시간 연결 (WebSocket · STOMP)
+
+다른 사람의 변경·커서·접속자는 WebSocket(STOMP)으로 받는다. 주소·메시지 형식은 `docs/backend/api-spec.md` 5.5·5.6, 선정 이유는 11장.
+
+| 화면 동작 | 방법 |
+|---|---|
+| 연결 | `wss://{호스트}/api/v1/ws`, `CONNECT` 헤더 `Authorization: Bearer {토큰}`. 끊기면 3초 뒤 다시 연결 |
+| 캔버스 열기 | 구독(`/topic/canvases/{id}/events` 등) → `GET /canvases/{id}` → `lastSeq` 뒤 메시지만 반영 |
+| 다른 사람 변경 | `firstSeq`가 내 마지막 번호 + 1이면 반영, 아니면 캔버스를 다시 조회. 내 `requestId`면 번호만 올림 |
+| 커서 | 마우스 위치를 캔버스 좌표로 `/app/canvases/{id}/cursor`에 50ms마다 최대 1번. 받은 커서 중 내 것은 무시 |
+| 접속자 | `/app/canvases/{id}/presence`로 지금 목록을 한 번 받고, `/topic/canvases/{id}/presence`로 들어옴·나감 반영 |
+| 권한 알림 | `/user/queue/canvases`: `revoked`·`deleted`면 캔버스 홈으로, `role_changed`면 편집 도구를 권한에 맞춤 |
+
+화면 구현은 `frontend/src/sync/`(연동 계층)이고, 환경변수 `VITE_CANVAS_SYNC=server`일 때만 켜진다(기본은 목업). 로그인(#34) 전에는 서버가 연결을 거절하므로 목업으로 동작한다.
 
 ## 4. 공시
 
@@ -477,7 +502,10 @@ PDF · Markdown 파일은 화면이 이 응답으로 만든다(PDF는 브라우�
 
 | 상황 | 화면 동작 |
 |---|---|
-| 이벤트 전송 실패 | 묶음을 큐 앞에 되돌리고 "조작을 반영하지 못했습니다. 새로고침 후 다시 시도하세요." |
+| 이벤트 전송 실패 (네트워크·5xx) | 같은 `requestId`로 다음에 다시 보냄. "서버에 연결하지 못했습니다. 연결되면 다시 보냅니다." |
+| 글 충돌 (`409 K003`) | 충돌한 글을 최신으로 바꾸고 "다른 사람이 먼저 고쳤습니다. 최신 글로 바꿨으니 확인한 뒤 다시 고쳐 주세요." |
+| 다른 사람 변경의 번호 누락, 재접속 | 캔버스를 다시 조회 |
+| 권한 회수·캔버스 삭제 알림 | 캔버스 홈으로 가고 "이 캔버스를 볼 권한이 없습니다." 또는 "캔버스가 삭제되었습니다." |
 | 비교 조회 실패 | 이전 결과를 그대로 보여 줌 |
 | 카드 태그 조회 실패 | 이전 태그를 유지 |
 | 401 | 로그인 화면으로 |
@@ -488,8 +516,6 @@ PDF · Markdown 파일은 화면이 이 응답으로 만든다(PDF는 브라우�
 - 공유 알림 (초대받은 사람에게 알릴지, 알린다면 메일 · 사내 메신저 중 무엇으로)
 - 소유권 넘기기, 소유자 퇴사 · 부서 이동 시 처리
 - 공유 링크 복사 기능 여부
-- 동시 편집 시 카드·연결 ID 발급과 충돌 처리 (서버 발급 vs 화면 발급)
-- 다른 팀원의 조작을 화면에 반영하는 방식 (폴링 주기, `GET /canvases/{id}/events?after={seq}` 여부)
 - 초안·질문 작업 결과 ID를 받는 경로 (`GET /jobs/{id}` 응답에 넣을지, 캔버스별 최신 결과 조회로 할지)
 - 평가의 동기·비동기 여부
 - 생성하기 세 단계를 한 작업으로 묶을지, 단계별 작업 세 개로 둘지 (프로세스 바 진행 표시 방식)
