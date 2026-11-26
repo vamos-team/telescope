@@ -1,16 +1,13 @@
 package com.telescope.backend.infra.storage;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
-import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.UUID;
 
 /**
  * 로컬 디스크에 파일을 저장하는 {@link FileStorage} 구현.
@@ -24,20 +21,21 @@ import java.util.UUID;
  * {@code backend 프로세스의 현재 작업 디렉터리 기준} 상대 경로로 풀려서 의도와 다른 곳에 쓸 수 있다.
  * docker-compose.yml의 backend 서비스에 {@code FILE_STORAGE_DIR=/app/data/files} 같은 값을
  * 명시로 넣어줘야 하는지 확인 필요 (이슈 #10 범위 밖이라 여기서는 안 건드림).
+ *
+ * <p>빈 등록은 {@link FileStorageConfig}가 한다(S3 버킷이 설정되지 않았을 때만).
  */
-@Component
 public class LocalFileStorage implements FileStorage {
 
     private final Path baseDir;
 
-    public LocalFileStorage(@Value("${app.storage.local.base-dir:./data/files}") String baseDir) {
+    /** 저장 기준 디렉터리를 받는다. 키는 이 디렉터리 기준 상대 경로로 풀린다. */
+    public LocalFileStorage(String baseDir) {
         this.baseDir = Path.of(baseDir);
     }
 
     @Override
     public String store(String originalFilename, InputStream content) {
-        String extension = extensionOf(originalFilename);
-        String key = UUID.randomUUID() + extension;
+        String key = StorageKeys.newKey(originalFilename);
         Path target = resolve(key);
         try {
             Files.createDirectories(target.getParent());
@@ -74,13 +72,5 @@ public class LocalFileStorage implements FileStorage {
             throw new IllegalArgumentException("잘못된 key: " + key);
         }
         return resolved;
-    }
-
-    private String extensionOf(String originalFilename) {
-        if (originalFilename == null) {
-            return "";
-        }
-        int dotIndex = originalFilename.lastIndexOf('.');
-        return dotIndex >= 0 ? originalFilename.substring(dotIndex) : "";
     }
 }
