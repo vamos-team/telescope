@@ -29,7 +29,8 @@ def _std(concept: str) -> bool:
 
 def build(zip_dir: str | Path) -> dict:
     """zip 폴더 → 후보 목록. 개념마다 몇 개 공시에서 그 계정의 증감 항목·자산 종류로 쓰였는지 센다."""
-    from .facts import _XbrlDoc, _local, _x_tables, _SCOPE_AX
+    from .facts import _x_tables, _SCOPE_AX
+    from .xbrl_reader import _XbrlDoc, _local
     acc = defaultdict(lambda: {"n": 0, "items": Counter(), "neg": Counter(), "members": Counter(), "measures": Counter()})
     names: dict[str, dict[str, str]] = defaultdict(dict)
     n_zip = 0

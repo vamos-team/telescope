@@ -47,10 +47,8 @@ from __future__ import annotations
 import bisect
 import itertools
 import re
-import zipfile
 from collections import Counter, defaultdict
 from datetime import date, timedelta
-from functools import lru_cache
 from types import SimpleNamespace
 from typing import Optional
 
@@ -60,6 +58,7 @@ from . import xbrl_vocab
 from .align import align, similarity
 from .numbers import detect_period, is_money_unit, periods_in, unspace
 from .tables import is_total_label
+from .xbrl_reader import _XbrlDoc, _local, _xbrl_period_end, _xdoc
 
 
 def _c(d: dict) -> list[tuple[str, list[re.Pattern]]]:
@@ -858,10 +857,6 @@ def _extract_table(t, fy, company: Optional[dict] = None) -> list[dict]:
 
 # ─── XBRL 이름표 확인 ───────────────────────────────────────────
 
-_XI = "{http://www.xbrl.org/2003/instance}"
-_XD = "{http://xbrl.org/2006/xbrldi}"
-_LB = "{http://www.xbrl.org/2003/linkbase}"
-_XL = "{http://www.w3.org/1999/xlink}"
 # 택소노미 개념 ID (회사 표기와 무관). 축은 이름만, 구성요소는 '접두어_이름'으로 다룬다
 _SCOPE_AX = "ConsolidatedAndSeparateFinancialStatementsAxis"
 _MEASURE_AX = "CarryingAmountAccumulatedDepreciationAmortisationAndImpairmentAndGrossCarryingAmountAxis"
@@ -873,132 +868,6 @@ _SMALL_VALUE = 1e8    # 원. 이보다 작은 값은 여러 주석에 흔해 표
 _BIG_VALUE = 1e9      # 원. 이만한 금액이 같은 연결/별도·같은 날짜로 우연히 일치할 가능성은 낮다
 _MIN_SUPPORT = 2
 _CHAPTER = re.compile(r"^\d+\.\s*(연결)?\s*재무제표(\s*주석)?$")
-
-
-def _xml(raw: bytes):
-    from lxml import etree
-    return etree.fromstring(raw, etree.XMLParser(recover=True, huge_tree=True))
-
-
-def _local(concept: str) -> str:
-    return concept.split("_", 1)[-1].split(":")[-1]
-
-
-class _XbrlDoc:
-    """zip 하나: 사실(개념·문맥·단위·값), 한글 이름표, 표시 구조."""
-
-    def __init__(self, path):
-        self.path = str(path)
-        with zipfile.ZipFile(path) as z:
-            names = z.namelist()
-            inst = next(n for n in names if n.endswith(".xbrl"))
-            pre = next((n for n in names if n.endswith("_pre.xml")), None)
-            cal = next((n for n in names if n.endswith("_cal.xml")), None)
-            dfn = next((n for n in names if n.endswith("_def.xml")), None)
-            lab = next((n for n in names if re.search(r"lab-ko\.xml$|lab_.*-ko_.*\.xml$", n)), None)
-            self.labels = self._labels(z.read(lab)) if lab else {}
-            self.links = self._presentation(z.read(pre)) if pre else []
-            self.calc = self._calculation(z.read(cal)) if cal else {}
-            self.defaults = self._defaults(z.read(dfn)) if dfn else {}
-            self._instance(_xml(z.read(inst)))
-
-    @staticmethod
-    def _labels(raw: bytes) -> dict[str, dict[str, str]]:
-        """개념 → {이름표 역할: 한글}."""
-        out: dict[str, dict[str, str]] = defaultdict(dict)
-        for link in _xml(raw).iter(_LB + "labelLink"):
-            loc = {x.get(_XL + "label"): x.get(_XL + "href").split("#")[-1] for x in link.iter(_LB + "loc")}
-            lab = {x.get(_XL + "label"): ((x.get(_XL + "role") or "").split("/")[-1], (x.text or "").strip())
-                   for x in link.iter(_LB + "label")}
-            for a in link.iter(_LB + "labelArc"):
-                c, (role, text) = loc.get(a.get(_XL + "from")), lab.get(a.get(_XL + "to"), ("", ""))
-                if c and text:
-                    out[c].setdefault(role, text)
-        return out
-
-    @staticmethod
-    def _defaults(raw: bytes) -> dict[str, str]:
-        """정의 구조의 축 기본값(dimension-default): 축 이름 → 합계 구성요소."""
-        out = {}
-        for link in _xml(raw).iter(_LB + "definitionLink"):
-            loc = {x.get(_XL + "label"): x.get(_XL + "href").split("#")[-1] for x in link.iter(_LB + "loc")}
-            for a in link.iter(_LB + "definitionArc"):
-                if (a.get(_XL + "arcrole") or "").endswith("/dimension-default"):
-                    out[_local(loc[a.get(_XL + "from")])] = loc[a.get(_XL + "to")]
-        return out
-
-    @staticmethod
-    def _calculation(raw: bytes) -> dict[str, set[str]]:
-        """계산 구조: 합 개념 → 그 합을 이루는 개념들(모든 계산 묶음을 합친 것)."""
-        out: dict[str, set[str]] = defaultdict(set)
-        for link in _xml(raw).iter(_LB + "calculationLink"):
-            loc = {x.get(_XL + "label"): x.get(_XL + "href").split("#")[-1] for x in link.iter(_LB + "loc")}
-            for a in link.iter(_LB + "calculationArc"):
-                out[loc[a.get(_XL + "from")]].add(loc[a.get(_XL + "to")])
-        return dict(out)
-
-    @staticmethod
-    def _presentation(raw: bytes) -> list[tuple[str, dict]]:
-        """[(표시 묶음 role, 부모 → [(자식, preferredLabel 역할)])]."""
-        out = []
-        for link in _xml(raw).iter(_LB + "presentationLink"):
-            loc = {x.get(_XL + "label"): x.get(_XL + "href").split("#")[-1] for x in link.iter(_LB + "loc")}
-            kids = defaultdict(list)
-            arcs = sorted(link.iter(_LB + "presentationArc"), key=lambda a: float(a.get("order") or 0))
-            for a in arcs:
-                kids[loc[a.get(_XL + "from")]].append((loc[a.get(_XL + "to")], (a.get("preferredLabel") or "").split("/")[-1]))
-            out.append((link.get(_XL + "role") or "", dict(kids)))
-        return out
-
-    def _instance(self, t) -> None:
-        from lxml import etree
-        ctx = {}
-        for c in t.iter(_XI + "context"):
-            dims = {_local(m.get("dimension")): (m.text or "").strip().replace(":", "_")
-                    for m in c.iter(_XD + "explicitMember")}
-            p = c.find(_XI + "period")
-            inst, s, e = (p.find(_XI + k) if p is not None else None for k in ("instant", "startDate", "endDate"))
-            ctx[c.get("id")] = (dims, (s.text.strip() if s is not None else None),
-                                (inst if inst is not None else e).text.strip() if (inst is not None or e is not None) else None)
-        units = {}
-        for u in t.iter(_XI + "unit"):
-            m = u.find(f".//{_XI}measure")
-            units[u.get("id")] = (m.text or "").split(":")[-1] if m is not None else ""
-        # (개념) → [(dims, 시작, 끝, 값, 단위, decimals)]
-        self.facts: dict[str, list[tuple]] = defaultdict(list)
-        for e in t:
-            if not isinstance(e.tag, str) or e.get("unitRef") is None or e.get("contextRef") not in ctx:
-                continue
-            try:
-                v = float(e.text)
-            except (TypeError, ValueError):
-                continue
-            dims, s, end = ctx[e.get("contextRef")]
-            self.facts[f"{e.prefix}_{etree.QName(e).localname}"].append(
-                (dims, s, end, v, units.get(e.get("unitRef"), ""), e.get("decimals")))
-        ends = [end for fs in self.facts.values() for _, s, end, *_ in fs if s and end]
-        self.period_end = max(ends) if ends else None
-
-    def label(self, concept: str, role: str = "") -> str:
-        """한글 이름표. role(표시 구조 연결선의 preferredLabel, 예: terseLabel)이 있으면 회사가 그 표에 쓴 이름."""
-        d = self.labels.get(concept, {})
-        t = d.get(role) or d.get("label") or next(iter(d.values()), _local(concept))
-        return re.sub(r"\s*\[(구성요소|member|개요)\]\s*$", "", t, flags=re.I)
-
-    def names(self, concept: str) -> list[str]:
-        """후보 이름: 그 개념의 한글 이름표 전부(표준 이름표 + 회사가 쓴 이름, 설명문 제외)."""
-        d = self.labels.get(concept, {})
-        return list(dict.fromkeys(self.label(concept, r) for r in d if r != "commentaryGuidance"))
-
-
-@lru_cache(maxsize=64)
-def _xdoc(path: str) -> _XbrlDoc:
-    return _XbrlDoc(path)
-
-
-def _xbrl_period_end(path) -> Optional[str]:
-    """XBRL zip의 보고 기간 말(가장 늦은 기간 끝 날짜)."""
-    return _xdoc(str(path)).period_end
 
 
 def _x_tables(kids: dict, calc: Optional[dict] = None, vocab: Optional[dict] = None,
