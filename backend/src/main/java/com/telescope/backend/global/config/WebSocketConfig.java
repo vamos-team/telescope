@@ -4,11 +4,14 @@ import com.telescope.backend.canvas.controller.CanvasOutboundInterceptor;
 import com.telescope.backend.canvas.controller.CanvasStompInterceptor;
 import com.telescope.backend.global.auth.StompAuthChannelInterceptor;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
@@ -38,24 +41,42 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Value("${app.websocket.allowed-origin-patterns:*}")
     private String[] allowedOriginPatterns;
 
-    /** STOMP 연결 주소를 등록한다. */
+    /** 하트비트용 스케줄러. 프레임워크가 관리하는 빈을 받아 써서 컨텍스트가 닫힐 때 함께 정리되게 한다. */
+    private TaskScheduler heartbeatScheduler;
+
+    /**
+     * 프레임워크의 {@code messageBrokerTaskScheduler} 빈을 받는다. 브로커 설정보다 늦게 만들어지므로 지연 주입한다.
+     * 직접 만든 스케줄러는 빈이 아니라 종료 때 스레드가 남는다.
+     */
+    @Autowired
+    public void setHeartbeatScheduler(@Lazy @Qualifier("messageBrokerTaskScheduler") TaskScheduler heartbeatScheduler) {
+        this.heartbeatScheduler = heartbeatScheduler;
+    }
+
+    /**
+     * STOMP 연결 주소를 등록한다.
+     *
+     * <p>수신 순서 보존({@code setPreserveReceiveOrder})은 켜지 않는다. 켜면 프레임을 별도 실행기에서 처리해
+     * 인증·권한 거절이 화면에 {@code ERROR} 프레임으로 전달되지 않고 연결이 멈춘다(테스트로 확인).
+     * 구독 직후의 커서가 구독 기록보다 먼저 처리되는 경우는 커서를 조용히 버리는 것으로 다룬다(docs/backend/canvas.md D20).
+     */
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/api/v1/ws").setAllowedOriginPatterns(allowedOriginPatterns);
     }
 
-    /** 메모리 브로커와 주소 접두어(앱 {@code /app}, 개인 {@code /user}), 하트비트를 설정한다. */
+    /**
+     * 메모리 브로커와 주소 접두어(앱 {@code /app}, 개인 {@code /user}), 하트비트를 설정한다.
+     * 같은 세션으로 나가는 메시지는 발행한 순서대로 보낸다(접속자 들어옴·나감 순서가 뒤바뀌지 않도록).
+     */
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        ThreadPoolTaskScheduler heartbeat = new ThreadPoolTaskScheduler();
-        heartbeat.setPoolSize(1);
-        heartbeat.setThreadNamePrefix("stomp-heartbeat-");
-        heartbeat.initialize();
         registry.enableSimpleBroker("/topic", "/queue")
                 .setHeartbeatValue(new long[]{HEARTBEAT_MILLIS, HEARTBEAT_MILLIS})
-                .setTaskScheduler(heartbeat);
+                .setTaskScheduler(heartbeatScheduler);
         registry.setApplicationDestinationPrefixes("/app");
         registry.setUserDestinationPrefix("/user");
+        registry.setPreservePublishOrder(true);
     }
 
     /** 들어오는 프레임: 인증을 먼저 하고 캔버스 권한을 확인한다. */

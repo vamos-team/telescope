@@ -24,7 +24,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
     private final AccessTokenVerifier verifier;
 
     /**
-     * 들어오는 프레임을 인증한다. {@code CONNECT}면 토큰을 검증해 사용자를 붙이고, 그 밖의 프레임은 사용자가 없으면 막는다.
+     * 들어오는 프레임을 인증한다. {@code CONNECT}·{@code STOMP}면 토큰을 검증해 사용자를 붙이고, 그 밖의 프레임은 사용자가 없으면 막는다.
      *
      * @throws MessageDeliveryException 인증 실패. 화면은 STOMP {@code ERROR} 프레임을 받는다
      */
@@ -34,7 +34,8 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         if (accessor == null || accessor.getCommand() == null) {
             return message;
         }
-        if (accessor.getCommand() == StompCommand.CONNECT) {
+        // STOMP 1.2는 STOMP 명령을 CONNECT와 같게 다룬다
+        if (accessor.getCommand() == StompCommand.CONNECT || accessor.getCommand() == StompCommand.STOMP) {
             accessor.setUser(new UserPrincipal(verify(accessor.getFirstNativeHeader("Authorization"))));
             return message;
         }

@@ -24,7 +24,7 @@ import java.util.Optional;
  * <ul>
  *   <li>{@code SUBSCRIBE}: 캔버스 주소면 그 캔버스 권한(소유자·편집·보기)이 있어야 한다. 없으면 {@code ERROR}(K001).
  *       통과한 구독은 {@link CanvasRealtimeRegistry}에 기록하고, 접속자 구독이면 들어옴을 알린다.</li>
- *   <li>{@code SEND} 커서: 그 캔버스를 구독 중인 세션만 보낼 수 있고, 50ms보다 잦은 메시지는 버린다.</li>
+ *   <li>{@code SEND} 커서: 그 캔버스를 구독 중인 세션의 것만 전달한다. 구독 기록이 없거나 50ms보다 잦은 메시지는 조용히 버린다.</li>
  *   <li>{@code UNSUBSCRIBE}: 기록에서 빼고, 그 사람이 캔버스에서 완전히 나갔으면 나감을 알린다.</li>
  *   <li>알 수 없는 주소로의 구독·보내기는 막는다.</li>
  * </ul>
@@ -66,11 +66,18 @@ public class CanvasStompInterceptor implements ChannelInterceptor {
         Long userId = userId(accessor);
         Optional<CanvasDestination> topic = CanvasDestination.topic(destination);
         if (topic.isPresent()) {
-            requireRole(topic.get().canvasId(), userId);
+            Long canvasId = topic.get().canvasId();
+            requireRole(canvasId, userId);
             boolean joined = registry.add(new CanvasRealtimeRegistry.Subscription(accessor.getSessionId(),
-                    accessor.getSubscriptionId(), topic.get().canvasId(), userId, topic.get().channel()));
+                    accessor.getSubscriptionId(), canvasId, userId, topic.get().channel()));
+            // 첫 확인과 기록 사이에 공유가 풀렸을 수 있다(회수 처리는 아직 기록이 없어 지울 것이 없었음).
+            // 기록한 뒤 다시 확인한다: 권한이 있으면 이후의 회수 처리가 이 기록을 지우고, 없으면 여기서 지운다.
+            if (access.roleOf(canvasId, userId).isEmpty()) {
+                registry.remove(accessor.getSessionId(), accessor.getSubscriptionId());
+                throw new MessageDeliveryException("K001 이 캔버스를 볼 권한이 없습니다.");
+            }
             if (joined) {
-                notifier.getObject().presence(topic.get().canvasId(), "join", userId);
+                notifier.getObject().presence(canvasId, "join", userId);
             }
             return message;
         }
@@ -94,8 +101,11 @@ public class CanvasStompInterceptor implements ChannelInterceptor {
             throw new MessageDeliveryException("C001 보낼 수 없는 주소입니다: " + accessor.getDestination());
         }
         Long canvasId = app.get().canvasId();
+        // 구독 기록이 없으면 조용히 버린다. 같은 세션의 프레임이 병렬로 처리돼 구독 직후의 커서가 구독보다 먼저 올 수 있는데,
+        // 이때 연결을 닫으면 권한 있는 사람도 다시 연결해야 한다. 커서는 50ms 뒤 다음 위치가 오므로 한 번 버려도 된다.
+        // 권한이 없는 사람은 애초에 구독 기록이 없으므로 커서를 보낼 수 없다.
         if (!registry.isSubscribed(accessor.getSessionId(), canvasId)) {
-            throw new MessageDeliveryException("K001 이 캔버스를 볼 권한이 없습니다.");
+            return null;
         }
         return registry.allowCursor(accessor.getSessionId(), canvasId, System.nanoTime()) ? message : null;
     }
