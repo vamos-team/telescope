@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 단계적으로 바뀐다.
  *
  * <p>설정 {@code infra.python-ai-client.mode}가 {@code stub}이거나 비어있으면(기본값) 이 구현이
- * 등록된다. 실제 HTTP 구현체가 생기면 같은 프로퍼티로 교체한다.
+ * 등록된다. {@code http}이면 {@link PythonAiClientHttp}가 대신 등록된다.
  *
  * <p>TODO: 지금은 프로세스 메모리에만 상태를 둬서 재시작하면 모든 작업 상태가 사라진다.
  * Stub 용도로는 문제없지만, 실제 구현체는 당연히 이 방식을 쓰면 안 된다.
