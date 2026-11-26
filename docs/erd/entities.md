@@ -7,12 +7,12 @@
 
 ## 1. 한눈에 보기
 
-엔티티 21개, 도메인 8개.
+엔티티 22개, 도메인 8개.
 
 | 도메인 | 엔티티 | 한 줄 역할 |
 |---|---|---|
 | user | `User` | 로그인 사용자와 역할(ADMIN/USER). 결과의 소유자 |
-| document | `Document`, `DocumentVersion` | 문서(공시, IR, 리포트, 뉴스, 예산서)와 그 버전 |
+| document | `Document`, `DocumentVersion`, `DocumentPreparationResult` | 문서(공시, IR, 리포트, 뉴스, 예산서)와 그 버전, 업로드 문서의 파싱 결과 |
 | job | `Job` | 오래 걸리는 작업(자료 준비, 분석, 예측)의 상태. 폴링 대상 |
 | datasync | `DataSyncRun`, `DataVersion` | 재무 데이터(DuckDB) 적재 이력과 데이터 버전 |
 | analysis | `AnalysisRun`, `AnalysisRunDocument`, `AnalysisFinding` | 분석 실행, 사용 문서 스냅샷, 근거 점검 결과 |
@@ -53,13 +53,20 @@ erDiagram
         bigint documentId FK
         bigint jobId FK
         bigint uploadedBy FK
+        bigint canvasId FK
         int versionNo
         date publishedDate
         string source
         string fileStorageKey
     }
+    DOCUMENT_PREPARATION_RESULT {
+        bigint id PK
+        bigint documentVersionId FK
+        jsonb result
+    }
     DOCUMENT ||--o{ DOCUMENT_VERSION : "has"
     USER ||--o{ DOCUMENT_VERSION : "uploads"
+    DOCUMENT_VERSION ||--o| DOCUMENT_PREPARATION_RESULT : "parsed into"
 
     JOB {
         bigint id PK
@@ -261,7 +268,7 @@ erDiagram
    - 공용 문서(공시 등): ai 쪽이 수집·적재한다.
 5. 클라이언트는 `GET /jobs/{id}`를 폴링한다. 연결된 `Job.status`가 `SUCCEEDED`이면 그 문서 버전은 준비가 끝난 것이다. 준비 상태를 `DocumentVersion`에 따로 저장하지 않으므로 문서 버전 row는 바뀌지 않는다.
    - 작업 응답(`GET /jobs/{id}`)에는 결과 본문이 없다. 사용자 업로드의 카드 데이터(요약·수치·태그)는 `SUCCEEDED` 뒤에 `GET /api/v1/documents/{id}`로 받는다(`docs/frontend/api-spec.md` 5.3).
-   - 그러려면 backend가 ai 작업 결과를 받아 저장해 두어야 한다. 저장 위치와 저장 시점은 아직 정하지 않았다(6장, #111). 정해지기 전까지 업로드 → 카드 표시 흐름은 완성되지 않는다.
+   - backend는 작업이 `SUCCEEDED`가 될 때 ai 결과를 `DocumentPreparationResult`에 저장하고 그때 완료를 확정한다(#63, #111). 세부는 `docs/backend/document.md`.
 6. 준비가 끝나지 않은 문서 버전(연결된 `Job`이 `SUCCEEDED`가 아닌 것)은 분석 허용 문서에 넣지 않는다.
 
 ### 3.3 재무 데이터 적재
@@ -381,10 +388,22 @@ erDiagram
 | `publishedDate` | date | 발행일. 모든 문서는 발행일과 출처를 가진다 |
 | `source` | string | 출처 |
 | `fileStorageKey` | string | `FileStorage`가 반환한 key |
+| `canvasId` | bigint FK | 업로드 문서가 속한 캔버스. 만들 때 한 번 넣고 바꾸지 않는다. 공용 문서는 비어 있다(#111) |
 
 - 불변이다. 새 버전은 새 row로 추가하고, 기존 row는 고치지 않는다. 모든 필드가 생성 시점에 정해지며 이후 바뀌지 않는다.
 - 자료 준비 상태는 이 테이블에 두지 않고 `jobId`로 연결된 `Job.status`에서 읽는다(`SUCCEEDED` = 준비 완료).
 - 예산서와 근거자료를 사용자가 올리면 여기에 저장된다(`uploadedBy` 있음).
+
+**DocumentPreparationResult** — 업로드 문서 버전의 자료 준비(파싱) 결과
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `id` | bigint PK | |
+| `documentVersionId` | bigint FK | 어느 문서 버전의 결과인지. 유니크(버전마다 하나) |
+| `result` | jsonb | ai가 돌려준 결과 그대로. 형식 확정 전(#109). 화면은 `summary`, `figures`, `tags`를 쓴다 |
+
+- 문서 버전이 불변이라 나중에 오는 결과는 여기에 따로 쌓는다. 고치지 않는다.
+- 자료 준비 작업이 `SUCCEEDED`가 될 때 같은 트랜잭션에서 저장된다(#63).
 
 ### 4.3 job
 
@@ -643,8 +662,7 @@ erDiagram
 | 항목 | 내용 |
 |---|---|
 | 문서 보관·삭제 정책 | 공용 문서와 일회성 업로드 문서(예산서, 근거자료)의 보관 기간, 삭제 범위, 삭제된 문서를 참조하는 결과의 처리, 지난 `DataVersion` 파일의 보관 |
-| 일회성 업로드 문서의 접근 범위 | 올린 파일이 캔버스에 속한다는 방향은 정했다. 캔버스 권한자 모두가 볼지 등 세부 범위는 보관·삭제 정책과 함께 정한다 |
-| 업로드 문서와 캔버스 연결, 파싱 결과 저장 | `DocumentVersion`에 캔버스를 잇는 칼럼과 파싱 결과(요약·수치·태그)를 둘 곳이 아직 없다. 결과는 작업이 끝난 뒤 생기므로, 생성 후 바뀌지 않는 `DocumentVersion`에 칼럼으로 두면 불변 규칙과 충돌한다(별도 테이블이 자연스럽다). 저장 시점은 "결과 저장 후 종료 확정"(#63)과 겹친다. 업로드 API(#111)에서 마이그레이션과 함께 정한다 |
+| 일회성 업로드 문서의 접근 범위 | 올린 파일은 캔버스에 속하고(`DocumentVersion.canvasId`), 지금은 그 캔버스 권한자 모두가 본다(#111). 보관·삭제 정책과 함께 최종 확정한다 |
 | 공용 문서의 `fileStorageKey` | 공용 문서 원본은 ai 쪽 저장소에 있다. `DocumentVersion.fileStorageKey`(필수)에 ai 쪽 위치를 넣을지, 칼럼을 사용자 업로드 전용으로 바꿀지 ai 담당과 정한다 |
 | loader 호출 계약 | 적재 실행 방식, 결과 파일 경로·버전 id 수신 방식. `PythonAiClient`에 적재 메서드가 없다 |
 | `DataSyncRun`과 `DataVersion`의 관계 수 | 지금은 1 : N으로 그렸다. 적재 한 번이 여러 버전을 만들지 않는다면 1 : 1이 된다. ai 담당자와 확인이 필요하다 |

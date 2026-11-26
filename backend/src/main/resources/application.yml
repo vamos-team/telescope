@@ -6,6 +6,11 @@ spring:
   # RDS는 공용 인스턴스라 우리 테이블은 app 스키마에만 둔다. 스키마가 없으면 Flyway가 만든다.
   flyway:
     default-schema: app
+  # 업로드 크기 상한(#111). 배포 Ingress(nginx)의 body 크기 제한도 같은 값으로 맞춰야 한다(infra)
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 51MB
   jpa:
     hibernate:
       ddl-auto: validate
@@ -26,6 +31,10 @@ infra:
     status-read-timeout: 3s
 
 app:
+  document:
+    upload:
+      # 업로드 정책이 정해지기 전까지 ai 파서가 읽는 형식으로 임시 제한한다(루트 CLAUDE.md 7장 미정, #111)
+      allowed-extensions: pdf,xlsx,xlsm,csv,pptx,html,htm,xml,txt,md,json
   job:
     # ai가 끝났다고 알려 준 작업의 결과 저장이 이 횟수만큼 실패하면 FAILED로 끝낸다(#63)
     result-save-max-attempts: 5
