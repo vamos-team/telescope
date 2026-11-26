@@ -102,6 +102,11 @@ class JwtTokenProviderTest {
         assertThatThrownBy(() -> new JwtProperties(SECRET, Duration.ZERO)).isInstanceOf(IllegalStateException.class);
     }
 
+    @Test
+    void 만료_설정이_비면_1시간이다() {
+        assertThat(new JwtProperties(SECRET, null).accessTokenExpiry()).isEqualTo(Duration.ofHours(1));
+    }
+
     private static String base64(String json) {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(json.getBytes(StandardCharsets.UTF_8));
     }
