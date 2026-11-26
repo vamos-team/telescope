@@ -26,7 +26,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 실제 보안 설정·DB로 로그인 → 보호 경로 호출 흐름을 확인한다(이슈 #34 완료 기준).
  * 각 테스트는 트랜잭션 안에서 돌고 끝나면 되돌린다.
  */
-@SpringBootTest
+// K8s 밖에서도 프로브 경로(/actuator/health/liveness·readiness)를 켜서 공개 경로인지 확인한다
+@SpringBootTest(properties = "management.endpoint.health.probes.enabled=true")
 @AutoConfigureMockMvc
 @Import(TestcontainersConfig.class)
 @Transactional
@@ -103,8 +104,10 @@ class UserApiIntegrationTest {
     }
 
     @Test
-    void 헬스_체크는_토큰_없이_200() throws Exception {
+    void 헬스_체크와_K8s_프로브_경로는_토큰_없이_200() throws Exception {
         mvc.perform(get("/actuator/health")).andExpect(status().isOk());
+        mvc.perform(get("/actuator/health/liveness")).andExpect(status().isOk());
+        mvc.perform(get("/actuator/health/readiness")).andExpect(status().isOk());
     }
 
     private String login(String employeeNo, String password) throws Exception {

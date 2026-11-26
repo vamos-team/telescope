@@ -24,7 +24,7 @@ import java.io.IOException;
  * HTTP 인증·인가 설정. 세션 없이 요청마다 JWT로 인증한다.
  *
  * <ul>
- *   <li>공개: {@code /actuator/health}, {@code POST /api/v1/auth/login}, WebSocket 연결 주소 {@code /api/v1/ws}.
+ *   <li>공개: {@code /actuator/health}(하위 프로브 경로 포함), {@code POST /api/v1/auth/login}, WebSocket 연결 주소 {@code /api/v1/ws}.
  *       WebSocket은 브라우저가 연결 요청에 헤더를 붙일 수 없어 STOMP {@code CONNECT}에서 인증한다
  *       ({@link StompAuthChannelInterceptor}, docs/backend/canvas.md 6장).</li>
  *   <li>그 밖의 경로는 인증이 필요하다. 관리자 전용 기능은 메서드에 {@code @PreAuthorize("hasRole('ADMIN')")}를 단다.</li>
@@ -49,7 +49,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 컨트롤러 밖 오류를 Boot 오류 처리로 넘길 때 401로 덮이지 않게 한다
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-                        .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
+                        // K8s 프로브가 /actuator/health(startup)와 /health/readiness·/health/liveness를 부른다(infra/k8s/backend.yaml)
+                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/ws").permitAll()
                         .anyRequest().authenticated())
