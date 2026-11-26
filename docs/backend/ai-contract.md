@@ -272,19 +272,26 @@ backend                                   ai
   - 걸러낸 뒤 분석 전체를 실패로 볼지, 그 항목만 버리고 나머지는 저장할지는 **열림**
     (제안: 그 항목만 버리고 경고 로그를 남긴다 — 전체 실패는 사용자 경험상 과하다).
 
-### 2.10 호출 인증, 타임아웃 — 제안
+### 2.10 호출 인증, 타임아웃 — 구현 (#114)
 
 - **인증**: backend ↔ ai는 같은 신뢰 경계 안의 내부 호출이다(외부에 노출되지 않음). 공유
   비밀키를 헤더로 보내는 방식을 제안한다: `X-Internal-Api-Key: {값}`. 값은 환경변수로 주입하고
   (`.env.example`에는 변수명만, 루트 `CLAUDE.md` 6번) backend·ai 양쪽에 같은 값을 둔다.
-  변수명 제안: backend `AI_SERVICE_API_KEY`, ai `INTERNAL_API_KEY`(ai 쪽 명명은 ai 담당자
-  재량). mTLS 등 더 강한 방식은 MVP 범위를 넘는다고 본다.
-- **타임아웃(제안, 숫자는 조정 가능)**: 연결 타임아웃 2초(공통). 시작 호출(`startXxx`)은
+  변수명: backend `AI_SERVICE_API_KEY`, ai `INTERNAL_API_KEY`. mTLS 등 더 강한 방식은 MVP 범위를 넘는다고 본다.
+- **backend 설정** (`infra.python-ai-client`, #114): `mode`(`AI_SERVICE_MODE`, 기본 `stub` / 실제 호출 `http`),
+  `base-url`(`AI_SERVICE_BASE_URL`), `api-key`(`AI_SERVICE_API_KEY`). `http`인데 주소나 비밀키가 비어 있으면 기동 시점에 실패한다.
+  구현은 `PythonAiClientHttp`(Spring `RestClient` + JDK HTTP 클라이언트).
+- **HTTP/1.1 고정**: JDK HTTP 클라이언트 기본값(HTTP/2)은 `http://` 주소에 h2c 업그레이드를 시도하는데,
+  ai/server(uvicorn)는 그 요청의 본문을 받지 못해 작업 시작이 `422`로 거절됐다(로컬 확인). backend는 HTTP/1.1로만 보낸다.
+- **타임아웃(설정으로 조정 가능)**: 연결 타임아웃 2초(공통). 시작 호출(`startXxx`)은
   읽기 타임아웃 5초 — 작업을 큐에 올리는 것만 하므로 오래 걸리지 않아야 한다. 상태 조회는
   읽기 타임아웃 3초 — 폴링마다 호출되므로 더 짧게 잡는다. 분석·예측 자체의 실행 시간은
   비동기 처리로 가려지므로 이 타임아웃들과 무관하다.
 - 타임아웃이 발생하면 2.5의 "일시 오류"로 처리한다(시작 호출은 `markFailed`, 상태 조회는
   상태 유지 후 재시도).
+- **오류 구분(구현)**: 상태 조회 `404`만 `AiJobNotFoundException`이고, 그 밖의 실패(타임아웃·연결 실패·`5xx`·형식이 틀린 응답)는
+  `AiCallFailedException`이다. 시작 호출의 `4xx`/`5xx`도 `AiCallFailedException`이며, 미등록 작업의 `501`(#86)은
+  "ai 서비스가 아직 지원하지 않는 작업입니다."로 구분한다. 예외 메시지와 로그에는 요청·응답 본문과 비밀키를 넣지 않는다.
 
 ### 2.11 파일 접근 방식 (`fileStorageKey`) — 결정 (2026-11-26, #86)
 
@@ -340,7 +347,7 @@ backend                                   ai
 | 영역 | 내용 |
 |---|---|
 | ai | FastAPI 껍데기 구현: 2.4의 엔드포인트, `X-Internal-Api-Key` 검증 미들웨어 |
-| backend | `PythonAiClient` 실제 HTTP 구현체 추가 (`infra.python-ai-client.mode`에 값 추가) |
+| backend | ~~`PythonAiClient` 실제 HTTP 구현체 추가~~ → #114에서 완료(`mode=http`) |
 | backend | `PredictionRequest`에 `allowedDocumentVersionIds` 추가, `AnalysisRequest`의 `profileSnapshotJson`은 profile 패키지 확정 후 정리 |
 | backend | 예측 평가, 재무 데이터 적재용 `PythonAiClient` 메서드 추가 (결과 보관·폴링 패턴 적용 여부는 각 작업별 이슈에서 먼저 확정) |
 | backend | `job` 도메인 재구성: `getJob`이 상태 동기화와 결과 저장(대상 도메인 호출)을 묶어서, 저장 성공 후에만 종료 확정하도록 변경 (2.7) |
