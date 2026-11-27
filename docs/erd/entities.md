@@ -96,7 +96,7 @@ erDiagram
     }
     DATA_SYNC_RUN ||--o{ DATA_VERSION : "produces"
     JOB ||--o| DATA_SYNC_RUN : "적재 작업"
-    USER ||--o{ DATA_SYNC_RUN : "requests"
+    USER |o--o{ DATA_SYNC_RUN : "requests (예약 실행은 없음)"
 
     ANALYSIS_RUN {
         bigint id PK
@@ -446,7 +446,7 @@ erDiagram
 |---|---|---|
 | `id` | bigint PK | |
 | `dataSyncRunId` | bigint FK | 이 버전을 만든 적재 실행 |
-| `isActive` | boolean | 현재 활성 여부. 활성 판은 언제나 하나다(부분 유일 색인) |
+| `isActive` | boolean | 현재 활성 여부. 활성 판은 최대 하나다(부분 유일 색인). 첫 적재가 성공하기 전에는 없다 |
 | `filePath` | string | 이 판의 DuckDB 파일 위치. 판마다 다른 파일이라 지난 판도 남는다 |
 
 - 적재 결과 하나가 데이터 버전 하나다. 활성 여부는 바뀌지만 row 자체가 그 버전의 식별자라서 `AnalysisRun.dataVersionId`가 가리킨다.

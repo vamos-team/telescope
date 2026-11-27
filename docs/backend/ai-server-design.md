@@ -326,7 +326,7 @@ PipelineFn = Callable[[JobContext, dict], dict]          # (ctx, payload) -> res
 | `PIPELINE_MODE` | | `fake` | `fake`(모든 작업 가짜, 데이터 적재는 늘 실패) / `real`(등록된 작업만, 나머지 `501`) |
 | `PIPELINE_ENTRYPOINT` | | — | ai 담당 등록 함수 `모듈경로:함수명`. 없으면 ai 파이프라인을 붙이지 않는다 |
 | `DATASYNC_DATA_DIR` | | — | 재무 데이터 적재 작업 폴더(#135). real 모드에서 값이 있으면 적재를 받는다 |
-| `OPENDART_API_KEY` | 적재 시 ○ | — | 수집기가 직접 읽는다(Secret) |
+| `OPENDART_API_KEY` | 적재 시 ○ | — | 수집기가 프로세스 환경변수(또는 저장소 루트 `.env`)에서 직접 읽는다. `ai/server/.env`로는 전달되지 않는다. 배포는 Secret(`datasync.md` 3장) |
 | `S3_BUCKET` | | — | 있으면 자료 준비 원본을 S3에서 받는다 |
 | `AWS_REGION` | `S3_BUCKET`이면 ○ | — | S3 리전 |
 | `FILE_STORAGE_DIR` | real이고 S3가 없으면 ○ | — | 로컬 원본 폴더. backend의 `FILE_STORAGE_DIR`과 같은 곳 |

@@ -366,7 +366,7 @@ ai 서비스가 발급한 ID(`externalJobId`)는 화면에 노출하지 않는�
 | `GET /api/v1/data-sync-runs` | 최근 실행 20건 |
 
 응답(실행 하나): `{ id, source, requestedBy, createdAt, jobId, status, startedAt, finishedAt, errorMessage, dataVersionId, active }`.
-진행은 `GET /jobs/{jobId}`로도 본다. 예약 실행은 서버가 매일 정해진 시각(배포 설정 `DATASYNC_CRON`)에 시작한다.
+진행은 `GET /api/v1/jobs/{jobId}`로도 본다. 예약 실행은 서버가 매일 정해진 시각(배포 설정 `DATASYNC_CRON`)에 시작한다.
 
 ## 8. 코드와의 대응
 

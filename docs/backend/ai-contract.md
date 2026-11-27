@@ -391,7 +391,9 @@ backend                                   ai
 |---|---|---|---|
 | 적재 시작 | `POST /internal/v1/jobs/data-sync` → `202 { jobId }` | `{ dataSyncRunId, corpCodes: [DART 고유번호], start, end }`(`yyyy-MM-dd`) | `{ duckdbPath, filings, replaced, collected: { 고유번호: 수집 통계 } }` |
 
-- 상태 조회·오류 규약은 다른 작업과 같다(2.4, 2.5). 화면이 폴링하지 않으므로 backend 스케줄러가 1분마다 확인한다.
+- 상태 조회 규약은 다른 작업과 같다(2.4). 화면이 폴링하지 않으므로 backend 스케줄러가 1분마다 확인한다.
+- **멱등(다른 작업과 다름)**: 같은 `dataSyncRunId`로 다시 오면 ai/server는 새로 만들지 않고 처음 작업의 `jobId`를 돌려준다(두 번째 요청 내용은 쓰지 않음). 그래서 backend는 시작 실패 중 **응답이 온 거절**(`4xx`/`5xx`)만 `markFailed`로 끝내고, 응답을 못 받았거나 받은 번호를 저장하지 못한 작업은 QUEUED로 두고 다음 확인 때 다시 보낸다(2.5·2.8과 다름, `datasync.md` S12).
+- ai/server는 한 번에 적재 하나만 실행한다(원본 폴더를 나눠 쓰므로, `datasync.md` S13).
 - ai/server는 `DATASYNC_DATA_DIR`이 있을 때만(실제 모드) 이 작업을 받는다. 없으면 `501`. 가짜 모드는 늘 실패한다(가짜 판을 만들지 않게).
 - 새 파일은 `<DATASYNC_DATA_DIR>/duckdb/finance-<dataSyncRunId>.duckdb`(판마다 다른 파일). backend는 `duckdbPath`를 `DataVersion.filePath`로 남기고 파일을 열지 않는다.
 - 실패 문구: "DART API 키가 설정되지 않았습니다." / "DART에서 공시를 받지 못했습니다." / "적재할 공시가 없습니다." / "재무 데이터를 적재하지 못했습니다." (내부 경로·키·예외 원문 없음)

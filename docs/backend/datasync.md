@@ -17,13 +17,15 @@
 [backend] 스케줄러(cron, 서울 시간) 또는 관리자 수동 실행
    │  ① DB 잠금 → 가장 최근 실행이 끝나지 않았으면 그것을 돌려주고 끝
    │  ② Job(DATA_SYNC, QUEUED) + DataSyncRun 만들기 (한 트랜잭션)
-   │  ③ ai/server에 적재 작업 시작 요청 → 성공 markStarted / 실패 markFailed
+   │  ③ ai/server에 적재 작업 시작 요청 → 접수 markStarted / 거절 markFailed / 응답 못 받음 QUEUED로 두고 ⑥에서 다시 보냄(S12)
    ▼
-[ai/server] ④ 수집기: 회사마다 DART에서 정기공시 XBRL zip 받기(이미 받은 건 건너뜀) + 택소노미
+[ai/server] (한 번에 적재 하나, S13)
+            ④ 수집기: 회사마다 DART에서 정기공시 XBRL zip 받기(이미 받은 건 건너뜀) + 택소노미
             ⑤ 적재기: 받아 둔 zip 전체로 새 DuckDB 파일 만들기(.tmp로 만들고 검증한 뒤 이름 바꾸기)
                → <DATASYNC_DATA_DIR>/duckdb/finance-<실행번호>.duckdb
    ▼
-[backend] ⑥ 결과 확인 스케줄러(1분마다): 끝나지 않은 적재 작업의 ai 상태를 물음
+[backend] ⑥ 결과 확인 스케줄러(1분마다): 접수 번호가 없는 작업은 같은 실행 번호로 다시 보내고(멱등),
+             끝나지 않은 적재 작업의 ai 상태를 물음
           ⑦ 성공 → 결과 처리기가 이전 판을 끄고 새 판을 켬(한 트랜잭션, #63) / 실패 → 실패 사유만 남고 이전 판 유지
 ```
 
@@ -50,7 +52,14 @@
 | `corp-codes` | `DATASYNC_CORP_CODES` | 비어 있음 | 대상 회사 DART 고유번호(쉼표). 비어 있으면 시작하지 않음 |
 | `years` | `DATASYNC_YEARS` | 5 | 오늘부터 몇 년 전 공시까지 받을지 |
 
-ai/server: `DATASYNC_DATA_DIR`(작업 폴더, 값이 있을 때만 real 모드에서 적재를 받음), `OPENDART_API_KEY`(수집기가 직접 읽음).
+ai/server: `DATASYNC_DATA_DIR`(작업 폴더, 값이 있을 때만 real 모드에서 적재를 받음), `OPENDART_API_KEY`(DART API 키).
+
+`OPENDART_API_KEY`는 **ai/server 설정(`ai/server/.env`)으로는 전달되지 않는다.** 수집기(`_api_key()`)가 ① 프로세스 환경변수, ② 저장소 루트 `.env` 순서로만 읽고, ai/server 설정은 이 키를 선언하지 않으며 `.env` 값을 환경변수로 올리지도 않는다.
+
+| 실행 방식 | 키를 두는 곳 |
+|---|---|
+| 배포(K8s) | ai/server 컨테이너 환경변수(Secret). 이미지 안에는 루트 `.env`가 없다(`/app/.env` 없음) |
+| 로컬 `uvicorn` | 실행 전에 셸에서 `export OPENDART_API_KEY=...`(권장). 또는 저장소 루트 `.env` |
 
 ## 4. 결정 기록 (#135)
 
@@ -92,7 +101,7 @@ ai/server: `DATASYNC_DATA_DIR`(작업 폴더, 값이 있을 때만 real 모드�
 | **(a) 판마다 다른 파일** `finance-<실행번호>.duckdb` (선택) | 지난 판이 남아 "분석이 어느 판의 숫자로 만들어졌나"를 다시 볼 수 있다. 읽는 쪽은 활성 판의 파일만 열면 된다. `DataVersion.filePath`에 위치를 남긴다 |
 | (b) 한 파일을 갈아끼움 | 적재기 기본 동작이라 단순하지만, 지난 판이 사라져 분석이 기록한 판 번호가 빈 이름이 된다 |
 
-- 활성 판은 DB 부분 유일 색인(`uk_data_version_active ... WHERE is_active`)으로 언제나 하나다. 새 판을 켤 때 이전 판 끄기를 먼저 DB에 보낸다(Hibernate는 한 번에 보낼 때 추가를 수정보다 먼저 해서, 그대로 두면 색인에 걸린다).
+- 활성 판은 DB 부분 유일 색인(`uk_data_version_active ... WHERE is_active`)으로 **최대 하나**다. 첫 적재가 성공하기 전에는 활성 판이 없다(`activeVersion()`이 비어 있음). 색인은 중복만 막고 존재는 강제하지 않는다. 새 판을 켤 때 이전 판 끄기를 먼저 DB에 보낸다(Hibernate는 한 번에 보낼 때 추가를 수정보다 먼저 해서, 그대로 두면 색인에 걸린다).
 - 저장 위치는 우선 ai/server 작업 폴더(`DATASYNC_DATA_DIR`)다. 읽는 쪽(mcp-server, ai 영역, 아직 클러스터에 없음)과 같은 파일을 봐야 해서 S3·공유 저장소 등은 ai 담당과 정한다(7장).
 - 지난 판 파일 보관 기간은 정하지 않았다(지금은 모두 남음).
 
@@ -139,6 +148,37 @@ ai/server: `DATASYNC_DATA_DIR`(작업 폴더, 값이 있을 때만 real 모드�
 - 수집기·적재기는 `pipelines` 폴더를 기준으로 서로를 부른다(`from parsers import ...`). 저장소 루트만 모듈 경로에 있으면 `collectors`를 찾지 못한다(로컬에서 확인).
 - ai/server `Dockerfile`: `PYTHONPATH=/app:/app/pipelines`.
 
+### S12. 접수됐는지 모르는 시작은 실패로 확정하지 않고, 같은 실행 번호로 다시 보낸다 (PR #141 리뷰)
+
+문제: 처음 구현은 시작 호출이 어떤 이유로든 실패하면 `markFailed`였고, 커밋 뒤 ai 요청 전에 서버가 멈추는 경우는 다루지 않았다.
+- 커밋 직후 backend가 멈추면 실행이 접수 번호 없는 QUEUED로 남는다. 결과 확인은 접수 번호가 없으면 건너뛰므로 영영 끝나지 않고, 그동안 새 적재가 모두 막힌다(S5가 "끝나지 않은 실행"을 돌려주므로).
+- ai가 접수한 뒤 응답이 끊기거나 받은 번호를 저장하지 못하면 `markFailed`가 된다. 다음 시작이 새 실행을 만들어, ai에서는 두 적재가 함께 돌고 앞의 결과는 아무도 가져가지 않는다.
+
+| 후보 | 장점 | 단점 |
+|---|---|---|
+| **(a) 접수 불명은 QUEUED로 두고 결과 확인 때 다시 보냄 + ai/server 멱등(선택)** | 멈춤·응답 유실·저장 실패를 한 방법으로 복구. 두 번 보내도 한 번만 돈다 | ai/server에 멱등 처리 추가 |
+| (b) 오래된 QUEUED를 실패로 정리 | 단순 | ai가 이미 접수했으면 (a)의 두 번째 문제가 그대로 |
+| (c) 보내기 전에 "보내는 중"을 따로 기록 | 멈춘 지점을 더 잘 앎 | 접수 여부는 여전히 모름. 결국 (a)가 필요 |
+
+- 실패로 확정하는 것은 **ai가 응답하며 거절했을 때만**이다(`AiCallRejectedException`: `4xx`/`5xx`, 가짜 ai). 응답을 못 받았거나(타임아웃·연결 실패·형식 오류), 받은 번호를 저장하지 못했으면 QUEUED로 둔다.
+- `pollUnfinished`가 먼저 접수 번호 없는 `DATA_SYNC` 작업(QUEUED, `externalJobId` 없음)을 같은 `dataSyncRunId`로 다시 보낸다. 나이 조건은 두지 않았다: 처음 보내는 중인 요청과 겹쳐도 ai가 같은 작업을 돌려주므로 안전하다. 겹치면 뒤쪽 `markStarted`가 상태 전이 오류로 실패하고 로그만 남는다.
+- ai/server: `data-sync` 시작은 `dataSyncRunId`를 멱등 키로 쓴다. `job_id = uuid5(이름공간, "data-sync:<dataSyncRunId>")`, `INSERT OR IGNORE`로 만들고, 이미 있으면 새로 만들지 않고 그 `jobId`를 돌려준다(두 번째 요청 내용은 쓰지 않음). 같은 순간 두 요청이 와도 기본 키 때문에 하나만 만든다.
+- ai/server가 재시작돼 작업이 `FAILED`가 됐으면, 다시 보내도 같은 실패 작업을 받고 결과 확인이 실패로 끝낸다(무한 대기 없음).
+- 버린 것: 자료 준비·분석·예측에는 넣지 않았다. 그쪽은 사용자가 결과를 보고 다시 요청하는 흐름이고, 멱등 키를 무엇으로 할지가 열려 있다(`ai-contract.md` 2.8).
+- 한계: backend DB를 초기화하면(로컬) 실행 번호가 다시 1부터라 ai/server의 예전 작업과 겹친다. 로컬에서 backend DB를 지울 때는 ai/server DB(`DB_PATH`)도 함께 지운다. 운영 DB는 초기화하지 않는다.
+
+### S13. ai/server에서 적재는 한 번에 하나 (PR #141 리뷰)
+
+- 실행끼리 같은 원본 폴더(`<DATASYNC_DATA_DIR>/raw`)를 쓰고, 수집기는 같은 공시를 같은 임시 이름(`.part`)으로 받은 뒤 이름을 바꾼다. 두 실행이 겹치면 뒤쪽이 이름을 바꿀 파일을 못 찾아 수집 실패로 끝난다.
+- backend가 한 번에 한 건만 시작하지만(S5), 응답 유실 등으로 앞 실행이 ai에 남은 채 다음 실행이 생길 수 있다. 그래서 ai/server에서도 막는다.
+- 선택: 파이프라인 안의 프로세스 내 잠금(`threading.Lock`)으로 수집부터 새 판 파일까지 감싼다. ai/server는 한 프로세스로 돌고 작업은 그 안의 스레드에서 실행된다. 적재기 두 개가 메모리(임베딩 모델)를 함께 쓰는 일도 막는다.
+- 기다리는 실행은 작업 자리 하나를 차지한다(S7과 같은 한계). 여러 프로세스나 여러 서버가 같은 폴더를 쓰게 되면 파일 잠금으로 바꿔야 한다.
+
+### S14. 이력 응답은 작업과 판을 같은 스냅샷에서 읽는다 (PR #141 리뷰)
+
+- 작업 상태(`Job`)와 판(`DataVersion`)을 두 번에 나눠 읽는다. PostgreSQL 기본(READ COMMITTED)에서는 문장마다 새 스냅샷이라, 그 사이 결과 확인이 성공과 새 판을 커밋하면 "RUNNING인데 판이 켜진" 응답이 나올 수 있다.
+- 선택: `recentRuns`, `describe`를 `REPEATABLE READ` 읽기 전용 트랜잭션으로. 한 쿼리로 합치는 안은 다른 도메인(`job`)의 저장소를 직접 쓰게 돼 버렸다.
+
 ## 5. 관리자 API
 
 | API | 응답 |
@@ -146,14 +186,15 @@ ai/server: `DATASYNC_DATA_DIR`(작업 폴더, 값이 있을 때만 real 모드�
 | `POST /api/v1/data-sync-runs` | 새로 시작 `202`, 이미 진행 중 `200`(그 실행). 대상 회사가 없으면 `400 C001` |
 | `GET /api/v1/data-sync-runs` | 최근 실행 20건: `{ id, source, requestedBy, createdAt, jobId, status, startedAt, finishedAt, errorMessage, dataVersionId, active }` |
 
-두 API 모두 `ADMIN`만(아니면 `403 A004`). 진행은 `GET /jobs/{jobId}`로도 본다.
+두 API 모두 `ADMIN`만(아니면 `403 A004`). 진행은 `GET /api/v1/jobs/{jobId}`로도 본다.
 
 ## 6. 확인
 
-- `DataSyncServiceTest`(PostgreSQL, 실제 커밋, 10개): 시작(대상 회사·5년 기간을 ai에 보냄, 작업 RUNNING), 진행 중이면 같은 실행, ai 시작 실패 사유와 다음 시작, 내부 사유 감춤, 대상 회사 없음, 성공 시 새 판 켜고 이전 판 끔(활성 하나), 결과에 파일 위치 없음 → 완료 안 함, ai 실패 → 판 유지, **동시 시작 → 실행 하나**, 이력
+- `DataSyncServiceTest`(PostgreSQL, 실제 커밋, 12개): 시작(대상 회사·5년 기간을 ai에 보냄, 작업 RUNNING), 진행 중이면 같은 실행, ai 거절 사유와 다음 시작, 응답을 못 받으면 QUEUED로 두고 새 실행을 막은 뒤 다음 확인 때 같은 실행으로 다시 보냄, 예상하지 못한 오류도 다시 보냄, 커밋 뒤 요청 전에 멈춘 실행도 다음 확인 때 보냄, 대상 회사 없음, 성공 시 새 판 켜고 이전 판 끔(활성 하나), 결과에 파일 위치 없음 → 완료 안 함, ai 실패 → 판 유지, **동시 시작 → 실행 하나**, 이력
 - `DataSyncControllerTest`(실제 보안 설정): 관리자 `202`/`200`, `USER` `403 A004`, 토큰 없음 `401`, 이력
 - `DataSyncSchedulerTest`: 예외를 올리지 않음, cron 설정 이름·서울 시간·기본 꺼짐
-- ai/server `test_datasync.py`·`test_registry.py`(가짜 수집기·적재기): 회사마다 수집 → 택소노미 → 적재 순서, 판마다 다른 파일, API 키 없음(`SystemExit`)·수집·적재 실패 문구, 받은 것이 없으면 적재 안 함, 요청 검증(`start` > `end`, 빈 회사 목록 `422`), 실제 모드 등록, 가짜 모드는 적재를 하지 않음
+- ai/server `test_datasync.py`·`test_registry.py`(가짜 수집기·적재기): 회사마다 수집 → 택소노미 → 적재 순서, 판마다 다른 파일, API 키 없음(`SystemExit`)·수집·적재 실패 문구, 받은 것이 없으면 적재 안 함, 요청 검증(`start` > `end`, 빈 회사 목록 `422`), 같은 실행 번호는 같은 작업(한 번만 실행), 두 실행이 원본 폴더를 겹쳐 쓰지 않음(잠금을 빼면 실패하는 것 확인), 실제 모드 등록, 가짜 모드는 적재를 하지 않음
+- `PythonAiClientHttpTest`: 응답이 온 거절은 `AiCallRejectedException`, 형식 오류는 거절이 아님
 - 로컬 끝까지: PostgreSQL + backend(`AI_SERVICE_MODE=http`) + ai/server(`PIPELINE_MODE=real`, `DATASYNC_DATA_DIR`) → `USER` 시작 `403`, `ADMIN` 시작 `202`, 다시 `200`(같은 실행), 약 3초 뒤 결과 확인 스케줄러가 ai의 실패("DART API 키가 설정되지 않았습니다.")를 받아 이력에 `FAILED`. 실제 DART 호출은 하지 않았다(키 없이, 저장소 `.env`를 읽지 않게 pipelines 복사본으로 실행)
 
 ## 7. 알려진 한계와 남은 일
@@ -166,4 +207,5 @@ ai/server: `DATASYNC_DATA_DIR`(작업 폴더, 값이 있을 때만 real 모드�
 | 대상 회사 고유번호가 설정에 없다 | 비어 있으면 시작하지 않는다(`400`) | SKT·SKB·KT·LGU+ 고유번호를 확인해 `DATASYNC_CORP_CODES`로 |
 | 적재가 오래 걸리면 ai/server 작업 자리 하나를 차지한다 | 그동안 업로드 파싱이 기다릴 수 있다 | 새벽에 돌아 겹치는 일이 드물다. 문제가 되면 전용 자리 |
 | 지난 판 파일을 지우지 않는다 | 판마다 파일이 쌓인다 | 보관 기간은 문서 보관 정책과 함께 |
+| `V14`는 두 테이블이 비어 있다고 본다(`job_id`, `file_path`를 기본값 없이 `NOT NULL`로 추가) | 행이 있으면 마이그레이션이 실패한다 | #135 전에는 이 테이블에 쓰는 코드가 없어(빈 `datasync` 패키지, 배치 없음) 모든 환경에서 비어 있다. 손으로 넣은 행이 있으면 먼저 지운다 |
 | 원문 XML·리포트 수집은 배치에 없다 | `dart_document.py`·`naver_research.py`는 수동 | 필요하면 같은 방식으로 |
