@@ -1,7 +1,7 @@
 /**
- * 외부 데이터(OpenDART 등)를 수집·동기화하는 기능.
+ * 재무 데이터(DuckDB) 적재 배치의 실행과 이력, 지금 쓰는 판(버전) 관리(#135).
  *
- * <p>스케줄링(datasync.scheduler)은 트리거 주체(Jenkins/Spring)가
- * 정해질 때까지 보류한다.
+ * <p>Spring 스케줄러가 정해진 때에 시작하고, 실행은 ai/server의 작업으로 한다. 결과는 backend가 주기적으로 확인해
+ * 새 판을 활성화한다. 설계와 결정 이유는 {@code docs/backend/datasync.md}.
  */
 package com.telescope.backend.datasync;

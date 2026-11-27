@@ -57,6 +57,12 @@ public class PythonAiClientHttp implements PythonAiClient {
         return start("prediction", request);
     }
 
+    /** 재무 데이터 적재 작업을 시작한다(#135). */
+    @Override
+    public JobStartResponse startDataSync(DataSyncRequest request) {
+        return start("data-sync", request);
+    }
+
     /**
      * 작업 상태를 조회한다.
      *

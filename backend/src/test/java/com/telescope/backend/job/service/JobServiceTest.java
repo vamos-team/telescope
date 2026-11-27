@@ -440,5 +440,10 @@ class JobServiceTest {
         public JobStartResponse startPrediction(PredictionRequest request) {
             throw new UnsupportedOperationException();
         }
+
+        @Override
+        public JobStartResponse startDataSync(com.telescope.backend.infra.python.DataSyncRequest request) {
+            throw new UnsupportedOperationException();
+        }
     }
 }

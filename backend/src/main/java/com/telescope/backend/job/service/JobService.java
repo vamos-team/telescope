@@ -19,7 +19,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -87,6 +89,28 @@ public class JobService {
     @Transactional
     public void markFailed(Long jobId, String errorMessage) {
         findOrThrow(jobId).fail(errorMessage, now());
+    }
+
+    /** 작업이 끝났는지(SUCCEEDED·FAILED). ai를 부르지 않고 저장된 상태만 본다. 없는 작업이면 404용 예외. */
+    @Transactional(readOnly = true)
+    public boolean isFinished(Long jobId) {
+        return findOrThrow(jobId).isTerminal();
+    }
+
+    /** 이 종류의 끝나지 않은 작업 ID. 화면이 폴링하지 않는 배치(데이터 적재 등)를 서버가 직접 확인할 때 쓴다. */
+    @Transactional(readOnly = true)
+    public List<Long> unfinishedJobIds(JobType jobType) {
+        return jobRepository.findIdsByJobTypeAndStatusIn(jobType, List.of(JobStatus.QUEUED, JobStatus.RUNNING));
+    }
+
+    /** 여러 작업의 저장된 상태를 ID별로 돌려준다(목록 화면용). ai를 부르지 않는다. */
+    @Transactional(readOnly = true)
+    public Map<Long, JobResponse> peek(Collection<Long> jobIds) {
+        Map<Long, JobResponse> byId = new LinkedHashMap<>();
+        for (Job job : jobRepository.findByIdIn(jobIds)) {
+            byId.put(job.getId(), JobResponse.from(job));
+        }
+        return byId;
     }
 
     /**

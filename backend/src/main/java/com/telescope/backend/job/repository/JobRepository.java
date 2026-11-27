@@ -7,6 +7,11 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.telescope.backend.job.entity.JobStatus;
+import com.telescope.backend.job.entity.JobType;
+
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface JobRepository extends JpaRepository<Job, Long> {
@@ -19,4 +24,11 @@ public interface JobRepository extends JpaRepository<Job, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select j from Job j where j.id = :id")
     Optional<Job> findByIdForUpdate(@Param("id") Long id);
+
+    /** 이 종류의 아직 끝나지 않은(QUEUED·RUNNING) 작업 ID. 화면이 폴링하지 않는 배치 작업을 서버가 확인할 때 쓴다. */
+    @Query("select j.id from Job j where j.jobType = :type and j.status in :statuses order by j.id")
+    List<Long> findIdsByJobTypeAndStatusIn(@Param("type") JobType type, @Param("statuses") Collection<JobStatus> statuses);
+
+    /** 여러 작업을 한 번에 읽는다(목록 화면용, ai를 부르지 않음). */
+    List<Job> findByIdIn(Collection<Long> ids);
 }
