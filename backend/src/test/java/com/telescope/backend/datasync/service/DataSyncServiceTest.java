@@ -10,6 +10,7 @@ import com.telescope.backend.global.config.JpaAuditingConfig;
 import com.telescope.backend.global.exception.BusinessException;
 import com.telescope.backend.global.exception.ErrorCode;
 import com.telescope.backend.infra.python.AiCallFailedException;
+import com.telescope.backend.infra.python.AiCallRejectedException;
 import com.telescope.backend.infra.python.AiJobStatus;
 import com.telescope.backend.infra.python.AnalysisRequest;
 import com.telescope.backend.infra.python.DataSyncRequest;
@@ -20,6 +21,7 @@ import com.telescope.backend.infra.python.PredictionRequest;
 import com.telescope.backend.infra.python.PythonAiClient;
 import com.telescope.backend.job.entity.Job;
 import com.telescope.backend.job.entity.JobStatus;
+import com.telescope.backend.job.entity.JobType;
 import com.telescope.backend.job.repository.JobRepository;
 import com.telescope.backend.job.service.JobService;
 import org.junit.jupiter.api.AfterEach;
@@ -123,8 +125,8 @@ class DataSyncServiceTest {
     }
 
     @Test
-    void ai_시작이_실패하면_작업은_사유와_함께_FAILED이고_다음_시작은_새로_만든다() {
-        ai.startError = new AiCallFailedException("ai 서비스가 아직 지원하지 않는 작업입니다.");
+    void ai가_시작을_거절하면_작업은_사유와_함께_FAILED이고_다음_시작은_새로_만든다() {
+        ai.startError = new AiCallRejectedException("ai 서비스가 아직 지원하지 않는 작업입니다.");
         DataSyncRun failed = service.start(null).run();
         assertThat(jobRepository.findById(failed.getJobId()).orElseThrow().getErrorMessage())
                 .isEqualTo("ai 서비스가 아직 지원하지 않는 작업입니다.");
@@ -137,13 +139,45 @@ class DataSyncServiceTest {
     }
 
     @Test
-    void 예상하지_못한_오류로_시작이_실패하면_내부_사유를_감춘다() {
+    void 시작_응답을_받지_못하면_QUEUED로_두고_다음_확인_때_같은_실행으로_다시_보낸다() {
+        ai.startError = new AiCallFailedException("ai 서비스에 작업을 시작하지 못했습니다.");
+        DataSyncRun run = service.start(null).run();
+        Job waiting = jobRepository.findById(run.getJobId()).orElseThrow();
+        assertThat(waiting.getStatus()).isEqualTo(JobStatus.QUEUED);
+        assertThat(waiting.getErrorMessage()).isNull();
+        assertThat(service.start(admin).started()).isFalse();  // 접수됐을 수 있으니 새 실행을 막는다
+
+        ai.startError = null;
+        service.pollUnfinished();
+
+        assertThat(ai.started).hasSize(2).allSatisfy(r -> assertThat(r.dataSyncRunId()).isEqualTo(run.getId().toString()));
+        Job started = jobRepository.findById(run.getJobId()).orElseThrow();
+        assertThat(started.getStatus()).isEqualTo(JobStatus.RUNNING);
+        assertThat(started.getExternalJobId()).isNotNull();
+    }
+
+    @Test
+    void 예상하지_못한_오류도_실패로_확정하지_않고_다시_보낸다() {
         ai.startError = new IllegalStateException("내부 주소 http://ai-server:8000");
 
         DataSyncRun run = service.start(null).run();
 
-        assertThat(jobRepository.findById(run.getJobId()).orElseThrow().getErrorMessage())
-                .isEqualTo(DataSyncService.START_FAILED_MESSAGE);
+        assertThat(jobRepository.findById(run.getJobId()).orElseThrow().getStatus()).isEqualTo(JobStatus.QUEUED);
+        ai.startError = null;
+        service.pollUnfinished();
+        assertThat(jobRepository.findById(run.getJobId()).orElseThrow().getStatus()).isEqualTo(JobStatus.RUNNING);
+    }
+
+    @Test
+    void 시작_직후_서버가_멈춰_요청을_못_보낸_실행도_다음_확인_때_보낸다() {
+        // 커밋까지 하고 ai 요청 전에 멈춘 상태를 그대로 만든다
+        DataSyncRun run = tx.execute(status -> runRepository.save(
+                DataSyncRun.dartXbrl(jobService.create(JobType.DATA_SYNC).getId(), null)));
+
+        service.pollUnfinished();
+
+        assertThat(ai.started).extracting(DataSyncRequest::dataSyncRunId).containsExactly(run.getId().toString());
+        assertThat(jobRepository.findById(run.getJobId()).orElseThrow().getStatus()).isEqualTo(JobStatus.RUNNING);
     }
 
     @Test

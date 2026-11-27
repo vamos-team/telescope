@@ -110,3 +110,50 @@ def test_data_sync_route_validates_and_starts_a_job(make_client):
     body = wait_for(client, res.json()["jobId"], {"SUCCEEDED", "FAILED"})
     assert body["status"] == "SUCCEEDED"
     assert seen[0] == {"data_sync_run_id": "7", "corp_codes": ["00159023"], "start": "2021-01-01", "end": "2026-11-27"}
+
+
+def test_same_data_sync_run_returns_the_same_job_without_running_twice(make_client):
+    seen = []
+    client = make_client(lambda ctx, payload: seen.append(payload) or {"duckdbPath": "/x"})
+    body = {"dataSyncRunId": "8", "corpCodes": ["00159023"], "start": "2021-01-01", "end": "2026-11-27"}
+
+    first = client.post("/internal/v1/jobs/data-sync", headers=HEADERS, json=body)
+    wait_for(client, first.json()["jobId"], {"SUCCEEDED"})
+    again = client.post("/internal/v1/jobs/data-sync", headers=HEADERS, json={**body, "end": "2026-11-28"})
+    other = client.post("/internal/v1/jobs/data-sync", headers=HEADERS, json={**body, "dataSyncRunId": "9"})
+
+    assert again.status_code == 202
+    assert again.json()["jobId"] == first.json()["jobId"]
+    assert other.json()["jobId"] != first.json()["jobId"]
+    wait_for(client, other.json()["jobId"], {"SUCCEEDED"})
+    assert [p["data_sync_run_id"] for p in seen] == ["8", "9"]
+
+
+def test_runs_sharing_the_raw_folder_do_not_overlap(tmp_path):
+    import threading
+    import time
+
+    active, overlaps = [0], []
+    guard = threading.Lock()
+
+    def collect(corp_code, start, end, raw_dir):
+        with guard:
+            active[0] += 1
+            overlaps.append(active[0])
+        time.sleep(0.05)
+        zip_dir = raw_dir / "dart_xbrl" / corp_code
+        zip_dir.mkdir(parents=True, exist_ok=True)
+        (zip_dir / "a.zip").write_bytes(b"zip")
+        with guard:
+            active[0] -= 1
+        return {}
+
+    run = make_data_sync_pipeline(str(tmp_path), collect=collect, collect_taxonomy=lambda raw: {},
+                                  load=lambda out, zips, tax: {"filings": len(zips)})
+    threads = [threading.Thread(target=run, args=(CTX, {**PAYLOAD, "data_sync_run_id": str(i)})) for i in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert max(overlaps) == 1
