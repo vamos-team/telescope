@@ -1,6 +1,9 @@
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /app
-COPY . .
+COPY gradlew settings.gradle build.gradle ./
+COPY gradle gradle
+RUN ./gradlew dependencies --no-daemon > /dev/null
+COPY src src
 RUN ./gradlew bootJar -x test --no-daemon
 
 FROM eclipse-temurin:21-jre
