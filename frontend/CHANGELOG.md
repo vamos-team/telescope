@@ -2,6 +2,7 @@
 
 형식: `- YYYY-MM-DD 무엇을 바꿨는지 (관련 파일)`. 최신이 위로 오게 쌓는다. 규칙은 [AGENTS.md](AGENTS.md).
 
+- 2026-11-27 #158 분석 세션 주석을 캔버스 권한 규칙에 맞게 수정 (src/stores/canvas.ts)
 - 2026-11-26 PR #122 사내 자료 업로드 대상 회사 선택과 D001의 포맷·회사 불일치 표시 추가 (src/components/DataInputDialog.vue, src/sync/http.ts, src/style.css)
 - 2026-11-26 PR #122 CodeRabbit 주요 리뷰 수정 및 사내 자료 단건 업로드·작업 폴링·캔버스 권한 기반 복원 연결 (src/App.vue, src/components/, src/local/, src/stores/canvas.ts, src/sync/http.ts)
 - 2026-11-26 #107 develop 병합: 동시 편집 연동(#84)을 메모 구조로 맞춤. 서버 이벤트를 add_memo · edit_memo · set_card_memo · set_link_memo로, 글 버전을 memoVersion으로, 시각화 카드는 create_compare(view: chart) + sources로, 선 관계(rel) · set_link · add_chart 삭제. 공유 설정은 소유자만(#100)을 페이지 정보 팝오버에 반영, MenuDrawer 삭제 유지 (src/sync/*, src/stores/canvas.ts, src/App.vue, src/components/PageInfo.vue, docs/frontend/*.md, docs/planning/기획서.md)
