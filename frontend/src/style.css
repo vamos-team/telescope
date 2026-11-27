@@ -153,11 +153,11 @@ table.raw tr.s td.lab{box-shadow:inset 3px 0 0 var(--primary)}
 .main{flex:1;display:flex;min-height:0}
 .flow-wrap{flex:1;min-width:0;position:relative}
 /* 빈 캔버스 안내: 가운데 흰 안내창(아이콘 + 글자 + 버튼). 버튼만 눌림 (끌어 놓기 · 이동을 막지 않음) */
-.cempty{position:absolute;inset:0;z-index:5;display:grid;place-content:center;pointer-events:none}
+.canvas-empty{position:absolute;inset:0;z-index:5;display:grid;place-content:center;pointer-events:none}
 .cebox{display:grid;justify-items:center;gap:10px;min-width:280px;padding:28px 36px;text-align:center;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-pop)}
-.cempty svg{width:36px;height:36px;fill:none;stroke:var(--t-cap);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
-.cempty p{margin:0;font-size:15px;font-weight:500;color:var(--t-sub)}
-.cempty .btn{pointer-events:auto}
+.canvas-empty svg{width:36px;height:36px;fill:none;stroke:var(--t-cap);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.canvas-empty p{margin:0;font-size:15px;font-weight:500;color:var(--t-sub)}
+.canvas-empty .btn{pointer-events:auto}
 /* 서버 모드: 다른 사람 커서(캔버스 위, 눌리지 않음)와 접속자 수 */
 .cursors{position:absolute;inset:0;pointer-events:none;z-index:6;overflow:hidden}
 .cursor{position:absolute;transform:translate(-1px,-1px);color:var(--c);transition:left .08s linear,top .08s linear}
@@ -1133,7 +1133,7 @@ svg.dchart rect:hover,svg.dchart circle:hover{opacity:.82}
   -webkit-mask-image:linear-gradient(transparent,#000 36px);mask-image:linear-gradient(transparent,#000 36px)}
 .adder.spanel .sugg li{width:min(520px,100%);animation:suggIn .24s ease-out var(--d) both}
 .adder.spanel .sugg button{display:flex;align-items:center;gap:8px;width:100%;height:32px;padding:0 10px;border-radius:var(--r-md);font-size:13.5px;color:var(--t);text-align:left}
-.adder.spanel .sugg button:hover{background:var(--hover)}
+.adder.spanel .sugg button:hover,.adder.spanel .sugg button.on{background:var(--hover)}
 .adder.spanel .sugg small{margin-left:auto;font-size:12px;color:var(--t-cap)}
 .adder.spanel .sugg svg{width:16px;height:16px;flex:none;fill:none;stroke:var(--t-cap);stroke-width:1.6;stroke-linecap:round}
 @keyframes suggIn{from{opacity:0;transform:translateY(8px)}}

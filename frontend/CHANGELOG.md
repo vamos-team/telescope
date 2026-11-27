@@ -2,6 +2,7 @@
 
 형식: `- YYYY-MM-DD 무엇을 바꿨는지 (관련 파일)`. 최신이 위로 오게 쌓는다. 규칙은 [AGENTS.md](AGENTS.md).
 
+- 2026-11-27 #170 리뷰 반영: 사이드바를 다시 열면 지난 검색을 지우고 탭 화면부터, 추천 검색어를 ↑ · ↓ · Enter로 고름, 검색창 Tab은 기본 포커스 이동, 빈 캔버스 안내 클래스를 `canvas-empty`로 바꿔 시각화 카드 상태 문구(`.cempty`)와 겹치지 않게 함 (src/App.vue, src/components/SourcePanel.vue, src/style.css)
 - 2026-11-27 #170 검색창을 골라도 위 탭을 숨기지 않음. 추천 검색어는 탭 화면 위 팝업으로만 뜨고 입력하면 사라짐 (src/components/SourcePanel.vue)
 - 2026-11-27 #170 추천 검색어를 검색창 위 3줄(공시 · IR·AR · 뉴스 하나씩)로 줄이고 그라데이션 블러 바탕에 아래부터 차례로 뜨게 함. 빈 캔버스 안내를 가운데 흰 안내창으로 (src/components/SourcePanel.vue, src/App.vue, src/style.css)
 - 2026-11-27 #170 자료 추가 · ⌘K로 오른쪽 사이드바를 열 때 검색창을 자동으로 고르지 않고 탭 화면부터 보여 줌 (src/App.vue, src/components/SourcePanel.vue)

@@ -346,7 +346,7 @@ const staleDot = computed(() => !!cv.latest && cv.latest.sig !== cv.sig);
         <button v-if="!spOpen" class="float fr" data-tip="자료 검색 보기" aria-label="오른쪽 사이드바 보기" @click="openSearch">
           <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2" /><path d="M12.5 3.5v13" /></svg></button>
         <!-- 빈 캔버스 안내(가운데 흰 안내창): 사이드바가 닫혀 있으면 자료 추가 버튼, 열려 있으면 끌어다 올리라는 문구 -->
-        <div v-if="!cv.cards.length && cv.canEdit" class="cempty"><div class="cebox">
+        <div v-if="!cv.cards.length && cv.canEdit" class="canvas-empty"><div class="cebox">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 13V3M6 7l4-4 4 4M4 13v3h12v-3" /></svg>
           <p>{{ spOpen ? "자료를 캔버스로 끌어다 올리세요" : "자료를 추가하세요" }}</p>
           <button v-if="!spOpen" class="btn fill" @click="openSearch">자료 추가</button>

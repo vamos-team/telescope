@@ -17,7 +17,7 @@ import DataInputDialog from "./DataInputDialog.vue";
 export interface Pick { key: string; label: string; tag: string; src: string; kind: "doc" | "table" | "compare" | "dash";
   id?: string; tableId?: string; rows?: number[]; cols?: number[]; tables?: string[]; panel?: string }
 
-defineProps<{ open: boolean }>();
+const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{ close: []; add: [items: Pick[]]; example: [] }>();
 const cv = useCanvas();
 const A = api.analysis;
@@ -66,7 +66,14 @@ async function suggest() {
   const used = new Set<string>();
   sugg.value = SUGG.flatMap(([k, kind]) => { const h = hits.find((x) => x[k] && !used.has(x.t)); if (!h) return []; used.add(h.t); return [{ t: h.t, kind }]; });
 }
-function onFocus() { focused.value = true; suggest(); }
+function onFocus() { focused.value = true; hi.value = -1; suggest(); }
+// 추천 검색어는 입력창 포커스를 둔 채 ↑ · ↓로 고르고 Enter로 검색 (Tab은 기본 포커스 이동)
+const hi = ref(-1);
+const showSugg = computed(() => focused.value && !q.value && sugg.value.length > 0);
+function moveHi(d: number) { if (!showSugg.value) return; const n = sugg.value.length + 1; hi.value = (hi.value + 1 + d + n) % n - 1; }  // -1 = 고르지 않음
+function pickHi(e: KeyboardEvent) { if (showSugg.value && hi.value >= 0) { e.preventDefault(); q.value = sugg.value[hi.value].t; hi.value = -1; } }
+// 사이드바를 다시 열면 지난 검색을 지우고 탭 화면부터
+watch(() => props.open, (o) => { if (o) { q.value = ""; sq.value = ""; } });
 
 // 인사이트 탭: 관련 뉴스는 캔버스 회사 · 개념과 겹치는 순, 회사 필터
 const NF = ["전체", "SKT", "KT", "LGU+", "3사 공통"];
@@ -236,14 +243,16 @@ const PH = "공시 · IR · AR · 뉴스 통합 검색 (예: SKT 감가상각비
     <!-- 아래 고정: [+ | 통합 검색] -->
     <div class="dock">
       <!-- 추천 검색어 3개: 검색창 위로 그라데이션 블러와 함께 아래부터 차례로 뜸. 누르면 그 검색어로 통합 검색 (mousedown.prevent로 입력창 선택 유지) -->
-      <ul v-if="focused && !q && sugg.length" class="sugg" aria-label="추천 검색어">
-        <li v-for="(x, i) in sugg" :key="x.t" :style="{ '--d': (sugg.length - 1 - i) * 60 + 'ms' }">
-          <button type="button" @mousedown.prevent @click="q = x.t">
+      <ul v-if="showSugg" id="sugg" class="sugg" role="listbox" aria-label="추천 검색어">
+        <li v-for="(x, i) in sugg" :id="`sugg-${i}`" :key="x.t" role="option" :aria-selected="hi === i" :style="{ '--d': (sugg.length - 1 - i) * 60 + 'ms' }">
+          <button type="button" tabindex="-1" :class="{ on: hi === i }" @mousedown.prevent @click="q = x.t">
             <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5" /><path d="M13 13l3.5 3.5" /></svg>{{ x.t }}<small>{{ x.kind }}</small></button></li>
       </ul>
       <form class="cin" @submit.prevent="search">
         <button v-if="cv.canEdit" type="button" class="plus" title="데이터 입력 (사내 자료)" aria-label="데이터 입력" @click="inputOpen = true">+</button>
-        <input ref="input" v-model="q" type="search" :placeholder="PH" :aria-label="PH" autocomplete="off" @focus="onFocus" @blur="focused = false" @keydown.esc="esc" @keydown.tab.prevent />
+        <input ref="input" v-model="q" type="search" :placeholder="PH" :aria-label="PH" autocomplete="off" @focus="onFocus" @blur="focused = false" @keydown.esc="esc"
+          :aria-controls="showSugg ? 'sugg' : undefined" :aria-activedescendant="showSugg && hi >= 0 ? `sugg-${hi}` : undefined"
+          @keydown.down.prevent="moveHi(1)" @keydown.up.prevent="moveHi(-1)" @keydown.enter="pickHi" />
       </form>
     </div>
     <SourceOverlay v-if="detail" :table-id="detail.table_id" :match="detail.hits.map((h) => h.r)" pick @close="detail = null" @add="picked" />
