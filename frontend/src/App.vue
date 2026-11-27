@@ -261,7 +261,7 @@ const realtime = SYNC_MODE === "server";
 const remoteCursors = computed(() => {
   const { x: vx, y: vy, zoom: z } = flow.viewport.value;
   return Object.entries(cv.cursors).map(([id, c]) => ({
-    id, left: c.x * z + vx, top: c.y * z + vy, color: `hsl(${(Number(id) * 67) % 360} 70% 45%)`, label: `사용자 ${id}`,
+    id, left: c.x * z + vx, top: c.y * z + vy, color: `hsl(${(Number(id) * 67) % 360} 70% 45%)`, label: cv.nameOf(Number(id)),
   }));
 });
 /** 내 마우스 위치를 캔버스 좌표로 바꿔 보낸다(보내는 빈도는 연결 쪽에서 50ms로 제한). */
@@ -305,7 +305,7 @@ const staleDot = computed(() => !!cv.latest && cv.latest.sig !== cv.sig);
     <b v-else class="ctitle" :title="cv.readOnly ? cv.canvasName : '두 번 눌러 이름 바꾸기'" @dblclick="renaming = !cv.readOnly">{{ cv.canvasName }}</b>
     <span class="asof" title="기준 시점: 이 시점 이전에 발행된 자료만 예측에 씀">{{ cv.pageQuarter }}</span>
     <div class="acts">
-      <span v-if="realtime && cv.present.length" class="presence" :title="cv.present.map((id) => `사용자 ${id}`).join(', ')">
+      <span v-if="realtime && cv.present.length" class="presence" :title="cv.present.map((id) => cv.nameOf(id)).join(', ')">
         접속 {{ cv.present.length }}명</span>
       <span v-if="cv.readOnly" class="ro-note">보기 전용</span>
       <!-- 화면 전환: 캔버스(사용자) / 분석(AI). 정보 아이콘 옆 -->

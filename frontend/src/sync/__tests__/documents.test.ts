@@ -77,7 +77,10 @@ it("열 때 문서와 본인 분석을 복원하고 권한 거절 시 문서 캐
   let allowed = true;
   const fetch = vi.fn(async (url: string) => {
     if (url === "/api/v1/documents/21") return allowed ? data(doc) : denied();
-    return data({ meta: { name: "예산", myRole: "edit", quarter: "2025년 4분기" }, lastSeq: 0, warnings: [], links: [],
+    if (url === "/api/v1/canvases/13/activities") return data([]);
+    const person = { id: 1, name: "이재무", dept: "네트워크센터" };
+    return data({ meta: { id: 13, name: "예산", myRole: "edit", quarter: "2025년 4분기", owner: person, updatedBy: person,
+      updatedAt: "2026-11-27T09:00:00", cardCount: 2 }, lastSeq: 0, warnings: [], links: [],
       cards: [{ id: "a", kind: "doc", docId: 21 }, { id: "b", kind: "doc", docId: 21 }] });
   });
   vi.stubGlobal("fetch", fetch);

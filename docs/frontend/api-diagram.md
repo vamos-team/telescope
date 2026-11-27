@@ -60,17 +60,18 @@ sequenceDiagram
   F->>B: POST /auth/login
   B-->>F: accessToken, user
   F->>B: GET /canvases?filter=all
-  B-->>F: 볼 수 있는 페이지 목록 (myRole, 미리보기)
+  B-->>F: 볼 수 있는 페이지 목록 (myRole, owner · updatedBy 이름, cardCount)
   Note over F: 페이지 홈 (C00)
   alt 타일 클릭
     U->>F: 페이지 고르기
   else + 새 페이지 (C14)
-    F->>B: GET /users?q= (편집할 사람 추천 · 찾기)
+    F->>B: GET /users?q= (편집할 사람 찾기, 입력이 멈추면)
     F->>B: POST /canvases (name, quarter, editorIds)
     B-->>F: 새 페이지 (소유자 = 나, 편집할 사람 초대됨)
   end
   F->>B: GET /canvases/{id}
-  B-->>F: meta(name, quarter, myRole), cards, links, lastSeq, warnings
+  B-->>F: meta(name, quarter, myRole, owner, updatedBy), cards, links, lastSeq, warnings
+  F->>B: GET /canvases/{id}/activities (활동 로그)
   Note over F: myRole이 view면 편집 도구를 숨김. warnings가 있으면 일부 복원 실패 안내
   F->>B: GET /canvases/{id}/card-tags (자료 검색 추천 기준)
   F->>B: GET /canvases/{id}/analyses (내 세션, 최신 세션의 지적 박스)
@@ -86,16 +87,13 @@ sequenceDiagram
 
   U->>F: 헤더 정보 아이콘
   F->>B: GET /canvases/{id}/shares
-  B-->>F: ownerId, members, people
-  U->>F: 찾기 칸 클릭
-  F->>B: GET /users?q=&excludeCanvas={id}
-  B-->>F: 추천 (같은 부서 먼저, 최대 6명)
-  U->>F: 사번 · 이름 · 부서 입력
-  F->>B: GET /users?q={입력}&excludeCanvas={id}
-  B-->>F: 후보 (최대 6명)
+  B-->>F: ownerId, owner, members (이름 · 부서 포함)
+  U->>F: 사번 · 이름 · 부서 입력 (빈 칸이면 부르지 않고 안내)
+  F->>B: GET /users?q={입력} (입력이 250ms 멈추면)
+  B-->>F: 후보 (최대 6명). 이미 권한이 있는 사람은 화면이 뺌
   U->>F: 후보 고르기 (편집 가능 · 보기 가능)
   F->>B: PUT /canvases/{id}/shares
-  B-->>F: 바뀐 공유 상태
+  B-->>F: 바뀐 공유 명단 (ownerId, owner, members)
   Note over B: 초대받은 사람의 GET /canvases에 바로 나타남
 ```
 

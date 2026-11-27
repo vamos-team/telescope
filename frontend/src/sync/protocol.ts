@@ -15,17 +15,23 @@ export interface EventsResponse { lastSeq: number; firstChangedLayer: string | n
 /** 409 K003 응답의 data: 지금 서버에 저장된 글. */
 export interface TextConflict { targetId: string; field: "text" | "memo"; text: string | null; version: number }
 
+/**
+ * 서버 응답·실시간 메시지의 사람(backend api-spec 4장, #149). 이름·부서는 서버가 채운다.
+ * 사용자가 없으면(삭제 등) name·dept는 null이다.
+ */
+export interface UserRef { id: number; name?: string | null; dept?: string | null }
+
 /** /topic/canvases/{id}/events: 커밋된 이벤트 묶음. */
 export interface EventsMessage {
-  firstSeq: number; lastSeq: number; requestId: string; author: { id: number };
+  firstSeq: number; lastSeq: number; requestId: string; author: UserRef;
   events: ServerEvent[]; textVersions: Record<string, TextVersions>;
 }
 
 /** /topic/canvases/{id}/cursors. 보낸 사람도 받으므로 자기 것은 무시한다. */
-export interface CursorMessage { user: { id: number }; x: number; y: number }
+export interface CursorMessage { user: UserRef; x: number; y: number }
 
 /** /topic/canvases/{id}/presence. */
-export interface PresenceMessage { type: "join" | "leave"; user: { id: number } }
+export interface PresenceMessage { type: "join" | "leave"; user: UserRef }
 
 /** /user/queue/canvases: 나에게만 오는 알림. */
 export interface CanvasNotice { type: "revoked" | "deleted" | "role_changed"; canvasId: number; role?: "owner" | "edit" | "view" }

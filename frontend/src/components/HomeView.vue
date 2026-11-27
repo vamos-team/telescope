@@ -1,10 +1,15 @@
 <script setup lang="ts">
 // 페이지 홈(C00): 내가 볼 수 있는 페이지 전부. 페이지 = 캔버스 + 분석 (Figma 파일 목록처럼). 로그인하면 여기로 옴
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useCanvas, memberOf, roleOf, when, ROLE, type CanvasMeta } from "../stores/canvas";
+import { SYNC_MODE } from "../sync/config";
 import Logo from "./Logo.vue";
 
 const cv = useCanvas();
+// server 모드: 홈에 들어올 때마다 서버 목록을 다시 읽는다(다른 사람이 공유·삭제했을 수 있음)
+onMounted(() => { if (SYNC_MODE === "server") cv.loadCanvases(); });
+/** 내 직무: 서버 로그인은 응답 값, local은 목업 구성원 */
+const myJob = computed(() => cv.user?.job ?? memberOf(cv.user!.name)?.job);
 const MENU = { recent: "최근", mine: "내가 만든 페이지", shared: "공유받은 페이지" } as const;
 const menu = ref<keyof typeof MENU>("recent");
 const q = ref("");
@@ -37,7 +42,7 @@ function del(m: CanvasMeta) { if (confirm(`'${m.name}' 페이지를 지울까요
     <nav class="hnav" aria-label="페이지 홈 메뉴">
       <button v-for="(t, k) in MENU" :key="k" :aria-current="menu === k ? 'page' : undefined" @click="menu = k">{{ t }}<small>{{ count(k) }}</small></button>
       <div class="who"><span class="av" data-me="true">{{ cv.user!.name[0] }}</span>
-        <div><b>{{ cv.user!.name }}</b><small>{{ cv.user!.dept }} · {{ memberOf(cv.user!.name)?.job }}</small></div>
+        <div><b>{{ cv.user!.name }}</b><small>{{ [cv.user!.dept, myJob].filter(Boolean).join(' · ') }}</small></div>
         <button class="lo" @click="cv.logout()">로그아웃</button></div>
     </nav>
     <main class="hmain">
@@ -54,7 +59,8 @@ function del(m: CanvasMeta) { if (confirm(`'${m.name}' 페이지를 지울까요
               <svg v-if="thumb(m.id)" :viewBox="thumb(m.id)!.box" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
                 <rect v-for="(c, i) in thumb(m.id)!.cs" :key="i" :x="c.x" :y="c.y" :width="W" :height="H" rx="24" :data-kind="c.kind" />
               </svg>
-              <span v-else>빈 페이지</span>
+              <!-- server 목록에는 카드 위치가 없어 미리보기 대신 카드 수 -->
+              <span v-else>{{ m.count ? `카드 ${m.count}장` : "빈 페이지" }}</span>
             </span>
             <b>{{ m.name }}</b>
             <small>{{ m.updatedBy }} · {{ when(m.updated) }} 수정 · 카드 {{ m.count }}</small>

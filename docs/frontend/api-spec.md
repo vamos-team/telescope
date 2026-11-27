@@ -29,11 +29,12 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | 로그인 | 로그인 | `POST /auth/login` | `canvas.signIn` (local: `canvas.login`) |
 | 로그인 → 회원가입 | 회원가입 | `POST /auth/signup` | `canvas.signUp` (local: 없음) |
 | 로그인 | 내 정보 | `GET /users/me` | `restoreUser` |
-| 페이지 홈 (C00) | 볼 수 있는 페이지 목록·삭제 | `GET /canvases`, `DELETE /canvases/{id}` | `canvases`, `removeCanvas`, `thumb` |
-| 새 페이지 (C14) | 이름 · 기준 시점 · 편집할 사람으로 생성, 사람 찾기 | `POST /canvases`, `GET /users?q=` | `newCanvas`, `findPeople` |
+| 페이지 홈 (C00) | 볼 수 있는 페이지 목록·삭제 | `GET /canvases`, `DELETE /canvases/{id}` | `loadCanvases`, `canvases`, `removeCanvas` (local: `thumb`) |
+| 새 페이지 (C14) | 이름 · 기준 시점 · 편집할 사람으로 생성, 사람 찾기 | `POST /canvases`, `GET /users?q=` | `newCanvas`, `searchPeople` (`usePeopleSearch`, local: `findPeople`) |
 | 헤더 | 페이지 이름 변경 | `PATCH /canvases/{id}` | `rename` |
-| 페이지 정보 (C13) | 사내 사람 찾기 | `GET /users?q=` | `ALL_MEMBERS` 상수 |
-| 페이지 정보 (C13) | 정보 · 권한 조회·변경 | `GET /canvases/{id}`, `GET/PUT /canvases/{id}/shares` | `meta`, `members`, `setShare` |
+| 페이지 정보 (C13) | 사내 사람 찾기 | `GET /users?q=` | `searchPeople` (local: `ALL_MEMBERS` 상수) |
+| 페이지 정보 (C13) | 정보 · 권한 조회·변경 | `GET /canvases/{id}`, `GET/PUT /canvases/{id}/shares` | `meta`, `loadShares`, `serverShares`, `setShare` |
+| 캔버스 (C10) | 활동 로그(열 때 읽음) | `GET /canvases/{id}/activities` | `loadActivities` |
 | 캔버스 (C10) | 페이지 열기 | `GET /canvases/{id}` | `canvas.open` |
 | 캔버스 (C10) | 카드·연결·메모 조작, 표 생성 · 시각화 생성 | `POST /canvases/{id}/events` | `api.postEvents` |
 | 왼쪽 사이드바 | 메모 목록 (카드 메모 · 메모 카드 · 선 메모) | (캔버스 상태에서 계산, API 없음) | `cardTitle`, `notes` |
@@ -55,7 +56,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 데모에만 있는 기능은 API를 두지 않는다: 로그인 화면의 데모 계정 미리 입력, `예시 불러오기`(`api.meta.example`), 평가의 `다음 분기 자료 반영 (데모)` 버튼, 홈 미리보기(`thumb`, 실제 서비스는 서버가 만든 썸네일 또는 카드 좌표), `api.warmup`·`api.ask`(LLM 없음).
 
-지금 서버로 부르는 것은 서버 모드의 로그인 · 회원가입 · 내 정보(2.1, 2.2, 2.4), 캔버스 열기(3.4) · 이벤트(3.6) · 실시간(3.10) · 업로드(5.2, 5.3) · 작업 조회뿐이다(`sync/http.ts`, `sync/realtime.ts`). 나머지는 같은 자리의 목업 함수가 대신한다.
+지금 서버로 부르는 것은 서버 모드의 로그인 · 회원가입 · 내 정보 · 사람 찾기(2장), 캔버스 목록 · 생성 · 이름 변경 · 삭제 · 열기 · 이벤트 · 활동 로그 · 공유 명단 · 실시간(3.1~3.4, 3.6, 3.7, 3.9, 3.10, #150), 업로드(5.2, 5.3) · 작업 조회다(`sync/http.ts`, `sync/realtime.ts`). 나머지는 같은 자리의 목업 함수가 대신한다.
 
 ## 2. 인증·사용자
 
@@ -81,7 +82,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | 401 | `A002` / `A003` | 다른 API에서 토큰 없음·위조 / 만료 | 로그인 화면으로 |
 | — | (네트워크 오류) | 서버에 닿지 않음 | "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요." |
 
-화면 구현 상태(#143): 서버 모드(`VITE_CANVAS_SYNC=server`)는 이 API를 부르고(`canvas.signIn` → `sync/http.ts` `login`), 응답의 `accessToken`을 `sessionStorage` `telescope-token`에 저장한다(`sync/config.ts` `setAccessToken`). 이후 HTTP와 STOMP `CONNECT`에 이 토큰을 붙인다. 화면 사용자는 backend와 같은 `{ id: 숫자, employeeNo, name, dept }`이다(`CanvasUser`). 공유 · 사람 찾기 · 커서 · 접속자는 숫자 `id`로 주고받고, 사번은 로그인 · 표시에만 쓴다. local 모드(데모)는 이 API를 부르지 않고 사번이 목업 명단(`ALL_MEMBERS`)에 있으면 통과하며 비밀번호는 검사하지 않는다(없는 사번 "사번을 확인하세요"). 빈 칸은 두 모드 모두 "사번과 비밀번호를 입력하세요".
+화면 구현 상태(#143): 서버 모드(`VITE_CANVAS_SYNC=server`)는 이 API를 부르고(`canvas.signIn` → `sync/http.ts` `login`), 응답의 `accessToken`을 `sessionStorage` `telescope-token`에 저장한다(`sync/config.ts` `setAccessToken`). 이후 HTTP와 STOMP `CONNECT`에 이 토큰을 붙인다. 화면 사용자는 backend와 같은 `{ id: 숫자, employeeNo, name, dept, job? }`이다(`CanvasUser`, `job`은 홈 · 왼쪽 패널 표시용). 공유 · 사람 찾기 · 커서 · 접속자는 숫자 `id`로 주고받고, 사번은 로그인 · 표시에만 쓴다. local 모드(데모)는 이 API를 부르지 않고 사번이 목업 명단(`ALL_MEMBERS`)에 있으면 통과하며 비밀번호는 검사하지 않는다(없는 사번 "사번을 확인하세요"). 빈 칸은 두 모드 모두 "사번과 비밀번호를 입력하세요".
 
 로그아웃은 서버 호출 없이 토큰을 버린다. 그 전에 남은 이벤트를 보낸다(`canvas.logout`의 `flush`).
 
@@ -91,7 +92,10 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 ### 2.3 `GET /api/v1/users?q={검색어}`
 
-공유 창(C13)과 새 페이지 창(C14)에서 사내 사람을 찾는다. 사번 · 이름 · 부서 일부로 찾고 최대 6명을 돌려준다. `q`가 비어 있으면 추천(요청한 사람과 같은 부서 먼저)을 돌려준다. `excludeCanvas={id}`를 주면 그 캔버스에 이미 권한 있는 사람을 뺀다. 응답에 `role`은 담지 않는다. 데모는 `findPeople`(목업 명단)이 대신한다.
+공유 창(C13)과 새 페이지 창(C14)에서 사내 사람을 찾는다. 사번 · 이름 · 부서 일부로 찾고 최대 6명을 돌려준다(이름순). 응답에 `role`은 담지 않는다. 이미 권한이 있거나 고른 사람은 화면이 결과에서 뺀다.
+
+- **서버 모드 [현재] (#150)**: `q`가 비면 backend는 빈 목록을 준다. 그래서 화면은 부르지 않고 "사번, 이름, 부서를 입력하세요."를 보여 준다(추천 없음). 입력이 250ms 멈추면 부르고, 늦게 온 응답은 버리며, 창을 닫으면 요청을 끊는다(`components/usePeopleSearch.ts`). 실패하면 "사람을 찾지 못했습니다. 잠시 후 다시 시도해 주세요."
+- **데모(로컬 모드)**: `findPeople`(목업 명단). `q`가 비면 추천(같은 부서 먼저).
 
 ```json
 { "data": [{ "id": 12, "employeeNo": "2001", "name": "최예산", "dept": "AIDC사업본부", "job": "재무기획" }], "error": null }
@@ -125,50 +129,51 @@ local 모드는 backend가 없어 가입할 수 없다("회원가입은 서버 �
 
 캔버스 하나가 데모의 세션(`sessionId`) 하나다. 서버 이벤트 로그가 원본이고, 화면은 로컬 상태를 먼저 바꾼 뒤 이벤트를 묶어 보낸다.
 
-데모(로컬 모드)는 캔버스 목록 · 메타 · 카드 · 이벤트 로그를 `localStorage` `telescope-canvas:v1`에 저장하고, 보던 캔버스 ID를 `sessionStorage`에 둔다. 3.1~3.3 · 3.9는 서버 모드에서도 아직 서버를 부르지 않는다.
+데모(로컬 모드)는 캔버스 목록 · 메타 · 카드 · 이벤트 로그를 `localStorage` `telescope-canvas:v1`에 저장하고, 보던 캔버스 ID를 `sessionStorage`에 둔다. 서버 모드는 목록 · 공유 · 카드가 모두 서버에 있어 브라우저에 캔버스를 저장하지 않는다(`save`는 아무것도 하지 않음, #150).
+
+**사람 정보(`UserRef`)**: 서버 응답과 실시간 메시지의 사람은 `{ id, name, dept }`이다(backend #149). 사용자가 없으면 `name`·`dept`가 `null`이고, 화면은 `사용자 {id}`로 보인다(`nameOfUser`).
 
 ### 3.1 `GET /api/v1/canvases`
 
-내가 볼 수 있는 캔버스 목록(페이지 홈 C00). 소유한 것과 초대받은 것을 담는다. 최근 수정 순.
+내가 볼 수 있는 캔버스 목록(페이지 홈 C00). 소유한 것과 초대받은 것을 담는다. 최근 수정 순. 서버 모드는 홈에 들어올 때마다 다시 읽는다(`loadCanvases`).
 
 | 쿼리 | 설명 | 타입 |
 |---|---|---|
-| `filter` | `all`(최근) / `mine`(내가 만든) / `shared`(공유받은). 기본 `all` | string? |
-| `q` | 캔버스 이름 검색 | string? |
+| `filter` | `all`(최근) / `mine`(내가 만든) / `shared`(공유받은). 기본 `all`. 화면은 `all`로 받고 메뉴는 화면에서 거른다 | string? |
 
 | 응답 `data[]` | 설명 | 타입 |
 |---|---|---|
-| `id` | 캔버스 ID | string |
+| `id` | 캔버스 ID | number |
 | `name` | 이름 | string |
-| `dept` | 부서 | string |
-| `owner` | 만든 사람 | string |
-| `updatedAt` | 마지막 수정 시각 | string |
-| `updatedBy` | 마지막 수정자 | string |
-| `cardCount` | 카드 수 | number |
-| `ownerId` | 소유자 사번 | string |
-| `myRole` | 내 권한 `owner` / `edit` / `view` | string |
 | `quarter` | 기준 시점 (예: `2026년 1분기`). 헤더 제목 옆 칩, 페이지 정보, 분석 기준에 씀 | string |
-| `thumbnail` | 홈 미리보기. 카드 `{ kind, x, y }` 목록 또는 이미지 URL (정해야 함) | object |
+| `owner` | 소유자 `UserRef` | object |
+| `myRole` | 내 권한 `owner` / `edit` / `view` | string |
+| `updatedAt` | 마지막 수정 시각 | string |
+| `updatedBy` | 마지막 수정자 `UserRef` | object |
+| `cardCount` | 카드 수 | number |
 
-데모 메타(`CanvasMeta`)는 `updatedAt` 대신 `updated`, `cardCount` 대신 `count`를 쓰고, `myRole` 대신 `ownerId`와 초대 명단 `share`로 화면이 권한을 계산한다(`roleOf`). `quarter`가 없는 예전 저장분은 `2026년 1분기`로 읽는다.
+- 화면 메타(`CanvasMeta`)로 바꿀 때(`metaOfServer`): `updatedAt` → `updated`, `cardCount` → `count`, `owner`·`updatedBy`는 이름, `dept`는 소유자 부서, `myRole`은 그대로 둬서 `roleOf`가 이 값을 쓴다.
+- 이름 검색은 화면이 목록에서 거른다(서버 `q` 없음).
+- 홈 미리보기: 목록에 카드 위치가 없어 서버 모드는 그림 대신 "카드 {n}장"을 보여 준다. 데모는 저장본의 카드 위치로 그린다(`thumb`).
+- 데모 메타는 `myRole` 대신 `ownerId`와 초대 명단 `share`로 권한을 계산한다. `quarter`가 없는 예전 저장분은 `2026년 1분기`로 읽는다.
 
 ### 3.2 `POST /api/v1/canvases`
 
 | 요청 | 설명 | 타입 |
 |---|---|---|
-| `name` | 이름. 없으면 `"{부서} 페이지 {n}"`(내가 소유한 페이지 수 + 1) | string? |
+| `name` | 이름. 화면은 비면 `"{부서} 페이지 {n}"`(내가 소유한 페이지 수 + 1)을 보낸다 | string? |
 | `quarter` | 기준 시점. `2025년 1분기` ~ `2026년 4분기` 중 하나, 기본 `2026년 1분기` | string |
-| `editorIds` | 편집 권한을 줄 사번 목록 (C14 편집할 사람) | string[] |
+| `editorIds` | 편집 권한을 줄 사람의 숫자 `id` 목록 (C14 편집할 사람) | number[] |
 
-응답은 3.1의 항목 하나. `201`. 만든 사람이 소유자가 되고, `editorIds`는 `edit`으로 초대된다.
+응답은 3.1의 항목 하나. `201`. 만든 사람이 소유자가 되고, `editorIds`는 `edit`으로 초대된다. 서버 모드 화면은 만든 뒤 바로 연다. 없는 사용자를 넣으면 `404 C002`("페이지를 만들지 못했습니다. 찾을 수 없는 사람이나 페이지입니다.").
 
 ### 3.3 `PATCH /api/v1/canvases/{id}` · `DELETE /api/v1/canvases/{id}`
 
-`PATCH`는 `{ name }`만 받는다. 앞뒤 공백을 지우고 빈 문자열이면 `"제목 없는 페이지"`. 소유자 · 편집 권한만. `DELETE`는 소유자만, `204`. 화면은 "'{이름}' 페이지를 지울까요? 공유받은 사람 모두에게서 지워집니다."를 확인한 뒤 부르고, 지운 캔버스를 보고 있었으면 페이지 홈으로 간다.
+`PATCH`는 `{ name }`만 받는다. 앞뒤 공백을 지우고 빈 문자열이면 서버는 `"제목 없는 캔버스"`(데모는 `"제목 없는 페이지"`). 화면은 응답의 이름을 쓴다. 소유자 · 편집 권한만. `DELETE`는 소유자만, `204`. 화면은 "'{이름}' 페이지를 지울까요? 공유받은 사람 모두에게서 지워집니다."를 확인한 뒤 부르고, 지운 캔버스를 보고 있었으면 페이지 홈으로 간다.
 
 | HTTP | 코드 | 상황 | 화면 문구 |
 |---|---|---|---|
-| 403 | `K002` | 이름 변경: 보기 권한 / 삭제: 소유자 아님 | 화면에서 버튼을 숨김. 이름은 두 번 눌러도 입력칸이 열리지 않음 |
+| 403 | `K002` | 이름 변경: 보기 권한 / 삭제: 소유자 아님 | 화면에서 버튼을 숨김. 이름은 두 번 눌러도 입력칸이 열리지 않음. 그래도 받으면 "이름을 바꾸지 못했습니다. 이 페이지를 바꿀 권한이 없습니다." / "페이지를 지우지 못했습니다. …" |
 
 ### 3.4 `GET /api/v1/canvases/{id}`
 
@@ -176,13 +181,13 @@ local 모드는 backend가 없어 가입할 수 없다("회원가입은 서버 �
 
 | 응답 `data` | 설명 | 타입 |
 |---|---|---|
-| `meta` | `{ id, name, quarter, myRole }`. `id`는 숫자, `myRole`은 `owner` / `edit` / `view` | object |
-| `cards` | 카드 목록. 공통 `{ id, kind, x, y, memo?, memoVersion?, createdBy? }` + 종류별 필드(3.5). 메모 카드는 `text`, `textVersion` | Card[] |
-| `links` | `{ id, source, target, memo, memoVersion, memoBy? }` 목록. `memoBy`는 선 메모를 마지막으로 고친 사람 `{ id }` | Link[] |
+| `meta` | 3.1의 항목 하나(`{ id, name, quarter, owner, myRole, updatedAt, updatedBy, cardCount }`). 화면은 홈 목록에도 넣어 페이지 정보가 홈을 거치지 않고 열어도 보이게 한다 | object |
+| `cards` | 카드 목록. 공통 `{ id, kind, x, y, memo?, memoVersion?, createdBy? }` + 종류별 필드(3.5). 메모 카드는 `text`, `textVersion`. `createdBy`는 `UserRef` | Card[] |
+| `links` | `{ id, source, target, memo, memoVersion, memoBy? }` 목록. `memoBy`는 선 메모를 마지막으로 고친 사람 `UserRef` | Link[] |
 | `lastSeq` | 마지막 이벤트 번호 | number |
 | `warnings` | 복원하지 못한 카드의 이유(가리키는 표·문서가 사라짐 등). 비어 있지 않으면 화면이 "'{이름}' 캔버스 일부를 복원하지 못했습니다. 자료가 바뀌었을 수 있습니다." | string[] |
 
-화면은 모르는 `kind`의 카드를 버린다. 작성자 이름은 사용자 API 연동 전이라 `사용자 {id}`로 표시한다.
+화면은 모르는 `kind`의 카드를 버린다. 메모 카드 작성자와 선 메모 작성자는 `UserRef`의 이름으로 표시한다.
 
 | HTTP | 코드 | 상황 | 화면 문구 |
 |---|---|---|---|
@@ -277,10 +282,10 @@ local 모드는 backend가 없어 가입할 수 없다("회원가입은 서버 �
 
 ### 3.7 `GET /api/v1/canvases/{id}/activities`
 
-활동 로그. 최근 순, 최대 200건. 지금 화면에는 활동 로그를 보여 주는 곳이 없다. 데모는 로그를 캔버스 저장본에 쌓기만 한다(공유 권한 변경 "공유 권한을 바꿈" 포함).
+활동 로그. 최근 순, 최대 200건. 서버 모드는 캔버스를 열 때(다시 읽을 때 포함) 읽어 `activity`를 바꾸고, 그 뒤 다른 사람의 변경은 실시간 메시지로 앞에 쌓는다(`loadActivities`, #150). 실패하면 비워 둔 채 콘솔에만 남긴다. 이름 변경은 활동 로그에 남지 않는다(backend 기준). 데모는 로그를 캔버스 저장본에 쌓는다(공유 권한 변경 "공유 권한을 바꿈" 포함).
 
 ```json
-{ "data": [{ "author": "박망", "text": "카드를 연결함", "cardId": null, "createdAt": "2026-11-25T09:31:00" }], "error": null }
+{ "data": [{ "author": { "id": 2, "name": "박망", "dept": "네트워크센터" }, "text": "카드를 연결함", "cardId": null, "createdAt": "2026-11-25T09:31:00" }], "error": null }
 ```
 
 ### 3.8 `GET /api/v1/canvases/{id}/card-tags`
@@ -293,17 +298,18 @@ local 모드는 backend가 없어 가입할 수 없다("회원가입은 서버 �
 
 ### 3.9 `GET /api/v1/canvases/{id}/shares` · `PUT /api/v1/canvases/{id}/shares`
 
-페이지 정보 창(C13). `GET`은 권한 있는 사람 전원, `PUT`은 소유자만 부른다. 화면은 초대 · 권한 변경 · 권한 삭제를 할 때마다 바뀐 명단 전체로 바로 부른다(따로 저장 버튼 없음). 데모는 `canvas.setShare`가 저장본의 `share`를 바꾼다.
+페이지 정보 창(C13). `GET`은 권한 있는 사람 전원, `PUT`은 소유자만 부른다. 서버 모드는 창을 열 때 `GET`으로 읽고(`loadShares`, 읽는 동안 "명단을 불러오는 중입니다."), 초대 · 권한 변경 · 권한 삭제를 할 때마다 바뀐 명단 전체로 바로 `PUT`을 부른다(따로 저장 버튼 없음). 응답으로 화면 명단을 바꾼다. 데모는 `canvas.setShare`가 저장본의 `share`를 바꾼다.
 
-| 필드 | 설명 | 타입 |
+| 응답 필드 | 설명 | 타입 |
 |---|---|---|
-| `ownerId` | 소유자 사번 (`GET`만, 바꿀 수 없음) | string |
-| `members` | 직접 초대한 사람 `{ userId, role }`. `role`은 `edit` / `view`. 목록에서 빠지면 권한 삭제 | object[] |
+| `ownerId` | 소유자 숫자 `id`(바꿀 수 없음) | number |
+| `owner` | 소유자 `UserRef` | object |
+| `members` | 직접 초대한 사람 `{ userId, role, name, dept }`. `role`은 `edit` / `view`. 목록에서 빠지면 권한 삭제 | object[] |
 
-`GET` 응답에는 소유자와 초대한 사람을 펼친 `people[]`(`{ id, name, dept, job, role }`)를 함께 준다.
+요청(`PUT`)은 `{ userId, role }`만 보낸다.
 
 ```json
-{ "members": [{ "userId": "2001", "role": "view" }] }
+{ "members": [{ "userId": 12, "role": "view" }] }
 ```
 
 권한 계산 순서: 소유자 → 직접 초대 권한. 둘 다 아니면 권한 없음. 바꾼 결과는 활동 로그에 "공유 권한을 바꿈"으로 남는다.
@@ -311,7 +317,7 @@ local 모드는 backend가 없어 가입할 수 없다("회원가입은 서버 �
 | HTTP | 상황 | 화면 문구 |
 |---|---|---|
 | 403 | 소유자가 아닌 사람(편집 · 보기 권한)이 `PUT` | 화면은 공유 창을 읽기 전용으로 보여 줌 ("공유 설정은 소유자만 바꿀 수 있습니다.") |
-| 404 | 없는 사번 | "찾는 사람이 없거나 이미 권한이 있습니다." |
+| 404 | `C002` 없는 사용자 | "공유 설정을 바꾸지 못했습니다. 찾을 수 없는 사람이나 페이지입니다." |
 
 ### 3.10 실시간 연결 (WebSocket · STOMP)
 
@@ -323,11 +329,11 @@ local 모드는 backend가 없어 가입할 수 없다("회원가입은 서버 �
 | 캔버스 열기 | 구독(`/topic/canvases/{id}/events` 등) → `GET /canvases/{id}` → `lastSeq` 뒤 메시지만 반영 |
 | 다른 사람 변경 | `firstSeq`가 내 마지막 번호 + 1이면 반영, 아니면 캔버스를 다시 조회. 내 `requestId`면 번호만 올림 |
 | 커서 | 마우스 위치를 캔버스 좌표로 `/app/canvases/{id}/cursor`에 50ms마다 최대 1번. 받은 커서 중 내 것은 무시 |
-| 접속자 | `/app/canvases/{id}/presence`로 지금 목록을 한 번 받고, `/topic/canvases/{id}/presence`로 들어옴·나감 반영. 헤더에 `접속 {n}명`(이름은 `사용자 {id}`) |
+| 접속자 | `/app/canvases/{id}/presence`로 지금 목록을 한 번 받고, `/topic/canvases/{id}/presence`로 들어옴·나감 반영. 헤더에 `접속 {n}명`(마우스를 올리면 이름). 커서 옆에도 이름. 이름은 메시지의 `user.name`을 기억해 쓰고(`rememberPerson`, `nameOf`), 모르면 `사용자 {id}` |
 | 권한 알림 | `/user/queue/canvases`: `revoked`·`deleted`면 남은 조작을 보내고 페이지 홈으로("이 캔버스를 볼 권한이 없습니다." · "캔버스가 삭제되었습니다."), `role_changed`면 편집 도구를 권한에 맞춤 |
 | 재접속 | 다시 연결되고 구독을 마치면 보내지 못한 조작을 먼저 보낸 뒤 캔버스를 다시 조회. 끊기면 다른 사람 커서를 지움 |
 
-화면 구현은 `frontend/src/sync/`(연동 계층)이고, 환경변수 `VITE_CANVAS_SYNC=server`일 때만 켜진다(기본은 목업). 주소는 `VITE_API_BASE`(비우면 화면과 같은 출처)에 `/api/v1`을 붙인다. backend 로그인(#34)은 구현됐지만 화면이 아직 로그인 API를 부르지 않아 토큰이 비어 있으므로, 서버 모드는 토큰을 직접 넣어야 동작한다(2.1). 내 커서를 거르는 내 사용자 ID(`myUserId`)도 로그인 연동 뒤 채운다.
+화면 구현은 `frontend/src/sync/`(연동 계층)이고, 환경변수 `VITE_CANVAS_SYNC=server`일 때만 켜진다(기본은 목업). 주소는 `VITE_API_BASE`(비우면 화면과 같은 출처)에 `/api/v1`을 붙인다. 토큰은 로그인 · 회원가입 응답에서 받는다(2.1, 2.4). 받은 커서 중 내 것은 로그인 사용자의 숫자 `id`(`user.id`)로 거른다.
 
 ## 4. 공시
 

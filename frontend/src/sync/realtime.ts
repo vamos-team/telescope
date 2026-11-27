@@ -4,13 +4,13 @@
 // - 커서는 많아야 50ms에 한 번만 보낸다(서버도 그보다 잦으면 버림).
 import { Client, type IMessage } from "@stomp/stompjs";
 import { accessToken, wsUrl } from "./config";
-import type { CanvasNotice, CursorMessage, EventsMessage, PresenceMessage } from "./protocol";
+import type { CanvasNotice, CursorMessage, EventsMessage, PresenceMessage, UserRef } from "./protocol";
 
 export interface RealtimeHandlers {
   onEvents(message: EventsMessage): void;
   onCursor(message: CursorMessage): void;
   onPresence(message: PresenceMessage): void;
-  onPresenceSnapshot(users: { id: number }[]): void;
+  onPresenceSnapshot(users: UserRef[]): void;
   onNotice(notice: CanvasNotice): void;
   /** (다시) 연결되고 구독을 마쳤을 때. 놓친 변경이 있을 수 있으므로 캔버스를 다시 조회한다. */
   onConnected(): void;
@@ -45,7 +45,7 @@ export function connectCanvas(canvasId: string, handlers: RealtimeHandlers): Rea
       client.subscribe(`${topic}/events`, (m) => handlers.onEvents(json(m)));
       client.subscribe(`${topic}/cursors`, (m) => handlers.onCursor(json(m)));
       client.subscribe(`${topic}/presence`, (m) => handlers.onPresence(json(m)));
-      client.subscribe(`/app/canvases/${canvasId}/presence`, (m) => handlers.onPresenceSnapshot(json<{ users: { id: number }[] }>(m).users));
+      client.subscribe(`/app/canvases/${canvasId}/presence`, (m) => handlers.onPresenceSnapshot(json<{ users: UserRef[] }>(m).users));
       client.subscribe("/user/queue/canvases", (m) => handlers.onNotice(json(m)));
       handlers.onConnected();
     },
