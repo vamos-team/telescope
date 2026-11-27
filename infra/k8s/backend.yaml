@@ -9,10 +9,13 @@ spec:
     metadata: { labels: { app: backend } }
     spec:
       serviceAccountName: s3-access # IRSA: 키 없이 S3 버킷 접근
+      terminationGracePeriodSeconds: 45
       containers:
         - name: backend
           image: skala-registry.skala-ai.com/p3-1/backend
           ports: [{ containerPort: 8080 }]
+          lifecycle:
+            preStop: { exec: { command: ["sh", "-c", "sleep 10"] } }
           env:
             - { name: JAVA_TOOL_OPTIONS, value: "-XX:MaxRAMPercentage=75" }
             - { name: TZ, value: Asia/Seoul }

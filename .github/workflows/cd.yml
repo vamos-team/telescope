@@ -28,12 +28,6 @@ jobs:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
 
-      - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: "21" }
-      - name: Backend Test
-        working-directory: backend
-        run: chmod +x gradlew && ./gradlew test --no-daemon
-
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.ROLE_ARN }}
@@ -41,24 +35,46 @@ jobs:
       - uses: aws-actions/amazon-ecr-login@v2
         id: ecr
 
-      - name: Build & push (backend, frontend, ai-server)
+      - name: 서비스별 이미지 태그 계산
+        id: tags
+        run: |
+          tree() { git rev-parse "HEAD:$1" | cut -c1-12; }
+          combined() { for d in "$@"; do git rev-parse "HEAD:$d"; done | sha256sum | cut -c1-12; }
+          need_build() { aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$1" >/dev/null 2>&1 && echo false || echo true; }
+          BACKEND="backend-$(tree backend)"
+          FRONTEND="frontend-$(tree frontend)"
+          AI_SERVER="ai-server-$(combined ai pipelines)"
+          {
+            echo "backend=$BACKEND"; echo "build_backend=$(need_build "$BACKEND")"
+            echo "frontend=$FRONTEND"; echo "build_frontend=$(need_build "$FRONTEND")"
+            echo "ai_server=$AI_SERVER"; echo "build_ai_server=$(need_build "$AI_SERVER")"
+          } | tee -a "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        if: steps.tags.outputs.build_backend == 'true'
+        with: { distribution: temurin, java-version: "21" }
+      - name: Backend Test
+        if: steps.tags.outputs.build_backend == 'true'
+        working-directory: backend
+        run: chmod +x gradlew && ./gradlew test --no-daemon
+
+      - name: Build & push (바뀐 서비스만)
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
+          BACKEND: ${{ steps.tags.outputs.backend }}
+          FRONTEND: ${{ steps.tags.outputs.frontend }}
+          AI_SERVER: ${{ steps.tags.outputs.ai_server }}
+          BUILD_BACKEND: ${{ steps.tags.outputs.build_backend }}
+          BUILD_FRONTEND: ${{ steps.tags.outputs.build_frontend }}
+          BUILD_AI_SERVER: ${{ steps.tags.outputs.build_ai_server }}
         run: |
-          for svc in backend frontend; do
-            TAG="${svc}-${GITHUB_SHA}"
-            if aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$TAG" >/dev/null 2>&1; then
-              echo "$TAG 는 이미 ECR 에 있음, 빌드/푸시 건너뜀"
-            else
-              docker buildx build --platform linux/amd64 -t "$REGISTRY/$ECR_REPOSITORY:$TAG" --push "./$svc"
-            fi
-          done
-          TAG="ai-server-${GITHUB_SHA}"
-          if aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$TAG" >/dev/null 2>&1; then
-            echo "$TAG 는 이미 ECR 에 있음, 빌드/푸시 건너뜀"
-          else
-            docker buildx build --platform linux/amd64 -t "$REGISTRY/$ECR_REPOSITORY:$TAG" -f ai/server/Dockerfile --push .
-          fi
+          build() {
+            if [ "$1" != true ]; then echo "$2 는 이미 ECR 에 있음, 빌드/푸시 건너뜀"; return; fi
+            docker buildx build --platform linux/amd64 -t "$REGISTRY/$ECR_REPOSITORY:$2" -f "$3" --push "$4"
+          }
+          build "$BUILD_BACKEND" "$BACKEND" backend/Dockerfile backend
+          build "$BUILD_FRONTEND" "$FRONTEND" frontend/Dockerfile frontend
+          build "$BUILD_AI_SERVER" "$AI_SERVER" ai/server/Dockerfile .
           echo "REGISTRY=$REGISTRY" >> "$GITHUB_ENV"
 
       - name: kustomize 설치
@@ -73,9 +89,9 @@ jobs:
         working-directory: infra/k8s
         run: |
           "$RUNNER_TEMP/kustomize" edit set image \
-            "skala-registry.skala-ai.com/p3-1/backend=$REGISTRY/$ECR_REPOSITORY:backend-${GITHUB_SHA}" \
-            "skala-registry.skala-ai.com/p3-1/frontend=$REGISTRY/$ECR_REPOSITORY:frontend-${GITHUB_SHA}" \
-            "skala-registry.skala-ai.com/p3-1/ai-server=$REGISTRY/$ECR_REPOSITORY:ai-server-${GITHUB_SHA}"
+            "skala-registry.skala-ai.com/p3-1/backend=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.backend }}" \
+            "skala-registry.skala-ai.com/p3-1/frontend=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.frontend }}" \
+            "skala-registry.skala-ai.com/p3-1/ai-server=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.ai_server }}"
 
       # Ingress 의 허용 IP 는 저장소에 두지 않고 시크릿 ALLOWED_IPS에서 받아 배포 때만 넣는다.
       - name: 허용 IP 주입
