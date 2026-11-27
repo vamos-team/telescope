@@ -43,6 +43,7 @@ import java.util.UUID;
  *   <li>같은 requestId가 다시 오면 저장하지 않고 처음 응답을 돌려준다.</li>
  *   <li>위치와 글은 다른 컬럼이라 서로 덮어쓰지 않는다. 글은 기준 버전이 다르면 409 K003으로 거절한다.</li>
  *   <li>다른 사람이 이미 지운 카드·연결을 가리키는 수정 이벤트는 무시하고 기록하지 않는다.</li>
+ *   <li>메모(메모 카드·카드 메모·선 메모)는 단 사람만 고치고 지운다. 다르면 403 K004. 전체 지우기({@code clear_cards})만 예외다.</li>
  * </ul>
  */
 @Service
@@ -58,6 +59,7 @@ public class CanvasEventService {
     private static final Map<String, String> LAYER_OF = Map.ofEntries(
             Map.entry("add_card", LAYER_SOURCES), Map.entry("add_doc", LAYER_SOURCES),
             Map.entry("add_dash", LAYER_SOURCES), Map.entry("remove_card", LAYER_SOURCES),
+            Map.entry("clear_cards", LAYER_SOURCES),
             Map.entry("add_memo", LAYER_WORKSPACE), Map.entry("edit_memo", LAYER_WORKSPACE),
             Map.entry("set_card_memo", LAYER_WORKSPACE), Map.entry("set_link_memo", LAYER_WORKSPACE),
             Map.entry("add_rows", LAYER_WORKSPACE), Map.entry("remove_row", LAYER_WORKSPACE),
@@ -80,7 +82,7 @@ public class CanvasEventService {
     /**
      * 이벤트 묶음을 적용하고 기록한다(소유자·편집 권한).
      *
-     * @throws BusinessException 권한 없음(K001, K002), 형식 오류(C001), 글 충돌(K003, data에 현재 글)
+     * @throws BusinessException 권한 없음(K001, K002), 형식 오류(C001), 글 충돌(K003, data에 현재 글), 남의 메모(K004)
      */
     @Transactional
     public CanvasEventsResponse apply(Long canvasId, Long userId, CanvasEventsRequest request) {
@@ -155,6 +157,7 @@ public class CanvasEventService {
             case "add_link" -> addLink(b, f);
             case "remove_link" -> removeLink(b, f);
             case "remove_card" -> removeCard(b, f);
+            case "clear_cards" -> clearCards(b);
             case "move_card" -> moveCard(b, f);
             default -> throw f.invalid("type", "알 수 없는 이벤트입니다: " + type);
         };
@@ -286,12 +289,13 @@ public class CanvasEventService {
         if (card.getKind() != CardKind.MEMO) {
             throw f.invalid("cardId", "메모 카드가 아닙니다");
         }
+        requireMemoAuthor(b, card.getCreatedBy());
         requireVersion(f, card.getId(), "text", card.getText(), card.getTextVersion());
         b.textVersion(card.getId(), card.changeText(f.string("text")));
         return true;
     }
 
-    /** 카드 메모를 고친다(메모 카드 제외). 빈 값이면 지운다. 기준 버전이 다르면 409. */
+    /** 카드 메모를 고친다(메모 카드 제외). 고친 사람이 작성자가 되고, 빈 값이면 지운다. 남의 메모면 403, 기준 버전이 다르면 409. */
     private boolean setCardMemo(Batch b, EventFields f) {
         Optional<CanvasCard> found = card(b, f.uuid("cardId"));
         if (found.isEmpty()) {
@@ -301,21 +305,37 @@ public class CanvasEventService {
         if (card.getKind() == CardKind.MEMO) {
             throw f.invalid("cardId", "메모 카드에는 카드 메모를 붙이지 않습니다");
         }
+        if (card.getMemo() != null) {
+            requireMemoAuthor(b, card.getMemoBy());
+        }
         requireVersion(f, card.getId(), "memo", card.getMemo(), card.getMemoVersion());
-        b.memoVersion(card.getId(), card.changeMemo(f.string("text")));
+        b.memoVersion(card.getId(), card.changeMemo(f.string("text"), b.userId));
         return true;
     }
 
-    /** 선 메모를 고친다. 고친 사람이 작성자({@code memoBy})가 되고, 빈 값이면 메모와 작성자를 지운다. 기준 버전이 다르면 409. */
+    /** 선 메모를 고친다. 고친 사람이 작성자({@code memoBy})가 되고, 빈 값이면 메모와 작성자를 지운다. 남의 메모면 403, 기준 버전이 다르면 409. */
     private boolean setLinkMemo(Batch b, EventFields f) {
         Optional<CanvasLink> found = link(b, f.uuid("linkId"));
         if (found.isEmpty()) {
             return false;
         }
         CanvasLink link = found.get();
+        if (link.getMemo() != null) {
+            requireMemoAuthor(b, link.getMemoBy());
+        }
         requireVersion(f, link.getId(), "memo", link.getMemo(), link.getMemoVersion());
         b.memoVersion(link.getId(), link.changeMemo(f.string("text"), b.userId));
         return true;
+    }
+
+    /**
+     * 메모를 단 사람만 고치고 지운다(소유자도 예외 없음). 작성자를 모르는 예전 메모({@code null})는 아무도 고치지 못한다.
+     * 다르면 묶음 전체를 403 K004로 거절한다.
+     */
+    private static void requireMemoAuthor(Batch b, Long author) {
+        if (!b.userId.equals(author)) {
+            throw new BusinessException(ErrorCode.CANVAS_MEMO_NOT_MINE);
+        }
     }
 
     /**
@@ -375,10 +395,17 @@ public class CanvasEventService {
         return true;
     }
 
+    /** 연결을 끊는다. 남이 단 선 메모가 있으면 메모도 같이 사라지므로 403. */
     private boolean removeLink(Batch b, EventFields f) {
         Optional<CanvasLink> found = link(b, f.uuid("linkId"));
-        found.ifPresent(linkRepository::delete);
-        return found.isPresent();
+        if (found.isEmpty()) {
+            return false;
+        }
+        if (found.get().getMemo() != null) {
+            requireMemoAuthor(b, found.get().getMemoBy());
+        }
+        linkRepository.delete(found.get());
+        return true;
     }
 
     // ---- 카드 삭제·이동 ----
@@ -386,6 +413,7 @@ public class CanvasEventService {
     /**
      * 카드를 지우고, 그 카드에 닿는 연결과 비교·시각화 카드의 원본 목록에서도 뺀다.
      * 비교 카드를 지워도 그 비교로 만든 시각화 카드는 남는다(시각화는 원본 표를 직접 가리킨다).
+     * 남이 만든 메모 카드, 남이 단 카드 메모나 닿는 선 메모가 있는 카드는 지우지 못한다(같이 사라지므로 403).
      */
     private boolean removeCard(Batch b, EventFields f) {
         UUID id = f.uuid("cardId");
@@ -393,8 +421,20 @@ public class CanvasEventService {
         if (found.isEmpty()) {
             return false;
         }
+        CanvasCard card = found.get();
+        if (card.getKind() == CardKind.MEMO) {
+            requireMemoAuthor(b, card.getCreatedBy());
+        }
+        if (card.getMemo() != null) {
+            requireMemoAuthor(b, card.getMemoBy());
+        }
         List<CanvasLink> touching = linkRepository.findByCanvasIdOrderByCreatedAtAsc(b.canvasId()).stream()
                 .filter(l -> l.touches(id)).toList();
+        for (CanvasLink link : touching) {
+            if (link.getMemo() != null) {
+                requireMemoAuthor(b, link.getMemoBy());
+            }
+        }
         linkRepository.deleteAll(touching);
         for (CardKind kind : List.of(CardKind.COMPARE, CardKind.CHART)) {
             for (CanvasCard derived : cardRepository.findByCanvasIdAndKind(b.canvasId(), kind)) {
@@ -405,7 +445,18 @@ public class CanvasEventService {
                 }
             }
         }
-        cardRepository.delete(found.get());
+        cardRepository.delete(card);
+        return true;
+    }
+
+    /** 전체 지우기: 캔버스의 카드와 연결을 모두 지운다. 남의 메모도 지운다. 지울 카드가 없으면 기록하지 않는다. */
+    private boolean clearCards(Batch b) {
+        List<CanvasCard> cards = cardRepository.findByCanvasIdOrderByCreatedAtAsc(b.canvasId());
+        if (cards.isEmpty()) {
+            return false;
+        }
+        linkRepository.deleteAll(linkRepository.findByCanvasIdOrderByCreatedAtAsc(b.canvasId()));
+        cardRepository.deleteAll(cards);
         return true;
     }
 

@@ -64,6 +64,9 @@ public class CanvasCard extends BaseTimeEntity implements Persistable<UUID> {
     @Column(nullable = false)
     private int memoVersion;
 
+    /** 카드 메모를 단 사람. 메모를 지우면 비운다. */
+    private Long memoBy;
+
     @Column(nullable = false)
     private Long createdBy;
 
@@ -104,9 +107,14 @@ public class CanvasCard extends BaseTimeEntity implements Persistable<UUID> {
         return ++textVersion;
     }
 
-    /** 카드 메모를 바꾸고 버전을 1 올린다. 빈 값이면 지운다. 기준 버전 확인은 부르는 쪽이 먼저 한다. */
-    public int changeMemo(String memo) {
-        this.memo = memo == null || memo.isBlank() ? null : memo;
+    /**
+     * 카드 메모를 바꾸고 버전을 1 올린다. 고친 사람을 작성자로 남기고, 빈 값이면 메모와 작성자를 지운다.
+     * 기준 버전·작성자 확인은 부르는 쪽이 먼저 한다.
+     */
+    public int changeMemo(String memo, Long editedBy) {
+        boolean blank = memo == null || memo.isBlank();
+        this.memo = blank ? null : memo;
+        this.memoBy = blank ? null : editedBy;
         return ++memoVersion;
     }
 
