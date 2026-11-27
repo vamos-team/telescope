@@ -69,7 +69,7 @@ MVP 제외: 콜백(작업 상태는 폴링으로 조회), 사내 데이터 연�
 
 ## 5. 작업 방식
 
-커밋 · 푸시 · 이슈 · PR의 세부 형식(라벨 · 담당자 · 프로젝트, CI · 봇 리뷰 확인 포함)은 `.github/GITHUB_RULES.md`를 따른다. 이 장과 다르면 이 장이 우선한다.
+커밋 · 푸시 · 이슈 · PR의 세부 형식(라벨 · 담당자 · 프로젝트, CI · 봇 리뷰 확인 포함)은 `.github/CONTRIBUTING.md`를 따른다. 이 장과 다르면 이 장이 우선한다.
 
 ### 브랜치 (Git Flow)
 - `main`: 배포용. 머지되면 GitHub Actions가 이미지를 올리고 Argo CD가 K8s 클러스터에 자동 배포한다.
@@ -115,7 +115,7 @@ MVP 제외: 콜백(작업 상태는 폴링으로 조회), 사내 데이터 연�
 - 라이브러리 버전은 명시적으로 고정한다. 빌드 도구(Gradle의 Spring Boot BOM 등)가 버전을 관리하는 의존성은 예외로, 버전을 적지 않는다. 그 외 버전 선택이 필요하면 후보와 근거를 보여주고 확인을 받는다.
 - 삭제·초기화처럼 되돌리기 어려운 작업은 사용자가 명시적으로 지시했을 때만 한다.
 - 막혔을 때 임의로 우회하지 말고 선택지를 보여주고 결정을 기다린다.
-- **에이전트는 커밋 작성자나 기여자(contributor)로 남지 않는다.** 커밋 메시지에 `Co-Authored-By: Claude …` 같은 trailer를, 커밋 · PR · 이슈 · 댓글에 `Generated with Claude Code` 같은 생성 도구 문구를 넣지 않는다. `git config user.*`를 바꾸거나 `--author`로 다른 이름을 넣지 않는다. Claude Code는 `.claude/settings.json`의 `attribution` 설정으로 기본 표기를 끈다. 세부는 `.github/GITHUB_RULES.md` 4장.
+- **에이전트는 커밋 작성자나 기여자(contributor)로 남지 않는다.** 커밋 메시지에 `Co-Authored-By: Claude …` 같은 trailer를, 커밋 · PR · 이슈 · 댓글에 `Generated with Claude Code` 같은 생성 도구 문구를 넣지 않는다. `git config user.*`를 바꾸거나 `--author`로 다른 이름을 넣지 않는다. Claude Code는 `.claude/settings.json`의 `attribution` 설정으로 기본 표기를 끈다. 세부는 `.github/CONTRIBUTING.md` 4장.
 - 머지된 브랜치에 커밋을 더 올리지 않는다. 남은 작업은 새 이슈와 새 브랜치로 한다.
 
 ## 7. 아직 정해지지 않은 것 (임의로 정하지 말 것)
