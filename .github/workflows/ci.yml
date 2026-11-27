@@ -17,6 +17,9 @@ jobs:
     timeout-minutes: 5
     outputs:
       backend: ${{ steps.diff.outputs.backend }}
+      be_analysis: ${{ steps.diff.outputs.be_analysis }}
+      be_auth: ${{ steps.diff.outputs.be_auth }}
+      be_canvas: ${{ steps.diff.outputs.be_canvas }}
       frontend: ${{ steps.diff.outputs.frontend }}
       ai-server: ${{ steps.diff.outputs.ai-server }}
     steps:
@@ -34,8 +37,16 @@ jobs:
             if printf '%s\n' "$files" | grep -qE '^\.github/workflows/'; then echo true; return; fi
             if printf '%s\n' "$files" | grep -qE "$1"; then echo true; else echo false; fi
           }
+          # backend 모듈 이미지: 공통(common·루트 빌드 파일)이 바뀌면 셋 다, 아니면 바뀐 모듈만 빌드한다
+          be_module() {
+            if printf '%s\n' "$files" | grep -qE '^\.github/workflows/|^backend/(common/|build\.gradle|settings\.gradle|Dockerfile|gradlew|gradle/)'; then echo true; return; fi
+            if printf '%s\n' "$files" | grep -qE "$1"; then echo true; else echo false; fi
+          }
           {
             echo "backend=$(changed '^backend/')"
+            echo "be_analysis=$(be_module '^backend/analysis/')"
+            echo "be_auth=$(be_module '^backend/auth/')"
+            echo "be_canvas=$(be_module '^backend/canvas/')"
             echo "frontend=$(changed '^frontend/')"
             echo "ai-server=$(changed '^(ai|pipelines)/')"
           } | tee -a "$GITHUB_OUTPUT"
@@ -54,7 +65,8 @@ jobs:
         working-directory: backend
         run: chmod +x gradlew && ./gradlew test --no-daemon
       - uses: docker/setup-buildx-action@v3
-      - name: Backend Image Build
+      - name: backend(analysis) Image Build
+        if: needs.changes.outputs.be_analysis == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./backend
@@ -63,6 +75,7 @@ jobs:
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
       - name: auth Image Build
+        if: needs.changes.outputs.be_auth == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./backend
@@ -71,6 +84,7 @@ jobs:
           build-args: MODULE=auth
           cache-from: type=gha,scope=backend
       - name: canvas Image Build
+        if: needs.changes.outputs.be_canvas == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./backend

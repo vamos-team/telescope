@@ -41,9 +41,12 @@ jobs:
           tree() { git rev-parse "HEAD:$1" | cut -c1-12; }
           combined() { for d in "$@"; do git rev-parse "HEAD:$d"; done | sha256sum | cut -c1-12; }
           need_build() { aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$1" >/dev/null 2>&1 && echo false || echo true; }
-          BACKEND="backend-$(tree backend)"
-          AUTH="auth-$(tree backend)"
-          CANVAS="canvas-$(tree backend)"
+          # backend 서비스별 태그 = 그 모듈 + 공통(common·루트 빌드 파일)의 내용 해시.
+          # 공통이 바뀌면 셋 다, 한 모듈만 바뀌면 그 서비스만 태그가 바뀐다(안 바뀐 서비스는 재배포 안 됨).
+          BE_SHARED="backend/common backend/build.gradle backend/settings.gradle backend/Dockerfile backend/gradlew backend/gradle"
+          BACKEND="backend-$(combined backend/analysis $BE_SHARED)"
+          AUTH="auth-$(combined backend/auth $BE_SHARED)"
+          CANVAS="canvas-$(combined backend/canvas $BE_SHARED)"
           FRONTEND="frontend-$(tree frontend)"
           AI_SERVER="ai-server-$(combined ai pipelines)"
           {
@@ -132,16 +135,9 @@ jobs:
             name: api
             annotations:
               nginx.ingress.kubernetes.io/whitelist-source-range: "$ALLOWED_IPS"
-          ---
-          apiVersion: networking.k8s.io/v1
-          kind: Ingress
-          metadata:
-            name: api-canary
-            annotations:
-              nginx.ingress.kubernetes.io/whitelist-source-range: "$ALLOWED_IPS"
           EOF
           printf 'patches:\n  - path: ingress-allowed-ips.yaml\n' >> kustomization.yaml
-          test "$(kubectl kustomize . | grep -c 'whitelist-source-range')" -eq 3 || { echo "허용 IP 가 세 Ingress에 모두 들어가지 않음"; exit 1; }
+          test "$(kubectl kustomize . | grep -c 'whitelist-source-range')" -eq 2 || { echo "허용 IP 가 두 Ingress에 모두 들어가지 않음"; exit 1; }
 
       - name: 배포
         working-directory: infra/k8s
