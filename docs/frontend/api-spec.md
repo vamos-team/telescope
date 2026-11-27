@@ -18,7 +18,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | 금액 단위 | 원본 표는 공시 단위 그대로(`unit`). 비교·근거 값은 서버가 십억원으로 변환(`UNIT_TO_BIL`). 화면은 표시만 바꿈 |
 | 오래 걸리는 작업 | `202` + `{ jobId }`를 받고 `GET /api/v1/jobs/{id}`를 `SUCCEEDED`·`FAILED`까지 폴링한 뒤 결과 조회 API를 부름. 콜백 없음 |
 | 권한 | 페이지(캔버스)마다 소유자 · 편집 · 보기 권한(3.9). 공유 설정은 소유자만 바꾼다. 일반 액세스(회사 전체 보기)는 없다. 권한 없는 페이지는 403. 분석 세션은 화면이 지금 요청한 본인 것만 보여 준다(backend 규약과 다름, 9장). 공용 문서 수집·삭제는 관리자만 |
-| 오류 코드 | 화면은 `error.code`로 나눈다: `A001`~`A003`(인증), `A005`(가입된 사번), `K001`(캔버스 권한 없음), `K002`(보기 권한), `K003`(글 충돌), `D001`(업로드 거절), `C001`·`C002`(입력 오류·없음). 목록은 `docs/backend/api-spec.md` 2장 |
+| 오류 코드 | 화면은 `error.code`로 나눈다: `A001`~`A003`(인증), `A005`(가입된 사번), `K001`(캔버스 권한 없음), `K002`(보기 권한), `K003`(글 충돌), `K004`(남의 메모), `D001`(업로드 거절), `C001`·`C002`(입력 오류·없음). 목록은 `docs/backend/api-spec.md` 2장 |
 | 연동 방식 | 환경변수 `VITE_CANVAS_SYNC=server`일 때만 로그인·회원가입·내 정보와 캔버스 열기·이벤트·실시간·업로드를 서버로 보낸다. 기본(`local`)은 브라우저 목업과 `localStorage`. 빌드할 때 정해지는 값이라 **배포 이미지(`frontend/Dockerfile`)는 `server`로 빌드한다**(#179, 데모 이미지는 `--build-arg VITE_CANVAS_SYNC=local`). 로컬 개발 · 데모 · Electron은 기본 `local`. 서버 모드에서도 검색·비교·카드 태그·분석은 아직 목업이 계산한다 |
 | 용어 | 화면의 "페이지" = 캔버스 + 분석. API 경로는 `canvases`를 그대로 쓴다 |
 
@@ -30,7 +30,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | 로그인 → 회원가입 | 회원가입 | `POST /auth/signup` | `canvas.signUp` (local: 없음) |
 | 로그인 | 내 정보 | `GET /users/me` | `restoreUser` |
 | 페이지 홈 (C00) | 볼 수 있는 페이지 목록·삭제 | `GET /canvases`, `DELETE /canvases/{id}` | `loadCanvases`, `canvases`, `removeCanvas` (local: `thumb`) |
-| 새 페이지 (C14) | 이름 · 기준 시점 · 편집할 사람으로 생성, 사람 찾기 | `POST /canvases`, `GET /users?q=` | `newCanvas`, `searchPeople` (`usePeopleSearch`, local: `findPeople`) |
+| 새 페이지 (C14) | 이름 · 기준 시점 · 초대할 사람(편집 · 보기)으로 생성, 사람 찾기 | `POST /canvases`, `PUT /canvases/{id}/shares`(보기 권한이 있을 때), `GET /users?q=` | `newCanvas`, `searchPeople` (`usePeopleSearch`, local: `findPeople`) |
 | 헤더 | 페이지 이름 변경 | `PATCH /canvases/{id}` | `rename` |
 | 페이지 정보 (C13) | 사내 사람 찾기 | `GET /users?q=` | `searchPeople` (local: `ALL_MEMBERS` 상수) |
 | 페이지 정보 (C13) | 정보 · 권한 조회·변경 | `GET /canvases/{id}`, `GET/PUT /canvases/{id}/shares` | `meta`, `loadShares`, `serverShares`, `setShare` |
@@ -163,9 +163,9 @@ local 모드는 backend가 없어 가입할 수 없다("회원가입은 서버 �
 |---|---|---|
 | `name` | 이름. 화면은 비면 `"{부서} 페이지 {n}"`(내가 소유한 페이지 수 + 1)을 보낸다 | string? |
 | `quarter` | 기준 시점. `2025년 1분기` ~ `2026년 4분기` 중 하나, 기본 `2026년 1분기` | string |
-| `editorIds` | 편집 권한을 줄 사람의 숫자 `id` 목록 (C14 편집할 사람) | number[] |
+| `editorIds` | 편집 권한을 줄 사람의 숫자 `id` 목록 (C14에서 `편집 가능`으로 고른 사람) | number[] |
 
-응답은 3.1의 항목 하나. `201`. 만든 사람이 소유자가 되고, `editorIds`는 `edit`으로 초대된다. 서버 모드 화면은 만든 뒤 바로 연다. 없는 사용자를 넣으면 `404 C002`("페이지를 만들지 못했습니다. 찾을 수 없는 사람이나 페이지입니다.").
+응답은 3.1의 항목 하나. `201`. 만든 사람이 소유자가 되고, `editorIds`는 `edit`으로 초대된다. C14에서 `보기 가능`으로 고른 사람이 있으면 화면은 만든 직후 3.9 `PUT /shares`로 명단 전체(편집 · 보기)를 한 번 더 보낸다(만들기 요청에는 보기 권한 칸이 없음). 이 요청이 실패하면 "공유 설정을 바꾸지 못했습니다. …"를 띄우고 페이지는 연다. 서버 모드 화면은 만든 뒤 바로 연다. 없는 사용자를 넣으면 `404 C002`("페이지를 만들지 못했습니다. 찾을 수 없는 사람이나 페이지입니다.").
 
 ### 3.3 `PATCH /api/v1/canvases/{id}` · `DELETE /api/v1/canvases/{id}`
 
@@ -213,6 +213,8 @@ local 모드는 backend가 없어 가입할 수 없다("회원가입은 서버 �
 
 메모 카드를 뺀 모든 카드는 `memo`(카드 메모)를 가질 수 있다. 지금 화면에는 카드 메모 입력칸이 없고(새 메모는 카드 오른쪽 위 `+`로 메모 카드를 달아 씀) 예전 저장본의 카드 메모만 읽기 전용으로 보인다. `set_card_memo`는 저장 · 재생 · 다른 사람 변경 반영용으로 남아 있다. 연결은 `source`, `target`, `memo`(선 메모)만 갖는다. 관계 종류(근거 · 설명 · 반박)는 저장하지 않고 분석에서 에이전트가 판단한다.
 
+메모 3종은 단 사람만 고치고 지운다(소유자도 예외 없음). 화면은 메모 카드의 `createdBy.id`, 카드 메모 · 선 메모의 `memoBy.id`, 다른 사람 변경 메시지의 `author.id`로 작성자를 판단해 입력칸 · `✕` · `연결 해제`를 숨긴다. 서버도 같은 규칙으로 막는다(`403 K004`, 화면은 "다른 사람이 단 메모는 고치거나 지울 수 없습니다. 새로고침하면 서버 상태로 돌아갑니다."). 작성자를 모르는 예전 카드 메모는 아무도 고치지 못한다. 남의 선 메모가 달린 연결은 끊지 못하고, `전체 지우기`만 남의 메모 카드도 지운다. 전체 지우기는 이벤트 하나 `clear_cards`로 보낸다(규칙: `docs/backend/api-spec.md` 5.3, #170).
+
 메모 3종(카드 메모 · 메모 카드 · 선 메모)은 모두 사용자가 쓴 글이다. 분석(7.2)에서 에이전트가 문장마다 지시 · 근거 · 의견으로 가린다.
 
 ### 3.6 `POST /api/v1/canvases/{id}/events`
@@ -252,14 +254,15 @@ local 모드는 backend가 없어 가입할 수 없다("회원가입은 서버 �
 | `add_doc` | `cardId`, `docId` | 자료를 올림 |
 | `add_dash` | `cardId`, `panel` | 대시보드를 올림 |
 | `add_memo` | `cardId`, `text`, `author` | 메모를 남김. 서버 모드에서는 `author`를 보내지 않고 서버가 토큰으로 정함 |
-| `edit_memo` | `cardId`, `text`, `baseVersion` | 메모를 고침 |
+| `edit_memo` | `cardId`, `text`, `baseVersion` | 메모를 고침. 만든 사람만(아니면 `403 K004`) |
 | `set_card_memo` | `cardId`, `text`, `baseVersion` | 카드 메모를 고침. 빈 값이면 지움 |
 | `set_link_memo` | `linkId`, `text`, `baseVersion` | 선 메모를 고침. 빈 값이면 지움 |
 | `create_compare` | `cardId`, `sources`, `view?` | 비교 카드를 만듦. 비교 카드(`view: compare`, 기본) 또는 시각화 카드(`view: chart`). 공시 표 카드가 2장 이상일 때만 |
 | `confirm_mapping` | `conceptId`, `company`, `cells`, `accepted` | 계정 대응을 확정함. 확정(`true`) · 거부(`false`) · 취소(`null`). 같은 개념 · 회사의 이전 값을 덮어씀 |
 | `add_link` | `linkId`, `source`, `target` | 카드를 연결함. 같은 두 카드 사이(방향 무관)와 자기 자신 연결은 화면이 막음 |
-| `remove_link` | `linkId` | 연결을 지움 |
+| `remove_link` | `linkId` | 연결을 지움. 남이 단 선 메모가 있으면 `403 K004` |
 | `remove_card` | `cardId` | 카드를 지움. 서버가 그 카드의 연결과 비교 원본에서도 뺌 |
+| `clear_cards` | — | 카드를 모두 지움(`전체 지우기`). 카드와 연결을 모두 지우고, 남의 메모 카드도 지우는 유일한 이벤트 (#170) |
 | `move_card` | `cardId`, `x`, `y` | 좌표만 저장. 컨텍스트·활동 기록에 영향 없음 |
 
 활동 로그 문구는 화면 목업(`stores/canvas.ts` `ACT`) 기준이며, 로컬 문구 뒤에는 `({cardId})`가 붙는다.
