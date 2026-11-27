@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: telescope-canvas
+  # 마이그레이션은 work가 맡는다. canvas는 같은 app 스키마의 테이블을 검증만 한다
+  flyway:
+    enabled: false
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      "[hibernate.default_schema]": app
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:}
+    access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:1h}

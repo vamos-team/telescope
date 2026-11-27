@@ -1,2 +1,2 @@
 rootProject.name = 'telescope-backend'
-include 'common', 'auth'
+include 'common', 'auth', 'canvas'
