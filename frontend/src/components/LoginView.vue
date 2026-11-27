@@ -10,6 +10,8 @@ import SignupForm from "./SignupForm.vue";
 
 const cv = useCanvas();
 const local = SYNC_MODE !== "server";
+// 회원가입 링크는 관리자 승인 절차가 생길 때까지 숨김(hotfix). 승인 기능이 들어오면 true로 되돌림. 회원가입 폼 코드는 그대로 둠
+const SIGNUP_OPEN = false;
 const view = ref<"login" | "signup">("login");
 const id = ref(local ? "1001" : ""), pw = ref(local ? "demo" : ""), err = ref(""), busy = ref(false);
 
@@ -55,7 +57,7 @@ async function submit() {
         <label>비밀번호<input v-model="pw" type="password" autocomplete="current-password" placeholder="비밀번호" @input="err = ''" /></label>
         <p v-if="err" class="auth-err" role="alert">{{ err }}</p>
         <button class="auth-submit" :disabled="busy">{{ busy ? "로그인 중…" : "로그인" }}</button>
-        <p class="auth-switch">계정이 없으신가요? <button type="button" @click="view = 'signup'; err = ''">회원가입</button></p>
+        <p v-if="SIGNUP_OPEN" class="auth-switch">계정이 없으신가요? <button type="button" @click="view = 'signup'; err = ''">회원가입</button></p>
       </form>
       <SignupForm v-else @back="view = 'login'" />
     </section>

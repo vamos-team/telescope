@@ -2,6 +2,7 @@
 
 형식: `- YYYY-MM-DD 무엇을 바꿨는지 (관련 파일)`. 최신이 위로 오게 쌓는다. 규칙은 [AGENTS.md](AGENTS.md).
 
+- 2026-11-27 hotfix 로그인 화면의 회원가입 링크를 숨김(관리자 승인 절차가 생길 때까지). 회원가입 폼 코드는 남겨 두고 `SIGNUP_OPEN`으로 되돌릴 수 있게 함 (src/components/LoginView.vue)
 - 2026-11-27 #170 리뷰 반영: Safari gesture 이벤트는 캔버스 밖에서만 막아 캔버스 안 핀치(ctrl+wheel)가 살아 있게 함 (src/App.vue)
 - 2026-11-27 #170 리뷰 반영: 사이드바를 다시 열면 지난 검색을 지우고 탭 화면부터, 추천 검색어를 ↑ · ↓ · Enter로 고름, 검색창 Tab은 기본 포커스 이동, 빈 캔버스 안내 클래스를 `canvas-empty`로 바꿔 시각화 카드 상태 문구(`.cempty`)와 겹치지 않게 함 (src/App.vue, src/components/SourcePanel.vue, src/style.css)
 - 2026-11-27 #170 검색창을 골라도 위 탭을 숨기지 않음. 추천 검색어는 탭 화면 위 팝업으로만 뜨고 입력하면 사라짐 (src/components/SourcePanel.vue)
