@@ -13,6 +13,9 @@ spring:
 app:
   # 서비스 간 내부 API(/internal/**) 확인 키. 설정 파일에 값을 넣지 않는다
   internal-api-key: ${INTERNAL_API_KEY:}
+  # 사람 이름을 읽어 오는 auth 서비스 주소(내부)
+  auth-service:
+    base-url: ${AUTH_SERVICE_BASE_URL:http://localhost:8081}
   jwt:
     secret: ${JWT_SECRET:}
     access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:1h}
