@@ -157,11 +157,9 @@ class SecurityRulesTest {
     // ---- 도움 함수 ----
 
     /** 공개 경로 응답: 401(A001)·400·201 중 하나이고, 인증 오류(A002)가 아니다. */
+    /** 공개 경로는 보안 필터를 지나 더미 컨트롤러에 닿아 200이다. 401·403으로 막히면 안 된다. */
     private void assertPublic(RequestBuilder request) throws Exception {
-        MvcResult result = mvc.perform(request).andReturn();
-
-        assertThat(result.getResponse().getStatus()).isNotEqualTo(401);
-        assertThat(errorCodeOrNull(result)).isNotEqualTo("A002");
+        mvc.perform(request).andExpect(status().isOk());
     }
 
     private void expectAuthError(String authorization, String code) throws Exception {
