@@ -1,6 +1,6 @@
 # ERD — 엔티티 정리
 
-> 기준은 Flyway 마이그레이션(`backend/src/main/resources/db/migration`)이다. 이 문서와 마이그레이션이 다르면
+> 기준은 Flyway 마이그레이션(`backend/analysis/src/main/resources/db/migration`)이다. 이 문서와 마이그레이션이 다르면
 > 마이그레이션이 맞고 이 문서를 고친다. 모든 테이블은 PostgreSQL의 `app` 스키마에 있다(#88).
 > 이 문서는 PostgreSQL(backend가 쓰는 운영 데이터)만 다룬다. DuckDB(재무 수치)와 ChromaDB(문서 검색)는
 > backend가 열지 않으며, 여기에는 "어느 버전을 썼는가" 같은 메타데이터만 남긴다.

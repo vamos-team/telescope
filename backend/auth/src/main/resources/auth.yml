@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: telescope-auth
+  flyway:
+    enabled: false
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      "[hibernate.default_schema]": app
+
+app:
+  internal-api-key: ${INTERNAL_API_KEY:}
+  jwt:
+    secret: ${JWT_SECRET:}
+    access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:1h}
+  auth:
+    login:
+      max-failures: ${AUTH_LOGIN_MAX_FAILURES:5}
+      lock-duration: ${AUTH_LOGIN_LOCK_DURATION:PT10M}
+  admin:
+    employee-no: ${ADMIN_EMPLOYEE_NO:}
+    password: ${ADMIN_PASSWORD:}
+    name: ${ADMIN_NAME:}
+
+logging:
+  pattern:
+    level: "%5p [%X{requestId:-}]"

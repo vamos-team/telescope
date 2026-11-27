@@ -4,32 +4,41 @@
 
 ## 1. 기술 스택
 
-- Java 21, Spring Boot, Gradle 단일 모듈, JPA, Flyway, PostgreSQL
-- base 패키지: `com.telescope.backend`
+- Java 21, Spring Boot, Gradle 멀티 모듈, JPA, Flyway, PostgreSQL
 - 기존 `spring-boot-starter-webmvc`와 Spring Boot 버전은 임의로 바꾸지 않는다.
 - Boot가 버전을 관리하는 의존성은 버전을 적지 않는다. 관리 범위 밖이면 버전을 고정한다.
 - Spring AI는 `chat` 기능에서만 쓴다. 버전은 Boot와의 호환을 확인한 뒤 확정한다.
 
-## 2. 패키지 구조
+## 2. 모듈과 패키지 구조
 
-`com.telescope.backend` 아래:
+루트(`backend/`)에는 공통 빌드 설정만 두고, 코드는 모두 모듈에 둔다.
 
-| 패키지 | 책임 |
-|---|---|
-| `global` | 공통 설정, 예외, 응답 포맷, 공통 Entity |
-| `user` | 로그인 사용자(사번·이름·부서·직무·역할), 로그인과 JWT 발급, 사용자 조회·검색 |
-| `document` | 문서 업로드, 버전, 발행일·출처, 자료 준비 상태 |
-| `job` | 비동기 작업 공통 (상태 전이, 폴링 대상) |
-| `datasync` | 재무 데이터 적재 실행 이력, 활성 데이터 버전 |
-| `analysis` | 분석 실행, 허용 문서 스냅샷, 근거 점검 결과 |
-| `prediction` | 예상 질문 실행과 결과, 예측 평가 |
-| `canvas` | 캔버스, 공유 권한(소유자·편집·보기), 카드·연결 상태, 편집 이벤트, 실시간 전달(WebSocket) |
-| `chat` | 대화와 메시지, Spring AI 오케스트레이션 |
-| `infra` | 외부 연동: `python`(ai 서비스 호출), `storage`(파일), `ai`(ChatClient, MCP Client 설정) |
+| 모듈 | 역할 | base 패키지 |
+|---|---|---|
+| `common` | 서비스들이 함께 쓰는 라이브러리(응답 포맷, 예외, 검증, JWT 검증, 보안 설정) | `com.telescope.common` |
+| `auth` | auth 서비스 | `com.telescope.auth` |
+| `canvas` | canvas 서비스 | `com.telescope.canvas` |
+| `analysis` | analysis 서비스(문서·작업·적재·분석·예측·채팅). Flyway 마이그레이션도 여기에 둔다 | `com.telescope.analysis` |
+
+각 서비스는 base 패키지 아래를 기능 단위로 나눈다: `com.telescope.<서비스>.<기능>.<계층>`
+
+| 패키지 | 모듈 | 책임 |
+|---|---|---|
+| `global` | 각 서비스 | 그 서비스에만 필요한 설정(WebSocket, 스케줄러 등) |
+| `user` | auth | 로그인 사용자(사번·이름·부서·직무·역할), 로그인과 JWT 발급, 사용자 조회·검색 |
+| `document` | analysis | 문서 업로드, 버전, 발행일·출처, 자료 준비 상태 |
+| `job` | analysis | 비동기 작업 공통 (상태 전이, 폴링 대상) |
+| `datasync` | analysis | 재무 데이터 적재 실행 이력, 활성 데이터 버전 |
+| `analysis` | analysis | 분석 실행, 허용 문서 스냅샷, 근거 점검 결과 |
+| `prediction` | analysis | 예상 질문 실행과 결과, 예측 평가 |
+| `canvas` | canvas | 캔버스, 공유 권한(소유자·편집·보기), 카드·연결 상태, 편집 이벤트, 실시간 전달(WebSocket) |
+| `chat` | analysis | 대화와 메시지, Spring AI 오케스트레이션 |
+| `bridge` | analysis | 같은 앱 안에서 기능 사이를 잇는 구현 (auth·canvas로 트래픽을 넘기기 전까지) |
+| `infra` | analysis, canvas | 외부 연동: `python`(ai 서비스 호출), `storage`(파일), `ai`(ChatClient, MCP Client 설정), `auth`(canvas가 auth 서비스 호출) |
 
 > 예측 평가는 별도 패키지 없이 `prediction`에 포함한다. 패키지가 추가되면 이 표도 갱신한다.
 
-- `global`, `infra`를 제외한 기능 패키지 안은 `controller / service / repository / entity / dto`로 나눈다.
+- `global`, `infra`, `bridge`를 제외한 기능 패키지 안은 `controller / service / repository / entity / dto`로 나눈다.
 - 클래스 이름: `XxxController`, `XxxService`, `XxxRepository`, `Xxx`(Entity), `XxxRequest`, `XxxResponse`
 
 ## 3. 계층 규칙

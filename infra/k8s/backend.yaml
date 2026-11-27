@@ -9,10 +9,13 @@ spec:
     metadata: { labels: { app: backend } }
     spec:
       serviceAccountName: s3-access # IRSA: 키 없이 S3 버킷 접근
+      terminationGracePeriodSeconds: 45
       containers:
         - name: backend
           image: skala-registry.skala-ai.com/p3-1/backend
           ports: [{ containerPort: 8080 }]
+          lifecycle:
+            preStop: { exec: { command: ["sh", "-c", "sleep 10"] } }
           env:
             - { name: JAVA_TOOL_OPTIONS, value: "-XX:MaxRAMPercentage=75" }
             - { name: TZ, value: Asia/Seoul }
@@ -21,6 +24,8 @@ spec:
             - { name: DATASYNC_CORP_CODES, value: "00159023,00243988,00190321,00231363" } # DART 고유번호: SKT, SKB, KT, LGU+
             - { name: AI_SERVICE_BASE_URL, value: "http://ai-server:8000" }
             - name: AI_SERVICE_API_KEY
+              valueFrom: { secretKeyRef: { name: ai-server-secrets, key: INTERNAL_API_KEY } }
+            - name: INTERNAL_API_KEY
               valueFrom: { secretKeyRef: { name: ai-server-secrets, key: INTERNAL_API_KEY } }
           envFrom:
             - secretRef: { name: rds-credentials }   
