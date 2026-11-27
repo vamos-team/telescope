@@ -22,10 +22,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-/**
- * canvas 서비스에서 사람 이름을 auth 서비스의 내부 API로 읽는다. auth가 응답하지 않으면 한 번 더 시도하고,
- * 그래도 실패하면 이름 없이 돌려준다(화면에는 ID만 보이고 캔버스 기능은 계속 동작한다).
- */
 @Slf4j
 @Component
 public class HttpUserDirectory implements UserDirectory {

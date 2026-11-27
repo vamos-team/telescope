@@ -15,7 +15,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** 서비스 간 내부 API(/internal/**)는 내부 키로만 열리고, 사용자 토큰과는 상관없다. */
 @SpringBootTest(properties = "app.internal-api-key=test-internal-key")
 @AutoConfigureMockMvc
 @Import(TestcontainersConfig.class)

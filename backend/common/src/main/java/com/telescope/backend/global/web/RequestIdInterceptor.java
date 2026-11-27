@@ -8,7 +8,6 @@ import org.springframework.http.client.ClientHttpResponse;
 
 import java.io.IOException;
 
-/** 내부 서비스를 부를 때 지금 요청의 요청 ID를 {@code X-Request-ID}로 넘긴다. */
 public class RequestIdInterceptor implements ClientHttpRequestInterceptor {
 
     @Override

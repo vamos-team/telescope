@@ -1,7 +1,6 @@
 spring:
   application:
     name: telescope-canvas
-  # 마이그레이션은 work가 맡는다. canvas는 같은 app 스키마의 테이블을 검증만 한다
   flyway:
     enabled: false
   jpa:
@@ -11,16 +10,13 @@ spring:
       "[hibernate.default_schema]": app
 
 app:
-  # 서비스 간 내부 API(/internal/**) 확인 키. 설정 파일에 값을 넣지 않는다
   internal-api-key: ${INTERNAL_API_KEY:}
-  # 사람 이름을 읽어 오는 auth 서비스 주소(내부)
   auth-service:
     base-url: ${AUTH_SERVICE_BASE_URL:http://localhost:8081}
   jwt:
     secret: ${JWT_SECRET:}
     access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:1h}
 
-# 로그에 요청 ID를 남겨 서비스 사이의 한 요청을 따라갈 수 있게 한다
 logging:
   pattern:
     level: "%5p [%X{requestId:-}]"

@@ -31,7 +31,6 @@ infra:
     status-read-timeout: 3s
 
 app:
-  # 서비스 간 내부 API(/internal/**) 확인 키. 설정 파일에 값을 넣지 않는다
   internal-api-key: ${INTERNAL_API_KEY:}
   # 재무 데이터 적재 배치(#135). 시작은 cron(서울 시간), "-"이면 꺼짐(로컬·테스트 기본). 배포는 DATASYNC_CRON="0 0 3 * * *"
   datasync:
@@ -72,7 +71,6 @@ app:
       bucket: ${S3_BUCKET:}
       region: ${AWS_REGION:}
 
-# 로그에 요청 ID를 남겨 서비스 사이의 한 요청을 따라갈 수 있게 한다
 logging:
   pattern:
     level: "%5p [%X{requestId:-}]"

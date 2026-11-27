@@ -13,7 +13,6 @@ COPY common/src common/src
 COPY auth/src auth/src
 COPY canvas/src canvas/src
 COPY src src
-# MODULE: 비우면 work, auth·canvas면 그 서비스
 ARG MODULE=
 RUN if [ -z "$MODULE" ]; then task=bootJar; out=build/libs; else task=":$MODULE:bootJar"; out="$MODULE/build/libs"; fi \
  && ./gradlew "$task" -x test --no-daemon \

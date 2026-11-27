@@ -11,10 +11,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 다른 서비스(work의 문서)가 캔버스 권한을 확인하는 내부 API. 내부 키로만 부를 수 있다(InternalApiKeyFilter).
- * 캔버스가 없거나 지워졌으면 {@code C002}(404)다. 허용·거절 판단은 부른 쪽이 지금 규칙대로 한다.
- */
 @RestController
 @RequestMapping("/internal/v1/canvases")
 @RequiredArgsConstructor

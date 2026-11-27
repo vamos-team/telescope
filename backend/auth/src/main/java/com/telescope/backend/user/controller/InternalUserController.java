@@ -13,10 +13,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/**
- * 다른 서비스(canvas)가 사람 이름·부서를 읽는 내부 API. 내부 키로만 부를 수 있다(InternalApiKeyFilter).
- * 없는 사용자는 결과에서 빠진다.
- */
 @RestController
 @RequestMapping("/internal/v1/users")
 @RequiredArgsConstructor

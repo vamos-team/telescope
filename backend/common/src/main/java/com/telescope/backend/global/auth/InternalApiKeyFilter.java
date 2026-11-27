@@ -11,10 +11,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
-/**
- * 서비스끼리만 부르는 내부 API({@code /internal/**})를 {@code X-Internal-Api-Key}로 확인한다.
- * 키가 설정되지 않았으면 모든 내부 호출을 거절한다. Ingress는 {@code /api}만 열어 두어 밖에서는 이 경로에 닿지 않는다.
- */
+/** 키가 설정되지 않았으면 모든 내부 호출을 거절한다. */
 public class InternalApiKeyFilter extends OncePerRequestFilter {
 
     public static final String HEADER = "X-Internal-Api-Key";
@@ -46,7 +43,6 @@ public class InternalApiKeyFilter extends OncePerRequestFilter {
         chain.doFilter(request, response);
     }
 
-    /** 거절 응답을 다른 인증 오류와 같은 형식으로 쓴다. */
     @FunctionalInterface
     public interface ErrorWriter {
         void write(HttpServletResponse response, ErrorCode code) throws IOException;

@@ -30,7 +30,6 @@ spec:
           - { path: /api/v1/canvases, pathType: Prefix, backend: { service: { name: backend, port: { number: 8080 } } } }
           - { path: /api/v1/ws, pathType: Prefix, backend: { service: { name: backend, port: { number: 8080 } } } }
 ---
-# auth·canvas 서비스 확인용. 헤더 X-Canary: msa 나 쿠키 canary=always 인 요청만 새 서비스로 간다
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

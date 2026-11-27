@@ -20,8 +20,6 @@ services:
     ports:
       - "8080:8080"
 
-  # backend를 서비스로 나눈 auth·canvas. 같은 PostgreSQL을 쓰고, 마이그레이션은 backend(work)가 한다.
-  # 실행: docker compose --profile msa up
   auth:
     build:
       context: ./backend

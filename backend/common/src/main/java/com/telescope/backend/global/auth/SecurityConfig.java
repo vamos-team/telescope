@@ -55,7 +55,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/signup").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/ws").permitAll()
-                        // 서비스 간 내부 API는 토큰 대신 InternalApiKeyFilter가 내부 키로 확인한다
                         .requestMatchers(InternalApiKeyFilter.PATH_PREFIX + "**").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(handling -> handling
