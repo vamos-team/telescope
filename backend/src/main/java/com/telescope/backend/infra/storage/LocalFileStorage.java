@@ -13,7 +13,7 @@ import java.nio.file.Path;
  * 로컬 디스크에 파일을 저장하는 {@link FileStorage} 구현.
  *
  * <p>저장 위치는 {@code app.storage.local.base-dir} 설정(환경변수 {@code FILE_STORAGE_DIR}로
- * 오버라이드 가능)으로 정한다. 하드코딩하지 않는다(CLAUDE.md "설정 값은 코드에 박지 않는다" 원칙).
+ * 오버라이드 가능)으로 정한다. 하드코딩하지 않는다(AGENTS.md "설정 값은 코드에 박지 않는다" 원칙).
  *
  * <p>TODO: 기본값 {@code ./data/files}는 "로컬에서 ./gradlew bootRun으로 돌릴 때" 기준이다.
  * docker-compose의 backend 컨테이너는 {@code ./data}를 {@code /app/data}에 마운트하므로,

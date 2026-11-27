@@ -2,7 +2,6 @@
 
 > 규칙과 구조만 담는다. 작업 기록과 수치는 넣지 않는다.
 > 세부 설계는 `docs/` (architecture, erd, api-spec, backend-structure)를 따른다.
-> 루트 `CLAUDE.md`는 이 파일을 가리키는 심볼릭 링크다. 규칙은 이 파일(`AGENTS.md`)만 고친다.
 
 ## 1. 프로젝트 개요
 
@@ -25,7 +24,7 @@ MVP 제외: 콜백(작업 상태는 폴링으로 조회), 사내 데이터 연�
 |---|---|---|
 | docs | `docs/` | 설계 문서 |
 | frontend | `frontend/` | Vue 3 + TypeScript |
-| backend | `backend/` | Spring Boot API 서버. 세부 규칙은 `backend/CLAUDE.md` |
+| backend | `backend/` | Spring Boot API 서버. 세부 규칙은 `backend/AGENTS.md` |
 | ai | `pipelines/`, `mcp-server/`, `ai/` | 수집, 파싱, 적재, 조회 도구, 분석·예측 서비스 |
 | infra | `infra/`, `.github/workflows/`, `docker-compose.yml` | CI/CD, 실행 환경 |
 
@@ -42,7 +41,7 @@ MVP 제외: 콜백(작업 상태는 폴링으로 조회), 사내 데이터 연�
 - **사용자가 지정한 영역의 폴더 안에서만 작업한다.** 담당은 기본적으로 폴더 단위이지만, 이
   문서가 하위 폴더별로 담당을 따로 적어둔 경우(`ai/server` 등)는 그 하위 폴더 단위를 따른다.
 - 다른 영역의 파일을 바꿔야 하면 수정하지 말고 멈춘다. 무엇을 왜 바꿔야 하는지 알리고 담당자와 논의한 뒤 진행한다.
-- 루트 파일(`README.md`, `CLAUDE.md`, `AGENTS.md`, `.env.example`, `.gitignore`)과 저장소 설정(`.github/`, `.claude/`)은 사용자가 지시했을 때만 수정한다.
+- 루트 파일(`README.md`, `AGENTS.md`, `.env.example`, `.gitignore`)과 저장소 설정(`.github/`, `.claude/`)은 사용자가 지시했을 때만 수정한다.
 - **`.gitignore`는 Claude가 임의로 고치지 않는다.** 로컬 파일(OS 메타데이터, 에디터 설정 등)이 추적되거나 리뷰에 걸려도
   규칙을 추가·삭제하지 말고, 필요한 규칙과 이유를 알린 뒤 사용자 지시를 기다린다. 개인 환경 파일은 `.git/info/exclude`를 안내한다.
 

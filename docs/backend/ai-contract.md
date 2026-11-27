@@ -11,8 +11,8 @@
 > 공통 규약을 설명하기 위한 것이고, 필드 확정은 해당 이슈를 따른다.
 >
 > 전제: backend(HTTP 껍데기, job 관리)와 ai(구체적 API, 파이프라인)는 역할이 다르다.
-> 분석·예측·ML 로직은 backend에 두지 않는다(`backend/CLAUDE.md` 3번). ai는 결과를 backend가
-> 저장할 수 있는 형태로 돌려주기만 한다. 결과 저장은 backend만 한다(루트 `CLAUDE.md` 3번).
+> 분석·예측·ML 로직은 backend에 두지 않는다(`backend/AGENTS.md` 3번). ai는 결과를 backend가
+> 저장할 수 있는 형태로 돌려주기만 한다. 결과 저장은 backend만 한다(루트 `AGENTS.md` 3번).
 
 ## 1. 전체 그림
 
@@ -244,7 +244,7 @@ backend                                   ai
     되돌릴 수 없다(`job.md` 3.1). 그러니 되살리는 대상은 첫 `Job`이 아니라 **재요청으로 새로
     만든 `Job`**이어야 한다 — 새 `Job`이 ai로부터 돌려받은(기존) `externalJobId`로 곧바로
     `markStarted`를 호출해 그 작업을 이어받는다. 첫 `Job`(이미 `FAILED`)은 고치지 않고 그냥
-    고아 기록으로 남는다(`Job`은 애초에 수정 없이 쌓는 이력이라 `backend/CLAUDE.md` 6번과도
+    고아 기록으로 남는다(`Job`은 애초에 수정 없이 쌓는 이력이라 `backend/AGENTS.md` 6번과도
     맞는다). 혹은 backend가 시작 호출 타임아웃 뒤 "ai 쪽에 이미 생겼는지" 확인할 별도 조회
     경로를 두는 방식도 대안이다. 이 중 어느 쪽으로 할지, 정확한 키는 무엇인지는 ai 담당자와
     후속 이슈(4번)에서 확정한다. (2.10의 타임아웃 설정과도 맞물린다: 타임아웃을 짧게 잡을수록
@@ -257,7 +257,7 @@ backend                                   ai
 
 ### 2.9 허용 문서·기준 시점을 backend가 확정해 전달하고 ai가 바꾸지 못하게 하는 방식 — 제안 + 발견한 간극
 
-- 원칙은 이미 세워져 있다(`backend/CLAUDE.md` 6번, `entities.md` 5): 허용 문서 범위와
+- 원칙은 이미 세워져 있다(`backend/AGENTS.md` 6번, `entities.md` 5): 허용 문서 범위와
   기준 시점은 서버가 강제하고, LLM이 인자로 정하지 않는다. `AnalysisRequest`가 이미
   `allowedDocumentVersionIds`(목록)와 `asOfDate`를 갖고 있다.
 - **간극**: `PredictionRequest`(현재 초안)에는 `analysisRunId`와 `asOfDate`만 있고
@@ -271,7 +271,7 @@ backend                                   ai
   2. ai/`mcp-server`의 조회 도구는 이 목록으로만 검색 범위를 제한한다(LLM이 날짜·범위를
      스스로 고르게 하지 않는다).
   3. ai가 돌려준 결과(`evidenceRef` 등)가 허용 목록 밖의 문서를 가리키면, **backend가 저장
-     시점에 걸러낸다.** 숫자는 코드로 계산하고 공시와 대조한다는 원칙(`CLAUDE.md` 4번)과
+     시점에 걸러낸다.** 숫자는 코드로 계산하고 공시와 대조한다는 원칙(`AGENTS.md` 4번)과
      같은 맥락이다 — ai의 응답이라도 그대로 믿지 않는다.
   - 걸러낸 뒤 분석 전체를 실패로 볼지, 그 항목만 버리고 나머지는 저장할지는 **열림**
     (제안: 그 항목만 버리고 경고 로그를 남긴다 — 전체 실패는 사용자 경험상 과하다).
@@ -280,7 +280,7 @@ backend                                   ai
 
 - **인증**: backend ↔ ai는 같은 신뢰 경계 안의 내부 호출이다(외부에 노출되지 않음). 공유
   비밀키를 헤더로 보내는 방식을 제안한다: `X-Internal-Api-Key: {값}`. 값은 환경변수로 주입하고
-  (`.env.example`에는 변수명만, 루트 `CLAUDE.md` 6번) backend·ai 양쪽에 같은 값을 둔다.
+  (`.env.example`에는 변수명만, 루트 `AGENTS.md` 6번) backend·ai 양쪽에 같은 값을 둔다.
   변수명: backend `AI_SERVICE_API_KEY`, ai `INTERNAL_API_KEY`. mTLS 등 더 강한 방식은 MVP 범위를 넘는다고 본다.
 - **backend 설정** (`infra.python-ai-client`, #114): `mode`(`AI_SERVICE_MODE`, 기본 `stub` / 실제 호출 `http`),
   `base-url`(`AI_SERVICE_BASE_URL`), `api-key`(`AI_SERVICE_API_KEY`). `http`인데 주소나 비밀키가 비어 있으면 기동 시점에 실패한다.
@@ -365,7 +365,7 @@ backend                                   ai
   ai/server의 K8s 매니페스트와 권한 구성은 infra 담당이다(아직 없음).
 - backend는 공시 원본을 저장하거나 S3에 올리지 않는다.
 - 이전 제안(backend·ai가 같은 공유 볼륨을 마운트)은 쓰지 않는다. 로컬 개발에서만 두 서버가 같은 폴더를 본다.
-- 업로드 원본의 보관·삭제 정책은 아직 정하지 않았다(루트 `CLAUDE.md` 7번).
+- 업로드 원본의 보관·삭제 정책은 아직 정하지 않았다(루트 `AGENTS.md` 7번).
 
 ### 2.12 파이프라인 호출 방식 (파이썬 함수 호출 여부) — 제안, ai 담당자 최종 합의 필요
 
@@ -417,7 +417,7 @@ backend                                   ai
 
 ## 4. 후속 이슈 목록 (제안)
 
-합의가 끝나면 아래 작업이 필요하다. 실제 이슈 등록은 사용자 요청 시에만 한다(루트 `CLAUDE.md` 5번).
+합의가 끝나면 아래 작업이 필요하다. 실제 이슈 등록은 사용자 요청 시에만 한다(루트 `AGENTS.md` 5번).
 
 | 영역 | 내용 |
 |---|---|

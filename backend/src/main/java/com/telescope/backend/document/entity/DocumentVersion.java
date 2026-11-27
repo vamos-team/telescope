@@ -19,7 +19,7 @@ import java.time.LocalDate;
 /**
  * 문서의 버전. 실제 파일(저장소 키)과 발행 정보를 가진다.
  *
- * <p>불변이다. 모든 값이 만들 때 정해지고 이후 바뀌지 않는다(루트 {@code CLAUDE.md} 4번).
+ * <p>불변이다. 모든 값이 만들 때 정해지고 이후 바뀌지 않는다(루트 {@code AGENTS.md} 4번).
  * 자료 준비 상태는 여기 두지 않고 {@code jobId}의 {@code Job.status}에서 읽는다. 파싱 결과는
  * {@link DocumentPreparationResult}에 따로 쌓는다. 스키마는 {@code V4}, {@code V11}.
  *

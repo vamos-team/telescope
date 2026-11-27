@@ -1,7 +1,7 @@
 # GitHub 작업 규칙
 
 사람과 AI 에이전트(Claude Code, Codex 등)가 브랜치 · 커밋 · 푸시 · 이슈 · PR을 만들 때 따르는 규칙이다.
-에이전트는 이 문서와 루트 `AGENTS.md`(`CLAUDE.md`는 이 파일을 가리키는 링크)를 함께 따른다. 둘이 다르면 `AGENTS.md`가 우선한다.
+에이전트는 이 문서와 루트 `AGENTS.md`를 함께 따른다. 둘이 다르면 `AGENTS.md`가 우선한다.
 
 ## 1. 담당 영역
 
@@ -15,7 +15,7 @@
 | AI | `pipelines/`, `mcp-server/`, `ai/` (`ai/server` 제외) |
 | Infra | `infra/`, `.github/workflows/`, `docker-compose.yml` |
 
-- 루트 파일(`README.md`, `CLAUDE.md`, `AGENTS.md`, `.env.example`, `.gitignore`)은 사용자가 지시했을 때만 수정한다.
+- 루트 파일(`README.md`, `AGENTS.md`, `.env.example`, `.gitignore`)은 사용자가 지시했을 때만 수정한다.
 - 비밀 값(`.env`, API 키, 비밀번호, `.pem`)은 커밋하지 않는다.
 - `data/`는 폴더(`.gitkeep`)만 올라가고 안의 파일은 모두 git에서 제외된다. 팀원마다 로컬 내용이 다르므로 공유가 필요한 데이터는 따로 합의한다.
 
