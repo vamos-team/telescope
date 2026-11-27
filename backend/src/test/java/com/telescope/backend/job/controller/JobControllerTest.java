@@ -21,7 +21,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** 인증(401)은 user 이슈에서 Security가 붙은 뒤 추가한다. */
+/**
+ * 보안 필터 없이 컨트롤러 응답만 본다. 이 경로는 공개 경로가 아니라 로그인이 필요하고({@code 401}, 보안 설정),
+ * 경로별 {@code 401}은 캔버스·문서·적재 컨트롤러 테스트에서 확인한다.
+ */
 class JobControllerTest {
 
     JobService jobService = Mockito.mock(JobService.class);
