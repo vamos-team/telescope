@@ -2,6 +2,7 @@
 
 형식: `- YYYY-MM-DD 무엇을 바꿨는지 (관련 파일)`. 최신이 위로 오게 쌓는다. 규칙은 [AGENTS.md](AGENTS.md).
 
+- 2026-11-27 #179 배포 이미지를 서버 연결 모드로 빌드(`ARG VITE_CANVAS_SYNC=server`, 데모 이미지는 `--build-arg VITE_CANVAS_SYNC=local`). 로컬 개발 · 데모 · Electron은 그대로 local 기본 (Dockerfile)
 - 2026-11-27 #150(범위 밖 수정) 다른 사람이 만든 빈 메모에 처음 쓴 글이 새로고침해야 보이던 문제 수정: 손대지 않은 입력 칸은 받은 글로 바꿈. 쓰는 중으로 열기 · 자동 포커스는 내가 만든 메모만(다른 사람이 메모를 만들 때 내 입력 포커스를 뺏지 않게) (src/components/MemoEditor.vue, src/components/memoDraft.ts, src/components/nodes/MemoNode.vue, src/stores/canvas.ts)
 - 2026-11-27 #150 서버 모드의 페이지 홈(목록 · 만들기 · 이름 바꾸기 · 지우기), 공유 명단(GET · PUT), 사람 찾기(GET /users?q=, 입력이 멈추면 부르고 빈 칸은 안내), 활동 로그를 backend에 연결. 메모 · 선 메모 · 다른 사람 변경 · 커서 · 접속자에 서버가 준 이름 표시, 홈 · 왼쪽 패널에 내 직무. 서버 모드는 브라우저에 캔버스를 저장하지 않음 (src/stores/canvas.ts, src/sync/http.ts, src/sync/protocol.ts, src/sync/realtime.ts, src/sync/snapshot.ts, src/components/usePeopleSearch.ts, src/components/HomeView.vue, src/components/PageInfo.vue, src/components/NewCanvasDialog.vue, src/components/LeftPanel.vue, src/App.vue)
 - 2026-11-27 #158 분석 세션 주석을 캔버스 권한 규칙에 맞게 수정 (src/stores/canvas.ts)
