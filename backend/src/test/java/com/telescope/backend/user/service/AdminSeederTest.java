@@ -3,12 +3,16 @@ package com.telescope.backend.user.service;
 import com.telescope.backend.user.entity.User;
 import com.telescope.backend.user.entity.UserRole;
 import com.telescope.backend.user.repository.UserRepository;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
-import org.springframework.boot.test.system.CapturedOutput;
-import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,12 +28,26 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /** 첫 관리자 시드: 설정 없음, 새로 만듦, 이미 있음(관리자·일반 사용자), 설정 실수. */
-@ExtendWith(OutputCaptureExtension.class)
 class AdminSeederTest {
 
     UserRepository userRepository = Mockito.mock(UserRepository.class);
     // 테스트 속도를 위해 해시 강도를 최소로 둔다
     PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
+
+    // 콘솔 출력 형식은 앞서 뜬 Spring 컨텍스트 여부에 따라 달라지므로, 로그 이벤트를 직접 받아 레벨과 메시지를 본다
+    Logger seederLogger = (Logger) LoggerFactory.getLogger(AdminSeeder.class);
+    ListAppender<ILoggingEvent> logs = new ListAppender<>();
+
+    @BeforeEach
+    void attachLogs() {
+        logs.start();
+        seederLogger.addAppender(logs);
+    }
+
+    @AfterEach
+    void detachLogs() {
+        seederLogger.detachAppender(logs);
+    }
 
     void seed(String employeeNo, String password, String name) {
         new AdminSeeder(new AdminProperties(employeeNo, password, name), userRepository, passwordEncoder).run(null);
@@ -67,17 +85,20 @@ class AdminSeederTest {
     }
 
     @Test
-    void 관리자가_이미_있으면_건너뛰고_바꾸지_않는다(CapturedOutput output) {
+    void 관리자가_이미_있으면_건너뛰고_바꾸지_않는다() {
         when(userRepository.findByEmployeeNo("A0001")).thenReturn(Optional.of(existing(UserRole.ADMIN)));
 
         seed("A0001", "admin-password", "관리자");
 
         verify(userRepository, never()).saveAndFlush(any());
-        assertThat(output).contains("이미 있어 관리자 시드를 건너뜁니다").doesNotContain("관리자를 만들지 않았습니다");
+        assertThat(logs.list).singleElement().satisfies(e -> {
+            assertThat(e.getLevel()).isEqualTo(Level.INFO);
+            assertThat(e.getFormattedMessage()).contains("이미 있어 관리자 시드를 건너뜁니다");
+        });
     }
 
     @Test
-    void 관리자_사번을_일반_사용자가_쓰고_있으면_역할을_바꾸지_않고_경고한다(CapturedOutput output) {
+    void 관리자_사번을_일반_사용자가_쓰고_있으면_역할을_바꾸지_않고_경고한다() {
         User squatter = existing(UserRole.USER);
         when(userRepository.findByEmployeeNo("A0001")).thenReturn(Optional.of(squatter));
 
@@ -85,7 +106,10 @@ class AdminSeederTest {
 
         verify(userRepository, never()).saveAndFlush(any());
         assertThat(squatter.getRole()).isEqualTo(UserRole.USER);
-        assertThat(output).containsPattern("WARN .*AdminSeeder -- 관리자 사번 A0001을 USER 계정");
+        assertThat(logs.list).singleElement().satisfies(e -> {
+            assertThat(e.getLevel()).isEqualTo(Level.WARN);
+            assertThat(e.getFormattedMessage()).contains("관리자 사번 A0001을 USER 계정", "관리자를 만들지 않았습니다");
+        });
     }
 
     private User existing(UserRole role) {
