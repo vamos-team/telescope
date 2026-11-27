@@ -2,6 +2,7 @@
 
 형식: `- YYYY-MM-DD 무엇을 바꿨는지 (관련 파일)`. 최신이 위로 오게 쌓는다. 규칙은 [AGENTS.md](AGENTS.md).
 
+- 2026-11-27 hotfix 로그인 화면의 회원가입 링크를 숨김(관리자 승인 절차가 생길 때까지). 회원가입 폼 코드는 남겨 두고 `SIGNUP_OPEN`으로 되돌릴 수 있게 함 (src/components/LoginView.vue)
 - 2026-11-27 #170 리뷰 반영: 새 페이지 공유 저장 실패 안내가 페이지를 연 뒤에도 남게 함, 남의 카드 메모나 닿는 선 메모가 있는 카드는 지우지 않음 (src/stores/canvas.ts, src/stores/__tests__/memoOwner.test.ts)
 - 2026-11-27 #170 연결 바의 `메모 입력` · `메모 보기`를 누르면 `수정` 없이 바로 입력칸으로(선을 골라 자동으로 펼친 메모는 보기 그대로) (src/App.vue, src/components/MemoEditor.vue)
 - 2026-11-27 #170 새 페이지에서 초대할 사람마다 권한(편집 · 보기) 선택(보기 권한은 만든 뒤 PUT /shares), `/` 키로 마우스 커서 위치에 메모 카드 추가, 메모(메모 카드 · 선 메모 · 카드 메모)는 단 사람만 고치고 지움(작성자 id로 판단, 전체 지우기는 예외), 메모 목록 아바타를 사람 아이콘으로, 홈 왼쪽 메뉴 폭을 캔버스 사이드바(264px)에 맞추고 맨 아래 사용자를 이름 / 부서 / 직무 3줄로 (src/App.vue, src/components/NewCanvasDialog.vue, src/components/nodes/MemoNode.vue, src/components/LeftPanel.vue, src/components/HomeView.vue, src/stores/canvas.ts, src/sync/apply.ts, src/sync/snapshot.ts, src/style.css, 테스트)
