@@ -6,10 +6,15 @@
 - 판마다 다른 파일을 만든다: `<data_dir>/duckdb/finance-<dataSyncRunId>.duckdb`. 기존 판 파일은 건드리지 않는다
   (적재기가 `.tmp`로 만들고 검증한 뒤 이름을 바꾼다). 지금 쓸 판은 backend가 정한다(`DataVersion`).
 - 원본은 `<data_dir>/raw/`에 쌓는다. 이미 받은 파일은 수집기가 다시 받지 않는다.
+- 한 프로세스에서 적재는 한 번에 하나만 돈다(잠금). 실행끼리 같은 원본 폴더와 같은 임시 파일 이름(`.part`)을 쓰므로
+  둘이 겹치면 한쪽이 파일을 못 찾아 실패한다. backend가 한 번에 한 건만 시작하지만, 시작 응답을 못 받은 사이 다음
+  실행이 생기는 경우까지 막는다. ai/server는 한 프로세스로 돈다(작업 실행은 스레드). 여러 프로세스가 같은 폴더를
+  쓰게 되면 파일 잠금으로 바꿔야 한다.
 - 수집기·적재기는 무거운 의존성(duckdb, lxml, 임베딩 모델)을 쓰므로 실행할 때 불러온다.
 """
 
 import logging
+import threading
 from pathlib import Path
 from typing import Any, Callable
 
@@ -66,8 +71,15 @@ def make_data_sync_pipeline(
     결과: `{ "duckdbPath", "filings", "replaced", "collected": {고유번호: 수집기 통계} }`.
     """
     root = Path(data_dir)
+    lock = threading.Lock()
 
     def run(ctx: JobContext, payload: dict[str, Any]) -> dict[str, Any]:
+        """수집부터 새 판 파일까지 잠금 안에서 한다(원본 폴더를 실행끼리 나눠 쓰므로)."""
+        with lock:
+            return _run(ctx, payload)
+
+    def _run(ctx: JobContext, payload: dict[str, Any]) -> dict[str, Any]:
+        """회사별 수집 → 택소노미 → 받아 둔 zip 전체로 새 DuckDB 파일."""
         raw_dir = root / "raw"
         out = root / "duckdb" / f"finance-{payload['data_sync_run_id']}.duckdb"
         start = str(payload["start"]).replace("-", "")

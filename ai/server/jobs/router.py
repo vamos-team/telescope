@@ -100,10 +100,14 @@ def start_prediction(body: PredictionJobRequest, service: ServiceDep) -> JobStar
 
 @router.post("/data-sync", status_code=status.HTTP_202_ACCEPTED, response_model=JobStartResponse)
 def start_data_sync(body: DataSyncJobRequest, service: ServiceDep) -> JobStartResponse:
-    """재무 데이터 적재를 시작한다. 시작일이 종료일보다 늦으면 422."""
+    """재무 데이터 적재를 시작한다. 시작일이 종료일보다 늦으면 422.
+
+    같은 dataSyncRunId로 다시 오면 새로 만들지 않고 처음 만든 작업의 jobId를 돌려준다(멱등). backend가 시작 응답을
+    받지 못했거나 받은 번호를 저장하지 못했을 때 다시 보내기 때문이다.
+    """
     if body.start > body.end:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="start는 end보다 늦을 수 없습니다.")
-    job_id = service.create_job(JobType.DATA_SYNC, _payload(body))
+    job_id = service.create_job(JobType.DATA_SYNC, _payload(body), idempotency_key=body.data_sync_run_id)
     return JobStartResponse(job_id=job_id)
 
 

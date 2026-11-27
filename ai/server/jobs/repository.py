@@ -28,6 +28,16 @@ class JobRepository:
             )
             conn.commit()
 
+    def create_if_absent(self, job_id: str, job_type: JobType) -> bool:
+        """같은 job_id가 없을 때만 만든다. 만들었으면 True. 같은 요청이 동시에 두 번 와도 한쪽만 True다(기본 키)."""
+        with closing(connect(self._db_path)) as conn:
+            cur = conn.execute(
+                "INSERT OR IGNORE INTO jobs (job_id, job_type, status, created_at) VALUES (?, ?, ?, ?)",
+                (job_id, job_type.value, JobStatus.QUEUED.value, _now()),
+            )
+            conn.commit()
+            return cur.rowcount == 1
+
     def get(self, job_id: str) -> Job | None:
         with closing(connect(self._db_path)) as conn:
             row = conn.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
