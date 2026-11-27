@@ -18,7 +18,8 @@ class Settings(BaseSettings):
     # TODO(#86 후속): 실제 자료 준비 파이프라인(Docling·임베딩 모델 동시 로드)이 붙으면 메모리 기준으로 기본값을 다시 정한다
     max_concurrent_jobs: int = Field(default=2, ge=1)
 
-    # fake: 모든 작업 종류에 가짜 구현. real: pipeline_entrypoint가 등록한 작업만 받는다
+    # fake: 모든 작업 종류에 가짜 구현(데이터 적재는 가짜로도 하지 않고 실패). real: 등록된 작업만 받고 나머지는 501
+    # (ai 등록 함수 pipeline_entrypoint가 붙인 작업 + datasync_data_dir가 있으면 데이터 적재)
     pipeline_mode: Literal["fake", "real"] = "fake"
     # real 모드에서 불러올 ai 담당 등록 함수. "모듈경로:함수명" (예: "ai.pipelines:register").
     # 함수는 register(registry: PipelineRegistry) -> None 모양이다
@@ -30,6 +31,10 @@ class Settings(BaseSettings):
     s3_bucket: str | None = None
     aws_region: str | None = None
     file_storage_dir: str | None = None
+
+    # 재무 데이터 적재(#135) 작업 폴더. 원본은 <dir>/raw, DuckDB 판 파일은 <dir>/duckdb/finance-<실행번호>.duckdb.
+    # real 모드에서 값이 있을 때만 데이터 적재를 받는다. DART API 키는 수집기가 OPENDART_API_KEY로 직접 읽는다
+    datasync_data_dir: str | None = None
 
     # 실제 파이프라인이 붙기 전까지 쓰는 가짜 구현의 동작
     fake_pipeline_mode: Literal["success", "fail"] = "success"
@@ -50,10 +55,8 @@ class Settings(BaseSettings):
         self.s3_bucket = self.s3_bucket or None
         self.aws_region = self.aws_region or None
         self.file_storage_dir = self.file_storage_dir or None
-        if self.pipeline_mode == "real" and self.pipeline_entrypoint is None:
-            raise ValueError("PIPELINE_MODE=real이면 PIPELINE_ENTRYPOINT가 필요합니다.")
+        self.datasync_data_dir = self.datasync_data_dir or None
         if self.s3_bucket is not None and self.aws_region is None:
             raise ValueError("S3_BUCKET이 설정됐지만 AWS_REGION이 비어 있습니다.")
-        if self.pipeline_mode == "real" and self.s3_bucket is None and self.file_storage_dir is None:
-            raise ValueError("PIPELINE_MODE=real이면 S3_BUCKET 또는 FILE_STORAGE_DIR이 필요합니다.")
+        # 자료 준비 원본 위치(S3_BUCKET 또는 FILE_STORAGE_DIR)는 자료 준비가 등록될 때 확인한다(jobs.registry)
         return self

@@ -18,8 +18,9 @@ public class JobController {
 
     /**
      * MVP: 로그인한 사용자라면 누구나 어떤 작업이든 조회할 수 있다. Job에 소유자 정보가 없어서
-     * 본인 작업만 보게 제한하지 못한다. 대상 도메인이 생기면 대상의 소유자 기준으로 좁힌다.
-     * 인증은 user 이슈에서 Security가 붙은 뒤 적용되므로 지금은 경로가 열려 있다.
+     * 본인 작업만 보게 제한하지 못한다. 대상 도메인 기준으로 좁힐지는 #151에서 정한다.
+     * 이 경로는 로그인이 필요하다. 보안 설정의 공개 경로(로그인·회원가입·헬스 체크·WebSocket 연결)가 아니어서
+     * 토큰이 없거나 틀리면 {@code 401}이다(#34).
      */
     @GetMapping("/{id}")
     public ApiResponse<JobResponse> getJob(@PathVariable Long id) {

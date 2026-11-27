@@ -4,11 +4,11 @@ import { computed, ref } from "vue";
 import { useCanvas, ALL_MEMBERS, QUARTERS, DEFAULT_QUARTER, findPeople } from "../stores/canvas";
 
 const cv = useCanvas();
-const name = ref(cv.defaultName()), quarter = ref(DEFAULT_QUARTER), editors = ref<string[]>([]);
+const name = ref(cv.defaultName()), quarter = ref(DEFAULT_QUARTER), editors = ref<number[]>([]);
 const q = ref(""), focused = ref(false);
 const found = computed(() => findPeople(q.value, new Set([cv.user!.id, ...editors.value]), cv.user!.dept));
 const people = computed(() => editors.value.map((id) => ALL_MEMBERS.find((m) => m.id === id)!));
-function add(id: string) { editors.value.push(id); q.value = ""; focused.value = false; }
+function add(id: number) { editors.value.push(id); q.value = ""; focused.value = false; }
 function blur(e: FocusEvent) { if (!(e.relatedTarget as HTMLElement | null)?.closest(".found")) focused.value = false; }
 const close = () => (cv.creating = false);
 async function create() { close(); await cv.newCanvas({ name: name.value, quarter: quarter.value, editors: editors.value }); }
@@ -29,7 +29,7 @@ async function create() { close(); await cv.newCanvas({ name: name.value, quarte
         <ul v-if="focused" class="found">
           <li v-if="!q.trim() && found.length" class="cap">추천</li>
           <li v-for="m in found" :key="m.id"><button type="button" @mousedown.prevent @click="add(m.id)">
-            <span class="av">{{ m.name[0] }}</span><b>{{ m.name }}</b><small>{{ m.id }} · {{ m.dept }} · {{ m.job }}</small></button></li>
+            <span class="av">{{ m.name[0] }}</span><b>{{ m.name }}</b><small>{{ m.employeeNo }} · {{ m.dept }} · {{ m.job }}</small></button></li>
           <li v-if="!found.length" class="none">찾는 사람이 없거나 이미 추가했습니다.</li>
         </ul>
       </div>

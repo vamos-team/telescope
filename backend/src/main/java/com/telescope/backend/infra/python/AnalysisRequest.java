@@ -14,7 +14,7 @@ import java.util.List;
  * {@code analysisRunId}, {@code profileSnapshotJson}은 자리만 잡아둔 형태다.
  * profile 패키지가 생기면 {@code profileSnapshotJson}(문자열)을 실제 스냅샷 타입으로 바꾼다.
  *
- * <p>{@code allowedDocumentVersionIds}, {@code asOfDate}는 CLAUDE.md의
+ * <p>{@code allowedDocumentVersionIds}, {@code asOfDate}는 AGENTS.md의
  * "허용 문서 범위와 기준 시점은 서버가 강제한다" 원칙에 따라 서버(backend)가 결정해서
  * 넘기는 값이다. ai 서비스가 임의로 넓히거나 무시할 수 없다.
  *

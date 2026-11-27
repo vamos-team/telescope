@@ -13,6 +13,7 @@ class JobType(StrEnum):
     DOCUMENT_PREPARATION = "document-preparation"
     ANALYSIS = "analysis"
     PREDICTION = "prediction"
+    DATA_SYNC = "data-sync"
 
 
 @dataclass(frozen=True)

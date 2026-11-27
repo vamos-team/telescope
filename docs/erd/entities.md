@@ -24,8 +24,8 @@ MVP에서 제외한 것: 팀 단위 프로필(설정), 팀 개념(`Team`), 콜�
 
 ## 2. 관계도
 
-> `Job`은 공통 테이블이지만 대상을 범용으로 가리키지 않는다. 자료 준비/분석/예측을 시작하는
-> 쪽(`DocumentVersion`/`AnalysisRun`/`PredictionRun`)이 각자 `jobId` FK로 `Job`을 가리키는
+> `Job`은 공통 테이블이지만 대상을 범용으로 가리키지 않는다. 자료 준비/분석/예측/데이터 적재를 시작하는
+> 쪽(`DocumentVersion`/`AnalysisRun`/`PredictionRun`/`DataSyncRun`)이 각자 `jobId` FK로 `Job`을 가리키는
 > 일대일 관계로 통일했다. `jobType`은 조인용이 아니라 필터링·표시용 메타데이터로만 쓴다.
 >
 > 관계 표기: 대상(`DocumentVersion`/`AnalysisRun`/`PredictionRun`)은 `jobId`로 `Job`을 반드시 하나 가진다.
@@ -85,16 +85,18 @@ erDiagram
     DATA_SYNC_RUN {
         bigint id PK
         string source
-        string status
-        datetime startedAt
-        datetime finishedAt
+        bigint jobId FK
+        bigint requestedBy FK
     }
     DATA_VERSION {
         bigint id PK
         bigint dataSyncRunId FK
         boolean isActive
+        string filePath
     }
     DATA_SYNC_RUN ||--o{ DATA_VERSION : "produces"
+    JOB ||--o| DATA_SYNC_RUN : "적재 작업"
+    USER |o--o{ DATA_SYNC_RUN : "requests (예약 실행은 없음)"
 
     ANALYSIS_RUN {
         bigint id PK
@@ -252,7 +254,7 @@ erDiagram
 
 ### 3.1 인증
 
-1. 사용자가 사번(`employeeNo`)과 비밀번호로 로그인하면 서버가 JWT를 발급한다. 계정 생성은 회원가입(역할 `USER`)과 배포 시 첫 관리자 시드로 할 예정이다(#133, 아직 구현 전).
+1. 사용자가 사번(`employeeNo`)과 비밀번호로 로그인하면 서버가 JWT를 발급한다. 계정은 회원가입(역할 `USER`)과 배포 시 첫 관리자 시드로 만든다(#133, `docs/backend/api-spec.md` 3.3·3.4).
 2. 이후 요청은 JWT로 사용자와 역할(`role`)을 판별한다. 권한은 서버가 강제한다.
 3. 사내 SSO 연동은 MVP 이후 과제다.
 
@@ -275,10 +277,10 @@ erDiagram
 
 ### 3.3 재무 데이터 적재
 
-1. Spring 스케줄러가 적재를 시작한다. 이미 실행 중인 적재가 있으면 건너뛴다(한 번에 한 건).
-2. `DataSyncRun`을 만들고 ai 서비스에 적재를 요청한다. ai의 loader가 새 DuckDB 파일을 만들고 검증한 뒤 교체한다.
-3. 성공하면 `DataVersion`을 새로 만들고 이전 버전의 `isActive`를 끈다. 이 전환은 한 트랜잭션에서 한다.
-4. 호출 계약(loader 실행 방식, 결과 파일 경로·버전 id 수신 방식)은 ai 담당자와 아직 맞추지 않았다.
+1. Spring 스케줄러(cron, 서울 시간) 또는 관리자 수동 실행이 적재를 시작한다. 이미 실행 중인 적재가 있으면 건너뛴다(DB 잠금, 한 번에 한 건).
+2. `Job`(`DATA_SYNC`)과 `DataSyncRun`을 만들고 ai/server에 적재를 요청한다. ai/server가 수집기로 DART에서 XBRL을 받고, 적재기로 판마다 다른 새 DuckDB 파일(`finance-<실행번호>.duckdb`)을 만든다.
+3. 결과는 backend 스케줄러가 주기적으로 확인한다(화면이 폴링하지 않으므로). 성공하면 `DataVersion`을 새로 만들고 이전 판의 `isActive`를 끈다. 이 전환은 한 트랜잭션에서 한다.
+4. 호출 계약은 `docs/backend/ai-contract.md` 2.13, 설계와 결정 이유는 `docs/backend/datasync.md`(#135).
 
 전체 그림은 아래와 같다. `DataSyncRun`은 작업 일지이고, `DataVersion`은 쓸 수 있는 "판"에 붙는 이름표다.
 
@@ -416,7 +418,7 @@ erDiagram
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `id` | bigint PK | |
-| `jobType` | string | `DOCUMENT_PREPARATION` / `ANALYSIS` / `PREDICTION`. 필터링·표시용 |
+| `jobType` | string | `DOCUMENT_PREPARATION` / `ANALYSIS` / `PREDICTION` / `DATA_SYNC`. 필터링·표시용 |
 | `status` | string | `QUEUED → RUNNING → SUCCEEDED/FAILED`. 역방향 전이 금지. 시작하지 못하고 실패한 작업을 위해 `QUEUED → FAILED`만 예외로 허용 |
 | `externalJobId` | string | ai 서비스가 발급한 jobId. `PythonAiClient.JobStartResponse.jobId`와 매핑 |
 | `errorMessage` | string | 실패 사유 |
@@ -434,10 +436,9 @@ erDiagram
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `id` | bigint PK | |
-| `source` | string | 적재 원천 |
-| `status` | string | 실행 상태 |
-| `startedAt` | datetime | 시작 시각 |
-| `finishedAt` | datetime | 종료 시각 |
+| `source` | string | 적재 원천(지금은 `dart_xbrl`) |
+| `jobId` | bigint FK | 적재 작업(`Job`, `DATA_SYNC`). 1 : 1. 실행 상태·시각은 여기서 읽는다(V14) |
+| `requestedBy` | bigint FK | 직접 실행한 관리자. 스케줄러가 시작했으면 비어 있다 |
 
 **DataVersion** — 적재 결과로 생긴 데이터 버전
 
@@ -445,7 +446,8 @@ erDiagram
 |---|---|---|
 | `id` | bigint PK | |
 | `dataSyncRunId` | bigint FK | 이 버전을 만든 적재 실행 |
-| `isActive` | boolean | 현재 활성 여부 |
+| `isActive` | boolean | 현재 활성 여부. 활성 판은 최대 하나다(부분 유일 색인). 첫 적재가 성공하기 전에는 없다 |
+| `filePath` | string | 이 판의 DuckDB 파일 위치. 판마다 다른 파일이라 지난 판도 남는다 |
 
 - 적재 결과 하나가 데이터 버전 하나다. 활성 여부는 바뀌지만 row 자체가 그 버전의 식별자라서 `AnalysisRun.dataVersionId`가 가리킨다.
 - DuckDB 파일은 backend가 열지 않는다. "어떤 버전이 활성인지"만 PostgreSQL 메타데이터로 보관한다.

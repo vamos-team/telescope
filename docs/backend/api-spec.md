@@ -8,7 +8,7 @@
 >
 > - 표시: **[현재]** 코드에 이미 있는 동작, **[제안]** 아직 코드가 없거나 팀 결정 전인 내용. 결정되면 [현재]로 바꾸고 10장에서 지운다.
 > - 프론트 명세와 이 문서가 다르면 이 문서의 규약을 따르고, 프론트 명세를 맞춰 고친다.
-> - `CLAUDE.md` 7장의 미정 항목은 여기서 정하지 않는다.
+> - `AGENTS.md` 7장의 미정 항목은 여기서 정하지 않는다.
 
 ## 1. 공통
 
@@ -19,9 +19,9 @@
 | 기본 경로 | `/api/v1`. 리소스는 명사 복수형 | [현재] |
 | 본문 | JSON, UTF-8. 파일 업로드만 `multipart/form-data` | [현재] |
 | 필드 이름 | camelCase | [현재] |
-| 인증 | 로그인으로 받은 토큰을 `Authorization: Bearer {accessToken}`으로 보낸다. 로그인·`/actuator/health` 외 모든 API에 필요 | [제안] #34 |
+| 인증 | 로그인으로 받은 토큰을 `Authorization: Bearer {accessToken}`으로 보낸다. 로그인·회원가입(`POST /api/v1/auth/login`, `/signup`), `GET /actuator/health`, 실시간 연결 주소(`GET /api/v1/ws`, 토큰은 STOMP `CONNECT`에서 검사) 외 모든 API에 필요. 없거나 틀리면 `401` | [현재] #34, #133 |
 | 시각 | ISO 8601, 시간대 표기 없음, 한국 시간(배포 파드 `TZ=Asia/Seoul`): `"2026-11-25T09:30:00"`. 날짜만은 `"2026-11-25"` | [현재] |
-| 금액 단위 | 원본 표는 공시 단위 그대로. 비교·근거 값의 십억원 변환은 코드가 한다(LLM에 맡기지 않음, `CLAUDE.md` 4번) | [제안] |
+| 금액 단위 | 원본 표는 공시 단위 그대로. 비교·근거 값의 십억원 변환은 코드가 한다(LLM에 맡기지 않음, `AGENTS.md` 4번) | [제안] |
 | 기준 시점·허용 자료 | 초안·질문·평가처럼 예측에 쓰는 요청은 `asOfDate`가 필수다. backend가 허용 자료를 정해 ai·mcp-server에 넘기고, 필터 결과가 비어도 전체 자료로 넘어가지 않는다 | [제안] |
 | 결과 보존 | 초안·질문·평가 결과는 고치지 않고 새로 쌓는다 | [제안] |
 | 실시간 | 캔버스의 다른 사람 변경·커서·접속자는 WebSocket(STOMP) `/api/v1/ws`로 받는다. 편집 저장은 HTTP로 한다 (5.5, 5.6, 선정 이유는 11장) | [제안] |
@@ -59,6 +59,7 @@
 | `A002` | 401 | 인증이 필요합니다. | 토큰 없음·형식 오류·위조 | [현재] |
 | `A003` | 401 | 인증이 만료되었습니다. | 토큰 만료 | [현재] |
 | `A004` | 403 | 권한이 없습니다. | 관리자 전용 기능을 `USER`가 호출 | [현재] |
+| `A005` | 409 | 이미 가입된 사번입니다. | 회원가입 사번이 이미 있거나 관리자 사번(`ADMIN_EMPLOYEE_NO`)과 같음. 둘을 구분하지 않음 | [현재] |
 | `K001` | 403 | 이 캔버스를 볼 권한이 없습니다. | 권한 없는 캔버스(공유가 풀림 포함) | [제안] |
 | `K002` | 403 | 이 캔버스를 수정할 권한이 없습니다. | 보기 권한으로 쓰기, 소유자 전용 기능을 다른 사람이 호출 | [제안] |
 | `K003` | 409 | 다른 사람이 먼저 글을 고쳤습니다. | 프롬프트 글의 기준 버전이 현재 버전과 다름 (5.3) | [제안] |
@@ -68,7 +69,7 @@
 - 코드 형식: 영역 접두사 한 글자 + 번호 세 자리. `C` 공통, `J` 작업, `A` 인증, `K` 캔버스, `D` 문서, `S` 외부 서비스.
 - 화면이 같은 코드 안에서 이유를 더 나눠야 하면 코드는 늘리지 않고 실패 응답의 `data`에 이유를 담는다(예: `K003`의 현재 글, `D001`의 `reason`).
 
-## 3. 인증·사용자 [현재] (#34, 회원가입·관리자 시드는 #133)
+## 3. 인증·사용자 [현재] (#34, 회원가입·관리자 시드 #133)
 
 ### 3.1 사용자 필드 (`User`)
 
@@ -90,8 +91,8 @@
 - 로그인은 사번 + 비밀번호(`POST /api/v1/auth/login`). 응답은 `{ accessToken, tokenType: "Bearer", expiresIn, user }`.
 - 토큰은 HS256 JWT, 만료 1시간(`JWT_ACCESS_TOKEN_EXPIRY`), 리프레시 토큰 없음. 서명 키 `JWT_SECRET`(32바이트 이상)이 없으면 기동하지 않는다.
 - 역할(`role`)은 토큰에 담긴 값을 쓴다. 요청마다 DB를 조회하지 않는 대신, 역할이 바뀌어도 기존 토큰이 만료될 때까지(토큰 만료 시간 `JWT_ACCESS_TOKEN_EXPIRY`만큼, 기본 1시간) 예전 역할로 동작한다. 만료 시간을 늘리면 이 지연도 그만큼 길어진다. 캔버스 공유 권한은 요청마다 DB에서 확인하므로 이 영향이 없다.
-- 공개 경로: `GET /actuator/health`(하위 프로브 포함), `POST /api/v1/auth/login`, `GET /api/v1/ws`(WebSocket 연결. 인증은 STOMP `CONNECT`에서 같은 토큰 검증으로 한다). 그 밖은 모두 인증이 필요하다.
-- 계정 만들기(결정 2026-11-27, 구현 #133): **회원가입은 누구나** 한다(사번·비밀번호·이름, 역할은 항상 `USER`, 같은 사번은 다시 가입할 수 없음). **첫 관리자는 배포 때 환경변수로 시드**한다. 회원가입으로는 `ADMIN`이 생기지 않는다.
+- 공개 경로: `GET /actuator/health`(하위 프로브 포함), `POST /api/v1/auth/login`, `POST /api/v1/auth/signup`, `GET /api/v1/ws`(WebSocket 연결. 인증은 STOMP `CONNECT`에서 같은 토큰 검증으로 한다). 그 밖은 모두 인증이 필요하다.
+- 계정 만들기(결정 2026-11-27, #133): **회원가입은 누구나** 한다(역할은 항상 `USER`, 같은 사번은 다시 가입할 수 없음, 3.3). **첫 관리자는 배포 때 환경변수로 시드**한다(3.4). 회원가입으로는 `ADMIN`이 생기지 않는다.
 - 로그아웃은 서버 호출 없이 토큰을 버린다.
 - 사용자 검색(`GET /api/v1/users?q=`)은 사번·이름·부서 일부로 찾는다. 응답에 `role`은 담지 않는다.
 
@@ -101,6 +102,44 @@
 | `Authorization` 헤더 없음, `Bearer` 형식 아님, 서명 위조 | 401 | `A002` |
 | 토큰 만료 | 401 | `A003` |
 | 관리자 전용 기능을 `USER`가 호출 | 403 | `A004` |
+| 회원가입 사번이 이미 있음, 관리자 사번으로 가입 | 409 | `A005` |
+| 회원가입 필수값 누락, 비밀번호 규칙 위반 | 400 | `C001` |
+
+### 3.3 회원가입 `POST /api/v1/auth/signup`
+
+요청:
+
+| 필드 | 필수 | 규칙 |
+|---|---|---|
+| `employeeNo` | ○ | 공백 불가, 100자 이하. 앞뒤 공백은 지우고 저장 |
+| `password` | ○ | 8자 이상, UTF-8 72바이트 이하(BCrypt 상한). 해시로만 저장 |
+| `name` | ○ | 공백 불가, 100자 이하. 앞뒤 공백은 지우고 저장 |
+| `dept` | | 100자 이하. 비우거나 공백이면 `null` |
+| `job` | | 100자 이하. 비우거나 공백이면 `null` |
+
+```json
+{ "employeeNo": "1001", "password": "password-1", "name": "김예산", "dept": "재무팀", "job": "재무기획" }
+```
+
+- 응답은 `201`, 본문은 로그인 응답과 같다(`{ accessToken, tokenType, expiresIn, user }`). 가입하면 바로 로그인한 상태가 된다.
+- `role`은 요청으로 받지 않는다. 보내도 무시하고 항상 `USER`로 만든다.
+- 관리자 사번(`ADMIN_EMPLOYEE_NO`)으로는 가입할 수 없다(`A005`). 시드 전에 일반 사용자가 관리자 사번을 먼저 차지하지 못하게 한다.
+
+### 3.4 첫 관리자 시드
+
+서버가 뜰 때 한 번 환경변수를 읽어 `ADMIN` 계정을 만든다.
+
+| 환경변수 | 설명 |
+|---|---|
+| `ADMIN_EMPLOYEE_NO` | 관리자 사번 |
+| `ADMIN_PASSWORD` | 관리자 비밀번호. 3.3과 같은 규칙. 배포에서는 Secret으로 넣는다 |
+| `ADMIN_NAME` | 표시 이름(선택). 비우면 `관리자` |
+
+- 사번·비밀번호가 둘 다 비면 아무것도 하지 않는다. 한쪽만 있거나, 비밀번호가 규칙에 맞지 않거나, 사번·이름이 100자를 넘으면 기동하지 않는다.
+- 그 사번이 이미 있으면 건너뛰고 역할·비밀번호를 바꾸지 않는다. 그 계정이 `USER`면 관리자 자리가 막힌 것이므로 경고 로그를 남긴다.
+- 서버 여러 대가 동시에 떠 저장이 고유 제약에 걸리면 사번을 다시 조회해, 있으면 위와 같이 건너뛰고 없으면 기동을 멈춘다(다른 제약 위반을 숨기지 않는다).
+- 값 없이 배포한 사이에 누가 그 사번으로 가입하면 관리자를 만들 수 없으므로, 첫 배포부터 넣는다.
+- 비밀번호는 로그에 남기지 않는다.
 
 ## 4. 캔버스 권한 [제안] (#82)
 
@@ -123,10 +162,20 @@
 - 권한은 HTTP 요청과 실시간 구독 모두에서 서버가 확인한다. 공유가 풀린 사람은 다음 요청부터 `K001`을 받고, 열어 둔 실시간 구독도 끊긴다.
 - 공유 설정 변경과 그 결과는 활동 로그에 남는다.
 - 캔버스 목록은 내가 소유했거나 초대받은 캔버스다. 각 항목에 내 권한(`owner` / `edit` / `view`)을 담는다.
+- **사람 정보 모양 [현재] (#149)**: 캔버스 응답과 실시간 메시지의 사람은 `{ "id": 2, "name": "박망", "dept": "네트워크센터" }`이다(소유자 `owner`, 마지막 수정자 `updatedBy`, 카드 `createdBy`, 선 메모 `memoBy`, 활동 로그 `author`, 실시간 `author`·`user`). 사용자가 없으면 `name`·`dept`는 `null`, 부서가 없으면 `dept`만 `null`.
+- **공유 명단 응답 [현재]** (`GET`·`PUT /api/v1/canvases/{id}/shares`): 요청은 `{ "members": [{ "userId": 2, "role": "edit" }] }` 그대로다.
+
+```json
+{
+  "ownerId": 1,
+  "owner": { "id": 1, "name": "이재무", "dept": "네트워크센터" },
+  "members": [ { "userId": 2, "role": "edit", "name": "박망", "dept": "네트워크센터" } ]
+}
+```
 - 삭제는 목록에서 숨기는 방식(삭제 표시)을 제안한다. 그 캔버스로 만든 초안·질문·평가 결과는 남는다.
 - **결과물 조회 범위 (결정)**: 캔버스에서 만든 초안·질문·평가는 만든 사람만이 아니라 **그 캔버스에 권한이 있는 사람 모두**가 본다.
   결과물에는 만든 사람(`createdBy`)을 남긴다. 공유가 풀리면 그 캔버스의 결과물도 볼 수 없다.
-  루트 `CLAUDE.md` 1번 "분석·예측 결과는 요청한 본인만 조회한다"를 이 규칙으로 바꿔야 한다(#79).
+  루트 `AGENTS.md` 1장도 이 규칙을 따른다(#79).
 
 ## 5. 캔버스 실시간 동시 편집 [제안] (#82, #83, #84)
 
@@ -226,7 +275,7 @@
   "firstSeq": 41,
   "lastSeq": 43,
   "requestId": "6f1c2a1e-6c1e-4d0f-9a43-7d3f8a0b9c21",
-  "author": { "id": 2, "name": "박망" },
+  "author": { "id": 2, "name": "박망", "dept": "네트워크센터" },
   "events": [ { "type": "move_card", "cardId": "0d9f…", "x": 140, "y": 96 } ],
   "textVersions": { "7a21…": { "memo": 4 } }
 }
@@ -252,15 +301,15 @@
 { "x": 512.5, "y": 230.0 }
 ```
 
-- 서버가 보내는 커서 메시지: `{ "user": { "id": 2 }, "x": 512.5, "y": 230.0 }`. 보낸 사람도 받으므로 화면은 `user.id`가 자기면 무시한다.
+- 서버가 보내는 커서 메시지: `{ "user": { "id": 2, "name": "박망", "dept": "네트워크센터" }, "x": 512.5, "y": 230.0 }`. 보낸 사람도 받으므로 화면은 `user.id`가 자기면 무시한다.
   (보낸 사람만 빼려면 받는 사람마다 따로 보내야 해서 메시지가 늘어난다. `docs/backend/canvas.md` D18)
-- 접속자: 구독하면 `{ "type": "join", "user": {…} }`, 연결이 끊기거나 구독을 풀면 `{ "type": "leave", "user": {…} }`를 보낸다. 지금 접속자 목록은 `/app/canvases/{id}/presence`를 구독하면 한 번 받는다(`{ "users": [{ "id": 1 }] }`).
+- 접속자: 구독하면 `{ "type": "join", "user": {…} }`, 연결이 끊기거나 구독을 풀면 `{ "type": "leave", "user": {…} }`를 보낸다. 지금 접속자 목록은 `/app/canvases/{id}/presence`를 구독하면 한 번 받는다(`{ "users": [{ "id": 1, "name": "이재무", "dept": "네트워크센터" }] }`). 이름·부서는 구독할 때 한 번 읽은 값이다(`canvas.md` 8장 N2).
 - 한 사람이 창을 여러 개 열어도 접속자 목록에는 한 번만 나온다.
 
 ## 6. 구현 담당
 
 화면은 backend만 부른다. backend가 인증·캔버스 권한·기준 시점을 확인한 뒤 필요한 곳을 대신 부른다.
-DuckDB·ChromaDB는 backend가 직접 열지 않는다(`CLAUDE.md` 3번).
+DuckDB·ChromaDB는 backend가 직접 열지 않는다(`AGENTS.md` 3번).
 
 | 표시 | 뜻 |
 |---|---|
@@ -288,6 +337,7 @@ DuckDB·ChromaDB는 backend가 직접 열지 않는다(`CLAUDE.md` 3번).
 | 초안 생성, 질문 생성 | AI작업 |
 | 평가 | 10장 미정 |
 | 작업 상태 | BE |
+| 재무 데이터 적재 실행·이력 (관리자) | BE → AI작업 (7.4) |
 
 - `mcp-server/http`의 담당 범위와 조회 함수 규약, ai/server 동기 API 규약은 ai 담당자와 확정한다(10장).
 - 공시·문서 같은 공용 자료는 로그인 사용자 모두 조회한다. 캔버스 맥락의 조회(추천, 비교 등)는 캔버스 권한을 먼저 확인한다.
@@ -325,7 +375,7 @@ ai 서비스가 발급한 ID(`externalJobId`)는 화면에 노출하지 않는�
 | 404 | `C002` | 없는 작업 |
 
 - ai 호출이 일시적으로 실패해도 에러를 내지 않고 마지막 저장 상태를 돌려준다(`job.md` 3.3).
-- 지금은 인증 없이 열려 있다. #34 이후 인증이 필요하다.
+- 로그인이 필요하다(없거나 틀린 토큰은 `401`, 1.1). 로그인한 사용자는 누구의 작업이든 조회할 수 있다(MVP). 범위를 좁힐지는 #151.
 
 ### 7.3 사용자 문서 업로드 [결정] (#111)
 
@@ -351,9 +401,21 @@ ai 서비스가 발급한 ID(`externalJobId`)는 화면에 노출하지 않는�
 | `404` `C002` | 캔버스 없음(삭제 포함) |
 | `413` `C001` | 50MB 초과 ("파일이 너무 큽니다 (최대 50MB).") |
 
-- 허용 형식(임시): `pdf, xlsx, xlsm, csv, pptx, html, htm, xml, txt, md, json`. 업로드 정책이 정해지면 바꾼다(루트 `CLAUDE.md` 7장).
+- 허용 형식(임시): `pdf, xlsx, xlsm, csv, pptx, html, htm, xml, txt, md, json`. 업로드 정책이 정해지면 바꾼다(루트 `AGENTS.md` 7장).
 - `GET /jobs/{jobId}`가 `SUCCEEDED`가 되면 `GET /api/v1/documents/{id}`로 카드 데이터(`Doc`)를 받는다. 업로드 문서는 그 캔버스 권한자(소유자·편집·보기)만 조회한다.
   `kind`는 `internal`, `publisher`는 `사내 업로드`, `url`은 빈 값, `uploaded`는 `true`. 준비 전에는 `summary`가 비어 있고 `figures`·`tags`는 빈 목록이다.
+
+### 7.4 재무 데이터 적재 (관리자) [결정] (#135)
+
+설계와 결정 이유는 `docs/backend/datasync.md`. 두 API 모두 `ADMIN`만(아니면 `403 A004`).
+
+| API | 응답 |
+|---|---|
+| `POST /api/v1/data-sync-runs` | 새로 시작 `202`, 이미 진행 중이면 `200`(그 실행). 대상 회사가 설정되지 않았으면 `400 C001` |
+| `GET /api/v1/data-sync-runs` | 최근 실행 20건 |
+
+응답(실행 하나): `{ id, source, requestedBy, createdAt, jobId, status, startedAt, finishedAt, errorMessage, dataVersionId, active }`.
+진행은 `GET /api/v1/jobs/{jobId}`로도 본다. 예약 실행은 서버가 매일 정해진 시각(배포 설정 `DATASYNC_CRON`)에 시작한다.
 
 ## 8. 코드와의 대응
 
@@ -361,12 +423,14 @@ ai 서비스가 발급한 ID(`externalJobId`)는 화면에 노출하지 않는�
 |---|---|
 | 1.2 응답 형식 | `global.response.ApiResponse`, `ErrorResponse` |
 | 1.3 목록 | `global.response.PageResponse` |
-| 2 에러 코드 | `global.exception.ErrorCode`, `GlobalExceptionHandler` (`A`, `K`, `S`는 아직 없음) |
-| 3 인증·사용자 | 없음 (#34) |
-| 4·5 캔버스 | 없음 (#82, #83) |
-| 5.5·5.6 실시간 | 없음 (#83. `spring-boot-starter-websocket` 추가 필요) |
+| 2 에러 코드 | `global.exception.ErrorCode`, `GlobalExceptionHandler` (`S`는 아직 없음) |
+| 3 인증·사용자 | `user.controller.AuthController`·`UserController`, `user.service.AuthService`·`UserService`·`AdminSeeder`, `global.auth.SecurityConfig`·`JwtAuthenticationFilter`·`JwtTokenProvider` |
+| 4·5 캔버스 | `canvas.controller.CanvasController`, `canvas.service.CanvasService` |
+| 5.5·5.6 실시간 | `global.config.WebSocketConfig`, `global.auth.StompAuthChannelInterceptor`, `canvas.controller.CanvasStompInterceptor`·`CanvasOutboundInterceptor`·`CanvasRealtimeController` |
 | 6 MCP | 없음 (`mcp-server/http`, backend 호출 클라이언트) |
 | 7.2 작업 상태 | `job.controller.JobController`, `job.dto.JobResponse` |
+| 7.3 사용자 문서 업로드 | `document.controller.DocumentController`, `document.service.DocumentService` |
+| 7.4 재무 데이터 적재 | `datasync.controller.DataSyncController`, `datasync.service.DataSyncService`·`DataSyncScheduler` |
 
 ## 9. 프론트 명세에 반영할 것
 
@@ -391,17 +455,18 @@ ai 서비스가 발급한 ID(`externalJobId`)는 화면에 노출하지 않는�
 |---|---|---|---|
 | 화면 STOMP 클라이언트 라이브러리와 버전 | 5.5 | `@stomp/stompjs`. 버전은 후보와 근거를 보여 주고 확인받아 고정 | #84 |
 | backend를 여러 파드로 늘릴 때 메시지 공유 | 5.5, 11장 | 지금은 파드 1개라 서버 안 메모리 브로커. 늘리면 PostgreSQL `LISTEN/NOTIFY` 또는 외부 브로커 | #83, infra |
-| 루트 `CLAUDE.md` 1번(결과물 권한)·MVP 기능 갱신, 기획서 F-08 등급 | 4장, 5장 | 결과물은 캔버스 권한자 모두, 실시간 동시 편집·커서 공유는 MVP(must) | #79, 기획 |
+| 루트 `AGENTS.md` 1번(결과물 권한)·MVP 기능 갱신, 기획서 F-08 등급 | 4장, 5장 | 결과물은 캔버스 권한자 모두, 실시간 동시 편집·커서 공유는 MVP(must) | #79, 기획 |
 | 캔버스 삭제 방식 | 4장 | 삭제 표시, 결과물 유지 | #82 |
 | 초안을 job `ANALYSIS`, 질문을 job `PREDICTION`으로 쓸지 | 7.1 | 그대로 쓰고 대상 ID를 시작 응답에 담음 | 작업별 이슈 |
 | 평가의 동기·비동기 | 6 | 계산이 가벼우면 동기 | ai 담당 |
 | 결과물 양식의 출처 | 6 | 설정 파일을 backend가 읽어 돌려줌. 양식은 기획서 열린 질문 2 | ai·기획 |
 | `mcp-server/http` 담당 범위, 조회 함수 규약 | 6 | `mcp-server/http`는 backend, 조회 함수는 ai | 팀, ai 담당 |
 | ai/server 동기 API 규약 | 6 | `ai-contract.md`에 동기 조회 절 추가 | ai 담당 |
-| 업로드 허용 형식, 업로드 문서 정책 | 6, 7.3 | 허용 형식은 파서 지원 형식으로 임시 제한(#111). 보관·삭제·만료는 미정 | `CLAUDE.md` 7장 |
+| 업로드 허용 형식, 업로드 문서 정책 | 6, 7.3 | 허용 형식은 파서 지원 형식으로 임시 제한(#111). 보관·삭제·만료는 미정 | `AGENTS.md` 7장 |
 | 액세스 토큰 만료 시간 | 3.2 | **결정**: 1시간(설정으로 조정) | #34 |
 | 리프레시 토큰 | 3.2 | **결정**: MVP 제외(만료되면 다시 로그인) | #34 |
-| 최초 관리자 계정, 회원가입 | 3.2 | **결정**(2026-11-27): 회원가입은 누구나(역할 `USER`), 첫 관리자는 배포 시 환경변수로 시드. (이전 제안 "회원가입 MVP 제외"는 기획에서 정한 것이 아니어서 바꿈) | #133 |
+| 최초 관리자 계정, 회원가입 | 3.2~3.4 | **결정**(2026-11-27): 회원가입은 누구나(역할 `USER`), 첫 관리자는 배포 시 환경변수로 시드. (이전 제안 "회원가입 MVP 제외"는 기획에서 정한 것이 아니어서 바꿈) | #133 |
+| 회원가입 응답, 비밀번호 규칙 | 3.3 | **결정**: 가입하면 토큰까지 발급(바로 로그인). 비밀번호 8자 이상, 72바이트 이하 | #133 |
 | 사용자 관리 API | 3 | 회원가입이 생겨 관리자용 생성은 필요 없어짐. 관리자의 목록·수정·역할 변경은 MVP 밖(필요해지면 이슈) | #133 |
 | 에러 코드 접두사 | 2 | 표대로 (`C`, `J`, `A`, `K`, `S`) | 이 문서 |
 | 작업 폴링 간격 | 7.2 | 2초, 1분 넘게 `RUNNING`이면 5초 | 이 문서 |
@@ -420,7 +485,7 @@ ai 서비스가 발급한 ID(`externalJobId`)는 화면에 노출하지 않는�
 | R4 | 권한(소유자·편집·보기)을 연결할 때와 메시지마다 확인하고, 공유가 풀리면 바로 막는다 | 4장 |
 | R5 | 기존 인증(JWT)을 쓰고 토큰을 주소에 넣지 않는다 | 3장, 로그 노출 방지 |
 | R6 | 배포 환경에서 동작한다: backend 파드 1개, Ingress(nginx, TLS), 경로 `/api` | `infra/k8s` |
-| R7 | 지금 스택을 유지한다: Spring MVC(서블릿). WebFlux로 바꾸지 않는다 | `backend/CLAUDE.md` 1번 |
+| R7 | 지금 스택을 유지한다: Spring MVC(서블릿). WebFlux로 바꾸지 않는다 | `backend/AGENTS.md` 1번 |
 
 ### 11.2 후보
 

@@ -57,6 +57,14 @@ public class PythonAiClientStub implements PythonAiClient {
         return startJob("prediction", request.analysisRunId());
     }
 
+    /**
+     * 가짜 구현은 재무 데이터를 적재하지 않는다. 시작을 거절해, 파일이 없는 판이 활성화되지 않게 한다.
+     */
+    @Override
+    public JobStartResponse startDataSync(DataSyncRequest request) {
+        throw new AiCallRejectedException("가짜 ai에서는 재무 데이터를 적재하지 않습니다.");
+    }
+
     @Override
     public JobStatusResponse getJobStatus(String jobId) {
         Instant startedAt = startedAtByJobId.get(jobId);

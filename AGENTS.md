@@ -24,7 +24,7 @@ MVP 제외: 콜백(작업 상태는 폴링으로 조회), 사내 데이터 연�
 |---|---|---|
 | docs | `docs/` | 설계 문서 |
 | frontend | `frontend/` | Vue 3 + TypeScript |
-| backend | `backend/` | Spring Boot API 서버. 세부 규칙은 `backend/CLAUDE.md` |
+| backend | `backend/` | Spring Boot API 서버. 세부 규칙은 `backend/AGENTS.md` |
 | ai | `pipelines/`, `mcp-server/`, `ai/` | 수집, 파싱, 적재, 조회 도구, 분석·예측 서비스 |
 | infra | `infra/`, `.github/workflows/`, `docker-compose.yml` | CI/CD, 실행 환경 |
 
@@ -41,7 +41,7 @@ MVP 제외: 콜백(작업 상태는 폴링으로 조회), 사내 데이터 연�
 - **사용자가 지정한 영역의 폴더 안에서만 작업한다.** 담당은 기본적으로 폴더 단위이지만, 이
   문서가 하위 폴더별로 담당을 따로 적어둔 경우(`ai/server` 등)는 그 하위 폴더 단위를 따른다.
 - 다른 영역의 파일을 바꿔야 하면 수정하지 말고 멈춘다. 무엇을 왜 바꿔야 하는지 알리고 담당자와 논의한 뒤 진행한다.
-- 루트 파일(`README.md`, `CLAUDE.md`, `.env.example`, `.gitignore`)은 사용자가 지시했을 때만 수정한다.
+- 루트 파일(`README.md`, `AGENTS.md`, `.env.example`, `.gitignore`)과 저장소 설정(`.github/`, `.claude/`)은 사용자가 지시했을 때만 수정한다.
 - **`.gitignore`는 Claude가 임의로 고치지 않는다.** 로컬 파일(OS 메타데이터, 에디터 설정 등)이 추적되거나 리뷰에 걸려도
   규칙을 추가·삭제하지 말고, 필요한 규칙과 이유를 알린 뒤 사용자 지시를 기다린다. 개인 환경 파일은 `.git/info/exclude`를 안내한다.
 
@@ -69,6 +69,8 @@ MVP 제외: 콜백(작업 상태는 폴링으로 조회), 사내 데이터 연�
 
 ## 5. 작업 방식
 
+커밋 · 푸시 · 이슈 · PR의 세부 형식(라벨 · 담당자 · 프로젝트, CI · 봇 리뷰 확인 포함)은 `.github/CONTRIBUTING.md`를 따른다. 이 장과 다르면 이 장이 우선한다.
+
 ### 브랜치 (Git Flow)
 - `main`: 배포용. 머지되면 GitHub Actions가 이미지를 올리고 Argo CD가 K8s 클러스터에 자동 배포한다.
 - `develop`: 통합용. 모든 개발 브랜치의 기준이다.
@@ -92,12 +94,12 @@ MVP 제외: 콜백(작업 상태는 폴링으로 조회), 사내 데이터 연�
 - **`git commit`, `git push`, PR 생성은 사용자가 요청할 때만 한다.**
 
 ### 이슈
-- 제목: `[작업 영역] 이슈명` — 예: `[backend] 회사 조회 API 추가`
+- 제목: `[작업 영역] 이슈명` — 영역 첫 글자는 대문자. 예: `[Backend] 회사 조회 API 추가`
 - 본문은 `.github/ISSUE_TEMPLATE/task.md`를 먼저 읽고 그 형식을 따른다. 섹션 이름과 순서를 바꾸지 않는다.
 - 이슈를 실제로 등록하는 것은 사용자가 요청할 때만 한다. 기본은 초안만 작성한다.
 
 ### PR
-- 제목: `[작업 영역] PR명 #이슈번호`
+- 제목: `[작업 영역] PR명 #이슈번호` — 영역 첫 글자는 대문자. 예: `[Frontend] API 명세서 정리 #136`
 - 본문은 `.github/pull_request_template.md`를 먼저 읽고 그 형식을 따른다. 템플릿 주석의 지시(해당 없는 항목 삭제 등)를 따른다.
 - 관련 이슈는 `close #번호`로 연결한다. 대상 브랜치는 `develop`이다.
 - **체크리스트는 실제로 확인한 항목만 체크한다.** 실행하지 못한 확인(빌드, 테스트, 기동 등)은 체크하지 말고 Remarks에 못 했다고 적는다.
@@ -113,6 +115,8 @@ MVP 제외: 콜백(작업 상태는 폴링으로 조회), 사내 데이터 연�
 - 라이브러리 버전은 명시적으로 고정한다. 빌드 도구(Gradle의 Spring Boot BOM 등)가 버전을 관리하는 의존성은 예외로, 버전을 적지 않는다. 그 외 버전 선택이 필요하면 후보와 근거를 보여주고 확인을 받는다.
 - 삭제·초기화처럼 되돌리기 어려운 작업은 사용자가 명시적으로 지시했을 때만 한다.
 - 막혔을 때 임의로 우회하지 말고 선택지를 보여주고 결정을 기다린다.
+- **에이전트는 커밋 작성자나 기여자(contributor)로 남지 않는다.** 커밋 메시지에 `Co-Authored-By: Claude …` 같은 trailer를, 커밋 · PR · 이슈 · 댓글에 `Generated with Claude Code` 같은 생성 도구 문구를 넣지 않는다. `git config user.*`를 바꾸거나 `--author`로 다른 이름을 넣지 않는다. Claude Code는 `.claude/settings.json`의 `attribution` 설정으로 기본 표기를 끈다. 세부는 `.github/CONTRIBUTING.md` 4장.
+- 머지된 브랜치에 커밋을 더 올리지 않는다. 남은 작업은 새 이슈와 새 브랜치로 한다.
 
 ## 7. 아직 정해지지 않은 것 (임의로 정하지 말 것)
 

@@ -6,10 +6,12 @@ import com.telescope.backend.canvas.dto.CanvasCreateRequest;
 import com.telescope.backend.canvas.dto.CanvasSharesResponse;
 import com.telescope.backend.canvas.dto.CanvasSummaryResponse;
 import com.telescope.backend.canvas.dto.ShareMember;
+import com.telescope.backend.canvas.dto.ShareMemberResponse;
 import com.telescope.backend.canvas.entity.CanvasRole;
 import com.telescope.backend.global.config.JpaAuditingConfig;
 import com.telescope.backend.global.exception.BusinessException;
 import com.telescope.backend.global.exception.ErrorCode;
+import com.telescope.backend.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,12 +34,13 @@ import java.util.Set;
 import static com.telescope.backend.canvas.service.CanvasTestSupport.user;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 /** 캔버스 목록·생성·이름 변경·삭제·공유 규칙을 실제로 커밋되는 상태에서 확인한다. */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfig.class, JpaAuditingConfig.class, CanvasService.class, CanvasEventService.class,
-        CanvasAccessService.class, CanvasServiceTest.TestBeans.class})
+        CanvasAccessService.class, CanvasPeople.class, UserService.class, CanvasServiceTest.TestBeans.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @RecordApplicationEvents
 class CanvasServiceTest {
@@ -75,7 +78,8 @@ class CanvasServiceTest {
         assertThat(created.name()).isEqualTo("제목 없는 캔버스");
         assertThat(created.myRole()).isEqualTo(CanvasRole.OWNER);
         assertThat(canvasService.shares(created.id(), editor).members())
-                .containsExactly(new ShareMember(editor, CanvasRole.EDIT));
+                .extracting(ShareMemberResponse::userId, ShareMemberResponse::role)
+                .containsExactly(tuple(editor, CanvasRole.EDIT));
         assertThatThrownBy(() -> canvasService.create(owner, new CanvasCreateRequest("x", "2026년 1분기", List.of(-1L))))
                 .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
     }
@@ -117,7 +121,8 @@ class CanvasServiceTest {
 
         CanvasSharesResponse after = canvasService.replaceShares(id, owner, List.of(new ShareMember(viewer, CanvasRole.EDIT)));
 
-        assertThat(after.members()).containsExactly(new ShareMember(viewer, CanvasRole.EDIT));
+        assertThat(after.members()).extracting(ShareMemberResponse::userId, ShareMemberResponse::role)
+                .containsExactly(tuple(viewer, CanvasRole.EDIT));
         assertThatThrownBy(() -> canvasService.open(id, editor))
                 .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.CANVAS_ACCESS_DENIED);
         assertThat(canvasService.activities(id, viewer)).extracting(CanvasActivityResponse::text)

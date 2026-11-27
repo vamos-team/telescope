@@ -70,9 +70,9 @@ sequenceDiagram
     B-->>F: 새 페이지 (소유자 = 나, 편집할 사람 초대됨)
   end
   F->>B: GET /canvases/{id}
-  B-->>F: meta(myRole), cards, links, lastSeq
-  Note over F: myRole이 view면 편집 도구를 숨김
-  F->>B: GET /canvases/{id}/card-tags
+  B-->>F: meta(name, quarter, myRole), cards, links, lastSeq, warnings
+  Note over F: myRole이 view면 편집 도구를 숨김. warnings가 있으면 일부 복원 실패 안내
+  F->>B: GET /canvases/{id}/card-tags (자료 검색 추천 기준)
   F->>B: GET /canvases/{id}/analyses (내 세션, 최신 세션의 지적 박스)
 ```
 
@@ -115,13 +115,15 @@ sequenceDiagram
   F->>B: POST /canvases/{id}/events (requestId, events, 글 수정은 baseVersion)
   alt 성공
     B-->>F: lastSeq, firstChangedLayer, textVersions
-    F->>B: GET /canvases/{id}/card-tags
+    F->>B: GET /canvases/{id}/card-tags (자료 검색 추천 기준)
     F->>B: GET /canvases/{id}/compares/{cardId} (비교 · 시각화 카드마다)
   else 409 K003 (다른 사람이 같은 글을 먼저 고침)
     B-->>F: data: 지금 글과 버전
     F->>F: 그 글을 최신으로 바꾸고 안내, 나머지 조작은 새 requestId로 다시 보냄
   else 네트워크 · 5xx
     F->>F: 같은 requestId로 다음에 다시 보냄
+  else 그 밖의 4xx (K002 보기 권한 등)
+    F->>F: 묶음을 버리고 오류 바 안내
   end
 ```
 
@@ -139,8 +141,10 @@ sequenceDiagram
   A->>B: SUBSCRIBE /topic/canvases/{id}/events · cursors · presence, /user/queue/canvases
   A->>B: SUBSCRIBE /app/canvases/{id}/presence
   B-->>A: 지금 접속자 목록
+  A->>B: POST /canvases/{id}/events (보내지 못한 조작이 있으면 먼저)
   A->>B: GET /canvases/{id}
-  B-->>A: cards, links, lastSeq
+  B-->>A: cards, links, lastSeq, warnings
+  Note over A: 구독 뒤 조회 전에 온 메시지는 모아 두었다가 lastSeq 뒤의 것만 반영
   C->>B: POST /canvases/{id}/events
   B-->>A: (커밋 뒤) firstSeq · lastSeq · events
   alt firstSeq = 내 lastSeq + 1
@@ -150,8 +154,10 @@ sequenceDiagram
   end
   C->>B: SEND /app/canvases/{id}/cursor (50ms마다 최대 1번)
   B-->>A: 커서 (user.id가 나면 무시)
-  B-->>A: /user/queue/canvases revoked · deleted → 캔버스 홈
+  B-->>A: /user/queue/canvases revoked · deleted → 페이지 홈, role_changed → 편집 도구 맞춤
 ```
+
+서버 모드는 로그인 화면이 `POST /auth/login`(또는 회원가입 `POST /auth/signup`, 응답 형식 같음)으로 받은 토큰을 저장해 이후 HTTP와 STOMP `CONNECT`에 붙인다. 새로고침은 `GET /users/me`로 복원한다(API 명세 2.1, 2.2, 2.4).
 
 ## 4. 자료 검색
 
@@ -163,9 +169,9 @@ sequenceDiagram
   participant A as ai
 
   rect rgba(128,128,128,0.08)
-  Note over U,B: 캔버스 오른쪽 사이드바. 입력 없음: 대시보드 · 회사 재무 · 인사이트 탭
+  Note over U,B: 캔버스 오른쪽 사이드바. 입력 없음: 회사 재무 · DART · 인사이트 탭
   F->>B: GET /dashboard (패널 목록 · 배치)
-  F->>B: GET /insights?asOfDate= (3사 비교, 인사이트 탭)
+  F->>B: GET /insights (3사 비교, 인사이트 탭. 화면은 기준 시점을 보내지 않음)
   F->>B: GET /documents?kind=news&canvasId= (관련 뉴스 추천, 썸네일 img)
   end
 
@@ -186,7 +192,7 @@ sequenceDiagram
   end
 
   rect rgba(128,128,128,0.08)
-  Note over U,A: 검색창 + → 데이터 입력 (C16)
+  Note over U,A: 검색창 + → 데이터 입력 (C16, 서버 모드. 로컬 모드는 화면에서 검증만)
   U->>F: 대상 회사 선택 · 발행일 선택(선택 사항) · 파일 여러 개 선택
   loop 파일마다 한 요청
     F->>B: POST /documents/uploads (file, canvasId, company, publishedDate?)
@@ -222,9 +228,9 @@ sequenceDiagram
   participant A as ai
 
   U->>F: 캔버스 하단 분석하기 (세션이 없을 때) 또는 새로 분석하기 / 업데이트(POST, baseAnalysisId = 같은 세션의 새 버전)
-  Note over F: 남은 이벤트(메모 포함)를 먼저 보내고 분석 화면(C20)으로
-  F->>B: POST /canvases/{id}/analyses (asOfDate)
-  B->>A: 분석 작업 (컨텍스트 L0~L4: 카드 · 연결 · 메모 3종)
+  Note over F: 분석 화면(C20)으로 바꾸고 남은 이벤트(메모 포함)를 먼저 보냄. 다 보내지 못하면 시작하지 않음
+  F->>B: POST /canvases/{id}/analyses (asOfDate = 페이지 기준 시점, 형식 미정)
+  B->>A: 분석 작업 (컨텍스트 L0~L4: 카드 · 연결 · 메모 3종, 기준 시점 이후 자료는 뺌)
   B-->>F: 202 jobId, analysisId
   loop SUCCEEDED · FAILED까지 (step: REVIEW → QUESTIONS로 프로세스 바 진행)
     F->>B: GET /jobs/{id}

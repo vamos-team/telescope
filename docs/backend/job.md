@@ -79,6 +79,7 @@ QUEUED ──▶ RUNNING ──▶ SUCCEEDED
 | `markStarted(jobId, externalJobId)` | ai 시작 요청이 성공했을 때. 외부 ID 저장 후 `RUNNING` |
 | `markFailed(jobId, message)` | ai 시작 요청이 실패했을 때 |
 | `getJob(jobId)` | 상태 조회. 미종료 작업이면 ai 상태를 받아 저장한 뒤 반환 |
+| `isFinished(jobId)`, `unfinishedJobIds(jobType)`, `peek(jobIds)` | 저장된 상태만 읽는다(ai 호출 없음). 화면이 폴링하지 않는 배치(데이터 적재 #135)를 서버가 확인할 때와 목록 화면에 쓴다 |
 
 **다른 도메인이 작업을 시작하는 순서**
 
@@ -107,7 +108,7 @@ ai가 `SUCCEEDED`를 알려 주면, 대상 도메인이 결과를 저장하는 �
 
 - **`JobResultHandler`** (`job/service`): 대상 도메인(자료 준비·분석·예측)이 자기 작업 종류에 맞게 구현해 빈으로 등록한다. job은 대상 도메인을 직접 알지 않는다. 작업 종류마다 하나만 둔다(둘이면 기동 실패).
   처리기는 잠금 트랜잭션 안에서 불리므로 DB 저장만 하고 외부 호출을 하지 않는다. 저장하지 못하면 예외를 던진다.
-- **처리기가 없는 작업 종류**: 경고 로그만 남기고 결과 없이 완료한다(이전 동작 그대로). 대상 도메인이 처리기를 붙이면 그때부터 저장된다. 자료 준비는 `DocumentPreparationResultHandler`(#111)가 붙었고, 분석·예측은 아직 없다.
+- **처리기가 없는 작업 종류**: 경고 로그만 남기고 결과 없이 완료한다(이전 동작 그대로). 대상 도메인이 처리기를 붙이면 그때부터 저장된다. 자료 준비는 `DocumentPreparationResultHandler`(#111), 데이터 적재는 `DataSyncResultHandler`(#135)가 붙었고, 분석·예측은 아직 없다.
 
 | ai 호출 결과 | 처리 |
 |---|---|
@@ -124,7 +125,7 @@ ai가 `SUCCEEDED`를 알려 주면, 대상 도메인이 결과를 저장하는 �
 
 `GET /api/v1/jobs/{id}`
 
-- 로그인한 사용자 누구나 조회할 수 있다(MVP). 인증은 user 이슈 이후 적용된다.
+- 로그인이 필요하다(없거나 틀린 토큰은 `401`, #34). 로그인한 사용자는 누구의 작업이든 조회할 수 있다(MVP). 범위를 좁힐지는 #151.
 
 #### 📤 Request Body
 
@@ -143,7 +144,7 @@ ai가 `SUCCEEDED`를 알려 주면, 대상 도메인이 결과를 저장하는 �
 | 속성 | 설명 | 타입 |
 | --- | --- | --- |
 | `data.id` | 작업 ID | number |
-| `data.jobType` | `DOCUMENT_PREPARATION` / `ANALYSIS` / `PREDICTION` | string |
+| `data.jobType` | `DOCUMENT_PREPARATION` / `ANALYSIS` / `PREDICTION` / `DATA_SYNC` | string |
 | `data.status` | `QUEUED` / `RUNNING` / `SUCCEEDED` / `FAILED` | string |
 | `data.startedAt` | 시작 시각. 시작 전이면 `null` | string \| null |
 | `data.finishedAt` | 종료 시각. 끝나지 않았으면 `null` | string \| null |
@@ -188,7 +189,7 @@ ai가 `SUCCEEDED`를 알려 주면, 대상 도메인이 결과를 저장하는 �
 | `QUEUED → FAILED` 허용 | ai 시작 요청이 실패하면 작업이 영원히 `QUEUED`로 남는다 | 이슈 원안(`QUEUED → RUNNING → 종료`만) |
 | 같은 상태 반복은 예외가 아니라 무시 | 폴링은 같은 상태를 반복해 받는 것이 정상이다 | 모든 비허용 전이를 예외로 처리 |
 | **조회할 때 갱신** | 사용자가 적고, 갱신 배치의 트리거 주체(Jenkins/Spring)가 아직 정해지지 않았다 | 주기 배치로 갱신 |
-| ai 호출은 트랜잭션 밖 | 외부 호출 동안 DB 커넥션을 붙잡지 않는다 (`backend/CLAUDE.md` 규칙) | 한 트랜잭션 안에서 호출 |
+| ai 호출은 트랜잭션 밖 | 외부 호출 동안 DB 커넥션을 붙잡지 않는다 (`backend/AGENTS.md` 규칙) | 한 트랜잭션 안에서 호출 |
 | 저장 직전에 행을 잠그고(`SELECT ... FOR UPDATE`) 다시 읽어 `syncFrom` | 같은 작업의 동시 갱신을 한 줄로 세운다. 잠금 읽기는 가장 최근에 커밋된 값을 읽으므로, 뒤에 온 요청은 앞선 요청의 종료 상태를 보고 무시한다. 마이그레이션이 필요 없다. 잠금은 짧은 저장 트랜잭션에만 걸고 ai 호출은 잠금 밖이다 | 낙관적 락(`@Version`, 컬럼 추가 필요), 락 없이 재조회만 (코드 리뷰에서 경쟁 가능성 지적) |
 | enum을 `AiJobStatus`(ai 쪽)와 `JobStatus`(DB)로 분리 | DB 값은 한번 쌓이면 바꾸기 어렵고, ai 계약은 초안이라 값이 늘 수 있다. 변환 한 곳만 고치면 된다 | 하나의 enum 공유 |
 | "ai에 없는 작업"과 "일시 오류"를 다르게 처리 | 없는 작업은 기다려도 끝나지 않지만, 일시 오류는 다시 시도하면 된다 | 모든 오류를 `FAILED`로 |
@@ -306,7 +307,7 @@ ai가 `SUCCEEDED`를 알려 주면, 대상 도메인이 결과를 저장하는 �
 
 | 시점 | 확인할 것 |
 |---|---|
-| user 이슈에서 인증이 붙을 때 | 이 경로에 인증 적용, 401 테스트 추가, 조회 권한 정책 재확인 |
+| ~~user 이슈에서 인증이 붙을 때~~ (#34에서 됨) | 이 경로도 로그인 필요(보안 설정의 공개 경로가 아님. 공개 경로는 로그인·회원가입·헬스 체크·WebSocket 연결, `api-spec.md` 1장). 경로별 `401`은 캔버스·문서·적재 컨트롤러 테스트에서 확인. 조회 권한 범위는 #151 |
 | 첫 대상 도메인(document)을 구현할 때 | `create → markStarted/markFailed` 흐름이 의도대로 쓰이는지, 소유자 제한 방식 결정 |
 | 실제 ai 서비스를 연동할 때 | 상태 값 대응, 404 변환, 오류 메시지 노출, 호출 지연 |
 | datasync 스케줄러(트리거 주체)가 정해질 때 | 갱신 배치와 타임아웃 정리를 함께 도입할지 |

@@ -8,8 +8,10 @@ import com.telescope.backend.canvas.service.CanvasRealtimeRegistry;
 import com.telescope.backend.global.auth.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.annotation.SubscribeMapping;
 import org.springframework.stereotype.Controller;
 
@@ -28,16 +30,19 @@ public class CanvasRealtimeController {
 
     /** 내 커서 위치를 같은 캔버스 사람들에게 보낸다({@code /app/canvases/{id}/cursor}). 형식이 틀리면 버린다. */
     @MessageMapping("/canvases/{canvasId}/cursor")
-    public void cursor(@DestinationVariable Long canvasId, @Payload CursorPosition position, Principal principal) {
+    public void cursor(@DestinationVariable Long canvasId, @Payload CursorPosition position, Principal principal,
+                       @Header(SimpMessageHeaderAccessor.SESSION_ID_HEADER) String sessionId) {
         if (position == null || !position.isValid() || !(principal instanceof UserPrincipal user)) {
             return;
         }
-        notifier.cursor(canvasId, user.id(), position.x(), position.y());
+        // 구독할 때 읽어 둔 이름을 쓴다(커서마다 DB를 보지 않게, #149). 구독 기록이 없으면 인터셉터가 이미 버렸다
+        UserRef person = registry.personOf(sessionId, canvasId).orElseGet(() -> UserRef.unknown(user.id()));
+        notifier.cursor(canvasId, person, position.x(), position.y());
     }
 
     /** 처음 구독할 때 지금 접속자 목록을 한 번 돌려준다({@code /app/canvases/{id}/presence}). */
     @SubscribeMapping("/canvases/{canvasId}/presence")
     public PresenceSnapshot presence(@DestinationVariable Long canvasId) {
-        return new PresenceSnapshot(registry.presentUsers(canvasId).stream().map(UserRef::new).toList());
+        return new PresenceSnapshot(registry.presentUsers(canvasId));
     }
 }
