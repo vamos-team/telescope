@@ -2,6 +2,7 @@
 
 형식: `- YYYY-MM-DD 무엇을 바꿨는지 (관련 파일)`. 최신이 위로 오게 쌓는다. 규칙은 [AGENTS.md](AGENTS.md).
 
+- 2026-11-27 #143 사용자 모양을 backend와 같이 `{ id: 숫자, employeeNo, name, dept }`로 바꾸고 `myUserId` 삭제. 목업 구성원도 숫자 id + 사번, 공유 · 사람 찾기 · 새 페이지 편집자를 숫자 id로, 예전 저장분(사번 기준 공유)은 읽을 때 변환 (src/stores/canvas.ts, src/components/PageInfo.vue, src/components/NewCanvasDialog.vue)
 - 2026-11-27 #143 로그인 화면 좌우 2분할(로고 · 우주 배경 / 로그인 폼, 아래 회원가입)과 회원가입 폼 추가, 서버 모드 로그인 · 회원가입 · 내 정보 API 연결(토큰 저장 · 새로고침 복원 · 로그아웃 삭제), 개발 서버 /api 프록시 (src/components/LoginView.vue, src/components/SignupForm.vue, src/stores/canvas.ts, src/sync/http.ts, src/style.css, vite.config.ts)
 - 2026-11-26 PR #122 사내 자료 업로드 대상 회사 선택과 D001의 포맷·회사 불일치 표시 추가 (src/components/DataInputDialog.vue, src/sync/http.ts, src/style.css)
 - 2026-11-26 PR #122 CodeRabbit 주요 리뷰 수정 및 사내 자료 단건 업로드·작업 폴링·캔버스 권한 기반 복원 연결 (src/App.vue, src/components/, src/local/, src/stores/canvas.ts, src/sync/http.ts)

@@ -9,21 +9,21 @@ const cv = useCanvas();
 const can = computed(() => cv.role === "owner");
 const s = computed(() => shareOf(cv.meta!));
 const q = ref(""), role = ref<"edit" | "view">("edit"), focused = ref(false);
-const has = computed(() => new Set([s.value.ownerId, ...Object.keys(s.value.share)]));
+const has = computed(() => new Set([s.value.ownerId, ...Object.keys(s.value.share).map(Number)]));
 const found = computed(() => findPeople(q.value, has.value, cv.user!.dept));  // 빈 칸이면 추천
 // 후보를 누르기 전에 목록이 닫히지 않게 포커스가 창 안 다른 곳으로 갈 때만 닫음
 function blur(e: FocusEvent) { if (!(e.relatedTarget as HTMLElement | null)?.closest(".found")) focused.value = false; }
 /** 권한 있는 사람 목록: 소유자와 직접 초대한 사람. 각 사람에 권한(owner / edit / view)을 붙인다. */
 const people = computed(() => [...has.value].flatMap((id) => {
   const m = ALL_MEMBERS.find((x) => x.id === id); if (!m) return [];
-  return [{ ...m, role: id === s.value.ownerId ? "owner" as const : s.value.share[id] }];
+  return [{ ...m, role: id === s.value.ownerId ? "owner" as const : s.value.share[String(id)] }];
 }));
 /** 찾은 사람을 고른 권한으로 초대하고 찾기 칸을 비운다. */
-function invite(id: string) { cv.setShare({ share: { ...s.value.share, [id]: role.value } }); q.value = ""; focused.value = false; }
+function invite(id: number) { cv.setShare({ share: { ...s.value.share, [String(id)]: role.value } }); q.value = ""; focused.value = false; }
 /** 초대한 사람의 권한을 바꾸거나("edit" / "view") 권한을 지운다("remove"). */
-function setRole(id: string, v: string) {
+function setRole(id: number, v: string) {
   const share = { ...s.value.share };
-  if (v === "remove") delete share[id]; else share[id] = v as "edit" | "view";
+  if (v === "remove") delete share[String(id)]; else share[String(id)] = v as "edit" | "view";
   cv.setShare({ share });
 }
 </script>
@@ -47,7 +47,7 @@ function setRole(id: string, v: string) {
           <ul v-if="focused" class="found">
             <li v-if="!q.trim() && found.length" class="cap">추천</li>
             <li v-for="m in found" :key="m.id"><button @mousedown.prevent @click="invite(m.id)">
-              <span class="av">{{ m.name[0] }}</span><b>{{ m.name }}</b><small>{{ m.id }} · {{ m.dept }} · {{ m.job }}</small></button></li>
+              <span class="av">{{ m.name[0] }}</span><b>{{ m.name }}</b><small>{{ m.employeeNo }} · {{ m.dept }} · {{ m.job }}</small></button></li>
             <li v-if="!found.length" class="none">찾는 사람이 없거나 이미 권한이 있습니다.</li>
           </ul>
         </div>

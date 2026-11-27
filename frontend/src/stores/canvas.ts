@@ -45,15 +45,19 @@ export interface Note { key: string; kind: "card" | "memo" | "link"; cardId?: st
 // 로그인: 사번 + 비밀번호(목업이라 아무 값이나 통과). 들어가면 캔버스 홈에서 볼 수 있는 캔버스를 고른다 (실제 서비스는 사내 SSO)
 // 부서는 기획서 1장의 사업 조직
 export const DEPTS = ["네트워크센터", "AIDC사업본부", "세일즈마케팅본부", "프로덕트브랜드본부"];
+// 사람은 backend와 같은 모양: id는 숫자(users PK), 사번(employeeNo)은 로그인 · 표시에만 쓴다
 export const ALL_MEMBERS = [
-  { id: "1001", name: "이재무", dept: "네트워크센터", job: "재무기획" }, { id: "1002", name: "박망", dept: "네트워크센터", job: "네트워크 기술" },
-  { id: "1003", name: "김센터", dept: "네트워크센터", job: "부서장" },
-  { id: "2001", name: "최예산", dept: "AIDC사업본부", job: "재무기획" }, { id: "2002", name: "정데이터", dept: "AIDC사업본부", job: "AIDC 사업" },
-  { id: "2003", name: "한본부", dept: "AIDC사업본부", job: "부서장" },
-  { id: "3001", name: "오마케", dept: "세일즈마케팅본부", job: "재무기획" }, { id: "3002", name: "윤영업", dept: "세일즈마케팅본부", job: "세일즈" },
-  { id: "4001", name: "서기획", dept: "프로덕트브랜드본부", job: "재무기획" }, { id: "4002", name: "강상품", dept: "프로덕트브랜드본부", job: "상품" }];
+  { id: 1, employeeNo: "1001", name: "이재무", dept: "네트워크센터", job: "재무기획" }, { id: 2, employeeNo: "1002", name: "박망", dept: "네트워크센터", job: "네트워크 기술" },
+  { id: 3, employeeNo: "1003", name: "김센터", dept: "네트워크센터", job: "부서장" },
+  { id: 4, employeeNo: "2001", name: "최예산", dept: "AIDC사업본부", job: "재무기획" }, { id: 5, employeeNo: "2002", name: "정데이터", dept: "AIDC사업본부", job: "AIDC 사업" },
+  { id: 6, employeeNo: "2003", name: "한본부", dept: "AIDC사업본부", job: "부서장" },
+  { id: 7, employeeNo: "3001", name: "오마케", dept: "세일즈마케팅본부", job: "재무기획" }, { id: 8, employeeNo: "3002", name: "윤영업", dept: "세일즈마케팅본부", job: "세일즈" },
+  { id: 9, employeeNo: "4001", name: "서기획", dept: "프로덕트브랜드본부", job: "재무기획" }, { id: 10, employeeNo: "4002", name: "강상품", dept: "프로덕트브랜드본부", job: "상품" }];
+/** 로그인한 사용자. local 목업과 서버 로그인이 같은 모양이다. */
+export interface CanvasUser { id: number; employeeNo: string; name: string; dept: string }
 export const memberOf = (name: string) => ALL_MEMBERS.find((m) => m.name === name);
-export const memberById = (id: string) => ALL_MEMBERS.find((m) => m.id === id.trim());
+export const memberById = (id: number) => ALL_MEMBERS.find((m) => m.id === id);
+export const memberByEmployeeNo = (no: string) => ALL_MEMBERS.find((m) => m.employeeNo === no.trim());
 export const who = (name: string) => { const m = memberOf(name); return m ? `${m.name} · ${m.dept} · ${m.job}` : name; };
 
 // 캔버스(세션) 저장: 카드·연결 스냅숏 + 서버로 보낸 이벤트 로그. 다시 열면 이벤트를 새 세션에 재생한다
@@ -61,10 +65,21 @@ export const who = (name: string) => { const m = memberOf(name); return m ? `${m
 // 공유(F-08 권한 목업): 소유자와 직접 초대한 사람별 권한(편집 가능 / 보기 가능)만 둔다.
 // 일반 액세스(회사 전체 보기)는 두지 않는다. 공유 설정은 소유자만 바꾼다 (docs/backend/api-spec.md 4장)
 export type Role = "owner" | "edit" | "view";
+// ownerId · share 키는 사용자 숫자 ID(share 키는 JSON이라 문자열 "3"). 예전 저장분은 사번 문자열("1001")이었다
 export interface CanvasMeta { id: string; name: string; dept: string; owner: string; updated: string; updatedBy: string; count: number;
-  ownerId?: string; share?: Record<string, "edit" | "view">; quarter?: string }
-/** 캔버스의 공유 정보(소유자 ID, 초대한 사람별 권한)를 돌려준다. 예전 저장분(공유 필드 없음)은 소유자만 있는 것으로 읽는다. */
-export const shareOf = (m: CanvasMeta) => ({ ownerId: m.ownerId ?? memberOf(m.owner)?.id ?? "", share: m.share ?? {} });
+  ownerId?: number | string; share?: Record<string, "edit" | "view">; quarter?: string }
+/**
+ * 캔버스의 공유 정보(소유자 ID, 초대한 사람별 권한)를 돌려준다.
+ * 예전 저장분은 사번으로 저장돼 있어(ownerId가 문자열) 숫자 ID로 바꿔 읽고, 공유 필드가 없으면 소유자만 있는 것으로 읽는다.
+ */
+export const shareOf = (m: CanvasMeta): { ownerId: number; share: Record<string, "edit" | "view"> } => {
+  if (typeof m.ownerId === "number") return { ownerId: m.ownerId, share: m.share ?? {} };
+  const ownerId = (m.ownerId ? memberByEmployeeNo(m.ownerId)?.id : undefined) ?? memberOf(m.owner)?.id ?? 0;
+  const share = Object.fromEntries(Object.entries(m.share ?? {}).flatMap(([no, r]) => {
+    const id = memberByEmployeeNo(no)?.id; return id ? [[String(id), r]] : [];
+  }));
+  return { ownerId, share };
+};
 export const ROLE: Record<Role, string> = { owner: "소유자", edit: "편집 가능", view: "보기 가능" };
 export const when = (iso: string) => {
   const d = new Date(iso), m = Math.round((Date.now() - d.getTime()) / 60000);
@@ -75,17 +90,17 @@ export const QUARTERS = ["2025년 1분기", "2025년 2분기", "2025년 3분기"
 export const DEFAULT_QUARTER = "2026년 1분기";
 export const quarterOf = (m?: CanvasMeta) => m?.quarter ?? DEFAULT_QUARTER;
 // 사람 찾기 (공유 창 · 새 캔버스 창): 입력이 비면 추천(같은 부서 먼저), 입력하면 사번 · 이름 · 부서로 찾음. 최대 6명
-export function findPeople(q: string, exclude: Set<string>, dept: string) {
+export function findPeople(q: string, exclude: Set<number>, dept: string) {
   const t = q.trim(), rest = ALL_MEMBERS.filter((m) => !exclude.has(m.id));
   if (!t) return [...rest.filter((m) => m.dept === dept), ...rest.filter((m) => m.dept !== dept)].slice(0, 6);
-  return rest.filter((m) => m.id.includes(t) || m.name.includes(t) || m.dept.includes(t)).slice(0, 6);
+  return rest.filter((m) => m.employeeNo.includes(t) || m.name.includes(t) || m.dept.includes(t)).slice(0, 6);
 }
 /** 사용자 u가 캔버스 m에서 가진 권한을 돌려준다. 소유자 → 직접 초대 권한 순으로 보고, 둘 다 아니면 권한 없음(null). */
-export function roleOf(m: CanvasMeta, u: { id: string; dept: string } | null): Role | null {
+export function roleOf(m: CanvasMeta, u: { id: number } | null): Role | null {
   if (!u) return null;
   const s = shareOf(m);
   if (s.ownerId === u.id) return "owner";
-  return s.share[u.id] ?? null;
+  return s.share[String(u.id)] ?? null;
 }
 // uploads: 이 캔버스 카드가 쓰는 업로드 문서(파서 요약본). 새로고침 뒤 같은 ID로 다시 등록해 카드가 사라지지 않게 함
 interface Saved { meta: CanvasMeta; cards: Card[]; links: Link[]; seq: number; activity: { author: string; text: string; time: string }[]; log: CanvasEvent[]; uploads?: Doc[] }
@@ -137,7 +152,7 @@ export const useCanvas = defineStore("canvas", {
     active: null as string | null,  // 누른 카드: 그 카드와 이어진 카드만 밝게, 카드 메모 칸이 펼쳐짐
     selected: [] as string[],  // Shift로 여러 장 고른 카드 (표 생성 · 시각화 생성)
     analyses: [] as Session[],  // 이 페이지에서 내가 돌린 분석 세션 (최신이 앞)
-    user: null as { id: string; name: string; dept: string } | null,
+    user: null as CanvasUser | null,
     canvasId: "", canvasName: "",
     creating: false,  // 새 캔버스 창
     log: [] as CanvasEvent[],  // 이 캔버스에서 서버로 보낸 이벤트 전체 (저장·재생용)
@@ -147,7 +162,6 @@ export const useCanvas = defineStore("canvas", {
     // ---- 서버 모드(SYNC_MODE=server)에서만 쓰는 상태 ----
     serverRole: null as Role | null,  // 캔버스 열기 응답·권한 변경 알림의 내 권한
     serverQuarter: null as string | null,
-    myUserId: null as number | null,  // 내 서버 사용자 ID(서버 로그인 때 채움). 내 커서를 걸러낼 때 쓴다
     cursors: {} as Record<string, { x: number; y: number }>,  // 다른 사람 커서(캔버스 좌표), 키는 사용자 ID
     present: [] as number[],  // 지금 이 캔버스에 들어와 있는 사람(사용자 ID)
   }),
@@ -336,7 +350,7 @@ export const useCanvas = defineStore("canvas", {
       }).catch((err) => console.error(err));
     },
     onRemoteCursor(m: CursorMessage) {
-      if (m.user.id === this.myUserId) return;  // 보낸 사람도 받으므로 내 커서는 무시
+      if (m.user.id === this.user?.id) return;  // 보낸 사람도 받으므로 내 커서는 무시
       this.cursors = { ...this.cursors, [m.user.id]: { x: m.x, y: m.y } };
     },
     onPresence(m: PresenceMessage) {
@@ -400,13 +414,12 @@ export const useCanvas = defineStore("canvas", {
       this.setServerUser(result.user);
       return this.restoreCanvas();
     },
-    // 화면의 사용자 id는 사번 문자열(local 모드와 같은 모양), 서버 숫자 ID는 myUserId
     setServerUser(u: AuthUser) {
-      this.user = { id: u.employeeNo, name: u.name, dept: u.dept ?? "" }; this.author = u.name; this.myUserId = u.id;
+      this.user = { id: u.id, employeeNo: u.employeeNo, name: u.name, dept: u.dept ?? "" }; this.author = u.name;
     },
-    login(id: string) {  // local 모드: 목업 구성원 사번으로 들어감. 없는 사번이면 false
-      const m = memberById(id); if (!m) return false;
-      this.user = { id: m.id, name: m.name, dept: m.dept }; this.author = m.name;
+    login(employeeNo: string) {  // local 모드: 목업 구성원 사번으로 들어감. 없는 사번이면 false
+      const m = memberByEmployeeNo(employeeNo); if (!m) return false;
+      this.user = { id: m.id, employeeNo: m.employeeNo, name: m.name, dept: m.dept }; this.author = m.name;
       try { sessionStorage.setItem(KEY + ":user", JSON.stringify(this.user)); } catch { /* 무시 */ }
       return this.restoreCanvas();  // 로그인하면 캔버스 홈. 새로고침이면 보던 캔버스로
     },
@@ -422,7 +435,7 @@ export const useCanvas = defineStore("canvas", {
     },
     async logout() {  // 대기 중인 조작을 지금 사용자 이름으로 저장한 뒤 캔버스 상태를 비움 (다음 사용자가 이전 캔버스를 덮어쓰지 않게)
       await this.flush(); this.save();
-      this.reset(); this.canvasId = ""; this.canvasName = ""; this.user = null; this.myUserId = null;
+      this.reset(); this.canvasId = ""; this.canvasName = ""; this.user = null;
       if (SYNC_MODE === "server") setAccessToken(null);
       try { sessionStorage.removeItem(KEY + ":user"); sessionStorage.removeItem(KEY + ":canvas"); } catch { /* 무시 */ }
     },
@@ -437,7 +450,8 @@ export const useCanvas = defineStore("canvas", {
         }
         return this.restoreCanvas();
       }
-      try { const u = JSON.parse(sessionStorage.getItem(KEY + ":user") ?? "null"); if (u?.id) return this.login(u.id); } catch { /* 무시 */ }
+      // 예전 저장분은 { id: 사번 } 모양
+      try { const u = JSON.parse(sessionStorage.getItem(KEY + ":user") ?? "null"); const no = u?.employeeNo ?? u?.id; if (typeof no === "string") return this.login(no); } catch { /* 무시 */ }
     },
     save() {
       if (!this.canvasId || !this.user) return;
@@ -457,12 +471,12 @@ export const useCanvas = defineStore("canvas", {
     },
     defaultName() { return `${this.user?.dept ?? ""} 페이지 ${this.canvases.filter((m) => roleOf(m, this.user) === "owner").length + 1}`; },
     // 새 캔버스: 이름, 분기, 편집할 사람을 받아 만들고 엶
-    async newCanvas(opt: { name?: string; quarter?: string; editors?: string[] } = {}) {
+    async newCanvas(opt: { name?: string; quarter?: string; editors?: number[] } = {}) {
       await this.flush(); this.save(); this.reset();
       this.canvasId = "cv" + Date.now().toString(36); this.canvasName = opt.name?.trim() || this.defaultName();
       this.save();
       const all = readAll(), x = all[this.canvasId];
-      if (x) { x.meta = { ...x.meta, quarter: opt.quarter ?? DEFAULT_QUARTER, share: Object.fromEntries((opt.editors ?? []).map((id) => [id, "edit" as const])) }; writeAll(all); this.saved++; }
+      if (x) { x.meta = { ...x.meta, quarter: opt.quarter ?? DEFAULT_QUARTER, share: Object.fromEntries((opt.editors ?? []).map((id) => [String(id), "edit" as const])) }; writeAll(all); this.saved++; }
       try { sessionStorage.setItem(KEY + ":canvas", this.canvasId); } catch { /* 무시 */ }
     },
     async open(id: string) {
@@ -662,7 +676,7 @@ export const useCanvas = defineStore("canvas", {
       this.emit({ type: "confirm_mapping", concept_id: conceptId, company, cells, accepted });
     },
     // ---------- 분석 세션 (본인만) ----------
-    akey() { return `${this.canvasId}|${this.user?.id ?? ""}`; },
+    akey() { return `${this.canvasId}|${this.user?.employeeNo ?? ""}`; },  // 예전 저장분과 같은 키(사번)를 쓴다
     readAnalyses() { const hid = new Set(readH()[this.akey()] ?? []); return (readA()[this.akey()] ?? []).filter((s) => !hid.has(s.base ?? s.id)); },
     // 새로 분석하기 · 업데이트 모두 새 결과를 앞에 쌓는다 (업데이트는 base로 같은 세션의 새 버전)
     pushAnalysis(s: Session) {

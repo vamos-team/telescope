@@ -25,7 +25,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-it("로그인하면 토큰을 저장하고 사번·이름·서버 ID로 사용자를 채운다", async () => {
+it("로그인하면 토큰을 저장하고 서버 숫자 ID·사번·이름으로 사용자를 채운다", async () => {
   const fetch = vi.fn(async (_url: string, _init: RequestInit) => ok(authData));
   vi.stubGlobal("fetch", fetch);
   const cv = useCanvas();
@@ -35,8 +35,7 @@ it("로그인하면 토큰을 저장하고 사번·이름·서버 ID로 사용�
   const [url, init] = fetch.mock.calls[0];
   expect([url, init.method, JSON.parse(String(init.body))]).toEqual(["/api/v1/auth/login", "POST", { employeeNo: "E1001", password: "password-1" }]);
   expect(token).toBe("jwt-1");
-  expect(cv.user).toEqual({ id: "E1001", name: "김예산", dept: "" });
-  expect(cv.myUserId).toBe(7);
+  expect(cv.user).toEqual({ id: 7, employeeNo: "E1001", name: "김예산", dept: "" });
   expect(cv.author).toBe("김예산");
 });
 
@@ -62,7 +61,7 @@ it("회원가입은 역할 없이 보내고 응답 토큰으로 바로 들어간
   expect(url).toBe("/api/v1/auth/signup");
   expect(JSON.parse(String(init.body))).toEqual({ employeeNo: "E1001", password: "password-1", name: "김예산", job: "재무기획" });
   expect(token).toBe("jwt-1");
-  expect(cv.myUserId).toBe(7);
+  expect(cv.user?.id).toBe(7);
 });
 
 it("새로고침하면 저장된 토큰으로 본인을 조회해 들어간다", async () => {
@@ -75,7 +74,7 @@ it("새로고침하면 저장된 토큰으로 본인을 조회해 들어간다",
 
   expect(fetch.mock.calls[0][0]).toBe("/api/v1/users/me");
   expect((fetch.mock.calls[0][1].headers as Record<string, string>).Authorization).toBe("Bearer jwt-1");
-  expect(cv.user?.id).toBe("E1001");
+  expect(cv.user).toMatchObject({ id: 7, employeeNo: "E1001" });
 });
 
 it("저장된 토큰이 만료(401)면 토큰을 지우고 로그인 화면에 남는다", async () => {
@@ -109,7 +108,7 @@ it("토큰이 없으면 서버를 부르지 않는다", async () => {
   expect(fetch).not.toHaveBeenCalled();
 });
 
-it("로그아웃하면 토큰과 서버 ID를 지운다", async () => {
+it("로그아웃하면 토큰과 사용자를 지운다", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => ok(authData)));
   const cv = useCanvas();
   await cv.signIn("E1001", "password-1");
@@ -118,7 +117,6 @@ it("로그아웃하면 토큰과 서버 ID를 지운다", async () => {
 
   expect(token).toBeNull();
   expect(cv.user).toBeNull();
-  expect(cv.myUserId).toBeNull();
 });
 
 it.each([

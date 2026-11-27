@@ -81,7 +81,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | 401 | `A002` / `A003` | 다른 API에서 토큰 없음·위조 / 만료 | 로그인 화면으로 |
 | — | (네트워크 오류) | 서버에 닿지 않음 | "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요." |
 
-화면 구현 상태(#143): 서버 모드(`VITE_CANVAS_SYNC=server`)는 이 API를 부르고(`canvas.signIn` → `sync/http.ts` `login`), 응답의 `accessToken`을 `sessionStorage` `telescope-token`에 저장한다(`sync/config.ts` `setAccessToken`). 이후 HTTP와 STOMP `CONNECT`에 이 토큰을 붙인다. 화면 사용자는 `{ id: employeeNo, name, dept }`이고 숫자 `user.id`는 `myUserId`에 둔다. local 모드(데모)는 이 API를 부르지 않고 사번이 목업 명단(`ALL_MEMBERS`)에 있으면 통과하며 비밀번호는 검사하지 않는다(없는 사번 "사번을 확인하세요"). 빈 칸은 두 모드 모두 "사번과 비밀번호를 입력하세요".
+화면 구현 상태(#143): 서버 모드(`VITE_CANVAS_SYNC=server`)는 이 API를 부르고(`canvas.signIn` → `sync/http.ts` `login`), 응답의 `accessToken`을 `sessionStorage` `telescope-token`에 저장한다(`sync/config.ts` `setAccessToken`). 이후 HTTP와 STOMP `CONNECT`에 이 토큰을 붙인다. 화면 사용자는 backend와 같은 `{ id: 숫자, employeeNo, name, dept }`이다(`CanvasUser`). 공유 · 사람 찾기 · 커서 · 접속자는 숫자 `id`로 주고받고, 사번은 로그인 · 표시에만 쓴다. local 모드(데모)는 이 API를 부르지 않고 사번이 목업 명단(`ALL_MEMBERS`)에 있으면 통과하며 비밀번호는 검사하지 않는다(없는 사번 "사번을 확인하세요"). 빈 칸은 두 모드 모두 "사번과 비밀번호를 입력하세요".
 
 로그아웃은 서버 호출 없이 토큰을 버린다. 그 전에 남은 이벤트를 보낸다(`canvas.logout`의 `flush`).
 
@@ -97,7 +97,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 { "data": [{ "id": 12, "employeeNo": "2001", "name": "최예산", "dept": "AIDC사업본부", "job": "재무기획" }], "error": null }
 ```
 
-데모 명단은 사번을 ID로 쓴다(`id: "2001"`). 서버는 숫자 `id`와 사번 `employeeNo`를 따로 두므로, 연동할 때 공유 · 초대 요청의 사람 ID는 숫자 `id`로 보낸다.
+데모 명단도 서버와 같이 숫자 `id`와 사번 `employeeNo`를 따로 둔다(`{ id: 4, employeeNo: "2001", ... }`). 공유 · 초대 요청의 사람 ID는 숫자 `id`로 보낸다. 예전 데모 저장분(소유자 · 공유를 사번으로 저장)은 읽을 때 숫자 `id`로 바꾼다(`shareOf`).
 
 ### 2.4 `POST /api/v1/auth/signup`
 
