@@ -42,19 +42,23 @@ jobs:
           combined() { for d in "$@"; do git rev-parse "HEAD:$d"; done | sha256sum | cut -c1-12; }
           need_build() { aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$1" >/dev/null 2>&1 && echo false || echo true; }
           BACKEND="backend-$(tree backend)"
+          AUTH="auth-$(tree backend)"
+          CANVAS="canvas-$(tree backend)"
           FRONTEND="frontend-$(tree frontend)"
           AI_SERVER="ai-server-$(combined ai pipelines)"
           {
             echo "backend=$BACKEND"; echo "build_backend=$(need_build "$BACKEND")"
+            echo "auth=$AUTH"; echo "build_auth=$(need_build "$AUTH")"
+            echo "canvas=$CANVAS"; echo "build_canvas=$(need_build "$CANVAS")"
             echo "frontend=$FRONTEND"; echo "build_frontend=$(need_build "$FRONTEND")"
             echo "ai_server=$AI_SERVER"; echo "build_ai_server=$(need_build "$AI_SERVER")"
           } | tee -a "$GITHUB_OUTPUT"
 
       - uses: actions/setup-java@v4
-        if: steps.tags.outputs.build_backend == 'true'
+        if: steps.tags.outputs.build_backend == 'true' || steps.tags.outputs.build_auth == 'true' || steps.tags.outputs.build_canvas == 'true'
         with: { distribution: temurin, java-version: "21" }
       - name: Backend Test
-        if: steps.tags.outputs.build_backend == 'true'
+        if: steps.tags.outputs.build_backend == 'true' || steps.tags.outputs.build_auth == 'true' || steps.tags.outputs.build_canvas == 'true'
         working-directory: backend
         run: chmod +x gradlew && ./gradlew test --no-daemon
 
@@ -64,15 +68,21 @@ jobs:
           BACKEND: ${{ steps.tags.outputs.backend }}
           FRONTEND: ${{ steps.tags.outputs.frontend }}
           AI_SERVER: ${{ steps.tags.outputs.ai_server }}
+          AUTH: ${{ steps.tags.outputs.auth }}
+          CANVAS: ${{ steps.tags.outputs.canvas }}
           BUILD_BACKEND: ${{ steps.tags.outputs.build_backend }}
+          BUILD_AUTH: ${{ steps.tags.outputs.build_auth }}
+          BUILD_CANVAS: ${{ steps.tags.outputs.build_canvas }}
           BUILD_FRONTEND: ${{ steps.tags.outputs.build_frontend }}
           BUILD_AI_SERVER: ${{ steps.tags.outputs.build_ai_server }}
         run: |
           build() {
             if [ "$1" != true ]; then echo "$2 는 이미 ECR 에 있음, 빌드/푸시 건너뜀"; return; fi
-            docker buildx build --platform linux/amd64 -t "$REGISTRY/$ECR_REPOSITORY:$2" -f "$3" --push "$4"
+            docker buildx build --platform linux/amd64 -t "$REGISTRY/$ECR_REPOSITORY:$2" -f "$3" --push "${@:5}" "$4"
           }
           build "$BUILD_BACKEND" "$BACKEND" backend/Dockerfile backend
+          build "$BUILD_AUTH" "$AUTH" backend/Dockerfile backend --build-arg MODULE=auth
+          build "$BUILD_CANVAS" "$CANVAS" backend/Dockerfile backend --build-arg MODULE=canvas
           build "$BUILD_FRONTEND" "$FRONTEND" frontend/Dockerfile frontend
           build "$BUILD_AI_SERVER" "$AI_SERVER" ai/server/Dockerfile .
           echo "REGISTRY=$REGISTRY" >> "$GITHUB_ENV"
@@ -90,6 +100,8 @@ jobs:
         run: |
           "$RUNNER_TEMP/kustomize" edit set image \
             "skala-registry.skala-ai.com/p3-1/backend=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.backend }}" \
+            "skala-registry.skala-ai.com/p3-1/auth=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.auth }}" \
+            "skala-registry.skala-ai.com/p3-1/canvas=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.canvas }}" \
             "skala-registry.skala-ai.com/p3-1/frontend=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.frontend }}" \
             "skala-registry.skala-ai.com/p3-1/ai-server=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.ai_server }}"
 
@@ -120,15 +132,24 @@ jobs:
             name: api
             annotations:
               nginx.ingress.kubernetes.io/whitelist-source-range: "$ALLOWED_IPS"
+          ---
+          apiVersion: networking.k8s.io/v1
+          kind: Ingress
+          metadata:
+            name: api-canary
+            annotations:
+              nginx.ingress.kubernetes.io/whitelist-source-range: "$ALLOWED_IPS"
           EOF
           printf 'patches:\n  - path: ingress-allowed-ips.yaml\n' >> kustomization.yaml
-          test "$(kubectl kustomize . | grep -c 'whitelist-source-range')" -eq 2 || { echo "허용 IP 가 두 Ingress에 모두 들어가지 않음"; exit 1; }
+          test "$(kubectl kustomize . | grep -c 'whitelist-source-range')" -eq 3 || { echo "허용 IP 가 세 Ingress에 모두 들어가지 않음"; exit 1; }
 
       - name: 배포
         working-directory: infra/k8s
         run: |
           kubectl -n "$NAMESPACE" apply -k .
           kubectl -n "$NAMESPACE" rollout status deployment/backend --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deployment/auth --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deployment/canvas --timeout=300s
           kubectl -n "$NAMESPACE" rollout status deployment/frontend --timeout=300s
           kubectl -n "$NAMESPACE" rollout status statefulset/chroma --timeout=300s
           kubectl -n "$NAMESPACE" rollout status deployment/pg-proxy --timeout=120s
