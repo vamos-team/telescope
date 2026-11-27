@@ -32,6 +32,9 @@ infra:
 
 app:
   internal-api-key: ${INTERNAL_API_KEY:}
+  # 캔버스 권한을 확인하는 canvas 서비스 주소(내부)
+  canvas-service:
+    base-url: ${CANVAS_SERVICE_BASE_URL:http://localhost:8082}
   # 재무 데이터 적재 배치(#135). 시작은 cron(서울 시간), "-"이면 꺼짐(로컬·테스트 기본). 배포는 DATASYNC_CRON="0 0 3 * * *"
   datasync:
     cron: ${DATASYNC_CRON:-}
