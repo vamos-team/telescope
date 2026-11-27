@@ -108,7 +108,7 @@ export function roleOf(m: CanvasMeta, u: { id: number } | null): Role | null {
 // uploads: 이 캔버스 카드가 쓰는 업로드 문서(파서 요약본). 새로고침 뒤 같은 ID로 다시 등록해 카드가 사라지지 않게 함
 interface Saved { meta: CanvasMeta; cards: Card[]; links: Link[]; seq: number; activity: { author: string; text: string; time: string }[]; log: CanvasEvent[]; uploads?: Doc[] }
 const KEY = "telescope-canvas:v1";
-// 분석 세션: 요청한 본인만 봄(CLAUDE.md 권한). 페이지 · 사용자별로 따로 저장하고, 결과는 고치지 않고 새로 쌓는다
+// 분석 세션: 페이지 · 사용자별로 따로 저장하고, 결과는 고치지 않고 새로 쌓는다. 공유 결과의 조회 범위는 캔버스 권한을 따른다(docs/backend/api-spec.md 4장)
 const AKEY = "telescope-analyses:v1";
 const readA = (): Record<string, Session[]> => { try { return JSON.parse(localStorage.getItem(AKEY) ?? "{}"); } catch { return {}; } };
 const writeA = (all: Record<string, Session[]>) => { try { localStorage.setItem(AKEY, JSON.stringify(all)); } catch { /* 저장 불가: 화면에서만 유지 */ } };

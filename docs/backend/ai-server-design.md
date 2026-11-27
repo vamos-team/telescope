@@ -2,7 +2,7 @@
 
 > 작성자 : 윤혜정 (이슈 #48)
 
-> `ai/server`(FastAPI 껍데기, job 관리)의 구현 설계다. 담당은 backend다(`CLAUDE.md` 2번 —
+> `ai/server`(FastAPI 껍데기, job 관리)의 구현 설계다. 담당은 backend다(`AGENTS.md` 2번 —
 > `ai/server`는 예외적으로 backend 담당). `ai/server`를 제외한 `ai/`(분석·예측 로직, 파이프라인
 > 연결)는 ai 담당 범위라 여기서 다루지 않는다.
 >
@@ -38,7 +38,7 @@ ai/server/
 
 ### 2.1 작업 상태 저장소 — SQLite (ai 담당자와 합의)
 
-루트 `CLAUDE.md` 7번에 미결로 있던 "ai 서비스의 작업 상태 저장 위치"를 ai 담당자와 합의해
+루트 `AGENTS.md` 7번에 미결로 있던 "ai 서비스의 작업 상태 저장 위치"를 ai 담당자와 합의해
 SQLite 파일로 정했다.
 
 - 재시작해도 상태가 남아, backend가 진행 중이던 작업을 "없는 작업"(404)으로 오판해 `FAILED`
@@ -257,7 +257,7 @@ def register(registry: PipelineRegistry) -> None:
 #### A6. 이미지는 저장소 루트에서 빌드하고, 무시 목록은 이 Dockerfile 전용으로 둔다
 
 - `pipelines/`와 `ai/`를 함께 넣어야 하므로 빌드 위치를 저장소 루트로 바꿨다: `docker build -f ai/server/Dockerfile .`, `PYTHONPATH=/app`(#135에서 `/app:/app/pipelines`로. 수집기·적재기가 pipelines 폴더 기준으로 서로를 불러서, `datasync.md` S11).
-- 무시 목록은 루트 `.dockerignore` 대신 `ai/server/Dockerfile.dockerignore`에 뒀다(BuildKit은 Dockerfile 이름 옆의 무시 목록을 먼저 쓴다). 루트 파일은 지시가 있을 때만 고치고(루트 `CLAUDE.md` 2번), 루트 무시 목록은 다른 빌드에도 영향을 줄 수 있다.
+- 무시 목록은 루트 `.dockerignore` 대신 `ai/server/Dockerfile.dockerignore`에 뒀다(BuildKit은 Dockerfile 이름 옆의 무시 목록을 먼저 쓴다). 루트 파일은 지시가 있을 때만 고치고(루트 `AGENTS.md` 2번), 루트 무시 목록은 다른 빌드에도 영향을 줄 수 있다.
 - 무시 목록은 "전부 제외 후 `ai/`, `pipelines/`만 포함"으로 썼다. 이미지에 `tests/`, `.env`, `__pycache__`, `Icon` 파일이 들어가지 않는 것을 확인했다.
 
 #### A7. `FILE_STORAGE_DIR`에는 기본값을 두지 않는다
@@ -292,7 +292,7 @@ def register(registry: PipelineRegistry) -> None:
 
 ### 2.8 기준 시점·허용 문서 고정 주입
 
-허용 문서 범위와 기준 시점은 서버가 강제한다(루트 `CLAUDE.md` 4번). 파이프라인이 이 값을
+허용 문서 범위와 기준 시점은 서버가 강제한다(루트 `AGENTS.md` 4번). 파이프라인이 이 값을
 바꾸거나 넓히지 못하게 다음 구조로 넘긴다.
 
 ```python
@@ -401,4 +401,4 @@ docker build -f ai/server/Dockerfile -t telescope-ai-server .
 - 호출 규약: `docs/backend/ai-contract.md`
 - backend 파일 저장소(키 형식, S3 구현): `docs/backend/file-storage.md`
 - `Job`(backend 쪽) 전이 규칙: `docs/backend/job.md`
-- 폴더 담당: `CLAUDE.md` 2번
+- 폴더 담당: `AGENTS.md` 2번

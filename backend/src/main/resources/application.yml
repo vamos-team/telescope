@@ -49,7 +49,7 @@ app:
     name: ${ADMIN_NAME:}
   document:
     upload:
-      # 업로드 정책이 정해지기 전까지 ai 파서가 읽는 형식으로 임시 제한한다(루트 CLAUDE.md 7장 미정, #111)
+      # 업로드 정책이 정해지기 전까지 ai 파서가 읽는 형식으로 임시 제한한다(루트 AGENTS.md 7장 미정, #111)
       allowed-extensions: pdf,xlsx,xlsm,csv,pptx,html,htm,xml,txt,md,json
       # 업로드 대상 회사. 사용자가 이 중에서 고른다. 늘어날 수 있어 설정으로 둔다(#111)
       companies: SKT,SKB,KT,LGU+

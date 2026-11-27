@@ -9,7 +9,7 @@ import java.util.Optional;
 /**
  * 업로드 설정({@code app.document.upload}).
  *
- * <p>허용 확장자는 업로드 정책이 정해지기 전까지 ai 파서가 읽는 형식으로 임시 제한한다(루트 {@code CLAUDE.md} 7장 미정).
+ * <p>허용 확장자는 업로드 정책이 정해지기 전까지 ai 파서가 읽는 형식으로 임시 제한한다(루트 {@code AGENTS.md} 7장 미정).
  * 대상 회사는 지금 4곳이지만 늘어날 수 있어 설정으로 둔다. 크기 상한은 {@code spring.servlet.multipart.max-file-size}가 맡는다.
  *
  * @param allowedExtensions 허용 확장자(점 없이, 소문자로 비교)
