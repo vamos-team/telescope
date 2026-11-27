@@ -65,9 +65,12 @@ sequenceDiagram
   alt 타일 클릭
     U->>F: 페이지 고르기
   else + 새 페이지 (C14)
-    F->>B: GET /users?q= (편집할 사람 찾기, 입력이 멈추면)
+    F->>B: GET /users?q= (초대할 사람 찾기, 입력이 멈추면)
     F->>B: POST /canvases (name, quarter, editorIds)
     B-->>F: 새 페이지 (소유자 = 나, 편집할 사람 초대됨)
+    opt 보기 권한으로 고른 사람이 있을 때
+        F->>B: PUT /canvases/{id}/shares (members: 편집 · 보기 전체)
+    end
   end
   F->>B: GET /canvases/{id}
   B-->>F: meta(name, quarter, myRole, owner, updatedBy), cards, links, lastSeq, warnings

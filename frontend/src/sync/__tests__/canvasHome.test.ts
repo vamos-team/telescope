@@ -44,17 +44,19 @@ it("홈 목록은 서버에서 읽고 이름 · 내 권한은 서버 값을 쓴�
   expect(roleOf(cv.canvases[1], cv.user)).toBe("view");  // 공유 정보가 없어도 서버가 알려 준 권한
 });
 
-it("새 페이지는 이름 · 기준 시점 · 편집할 사람을 보내 만들고 바로 연다", async () => {
+it("새 페이지는 이름 · 기준 시점 · 편집할 사람을 보내 만들고, 보기 권한은 공유 명단으로 저장한 뒤 바로 연다", async () => {
   const fetch = route({
     "POST /api/v1/canvases": () => ok(summary(7, "새 검토"), 201),
+    "PUT /api/v1/canvases/7/shares": () => ok({ members: [] }),
     "GET /api/v1/canvases/7": () => ok(snapshot(7)),
     "GET /api/v1/canvases/7/activities": () => ok([]),
   });
   const cv = useCanvas();
 
-  await cv.newCanvas({ name: " 새 검토 ", quarter: "2026년 1분기", editors: [2, 3] });
+  await cv.newCanvas({ name: " 새 검토 ", quarter: "2026년 1분기", members: [{ id: 2, role: "edit" }, { id: 3, role: "view" }] });
 
-  expect(bodyOf(fetch.mock.calls[0][1])).toEqual({ name: "새 검토", quarter: "2026년 1분기", editorIds: [2, 3] });
+  expect(bodyOf(fetch.mock.calls[0][1])).toEqual({ name: "새 검토", quarter: "2026년 1분기", editorIds: [2] });
+  expect(bodyOf(fetch.mock.calls[1][1])).toEqual({ members: [{ userId: 2, role: "edit" }, { userId: 3, role: "view" }] });
   expect(cv.canvasId).toBe("7");
   expect(cv.canvases[0].id).toBe("7");
   cv.closeServer();
