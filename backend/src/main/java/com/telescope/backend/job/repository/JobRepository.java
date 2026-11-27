@@ -29,6 +29,10 @@ public interface JobRepository extends JpaRepository<Job, Long> {
     @Query("select j.id from Job j where j.jobType = :type and j.status in :statuses order by j.id")
     List<Long> findIdsByJobTypeAndStatusIn(@Param("type") JobType type, @Param("statuses") Collection<JobStatus> statuses);
 
+    /** 이 종류의 아직 ai에 접수 번호를 받지 못한(QUEUED, 외부 ID 없음) 작업 ID. 시작 요청을 다시 보낼 대상이다. */
+    @Query("select j.id from Job j where j.jobType = :type and j.status = :status and j.externalJobId is null order by j.id")
+    List<Long> findIdsByJobTypeAndStatusAndExternalJobIdIsNull(@Param("type") JobType type, @Param("status") JobStatus status);
+
     /** 여러 작업을 한 번에 읽는다(목록 화면용, ai를 부르지 않음). */
     List<Job> findByIdIn(Collection<Long> ids);
 }

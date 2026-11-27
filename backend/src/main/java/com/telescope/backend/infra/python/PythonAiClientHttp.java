@@ -100,7 +100,7 @@ public class PythonAiClientHttp implements PythonAiClient {
                     .body(JobStartResponse.class);
         } catch (RestClientResponseException e) {
             log.warn("ai 작업 시작 거절: kind={}, status={}", jobKind, e.getStatusCode().value());
-            throw new AiCallFailedException(startRejectedMessage(e), e);
+            throw new AiCallRejectedException(startRejectedMessage(e), e);
         } catch (RestClientException e) {
             log.warn("ai 작업 시작 실패: kind={}, reason={}", jobKind, describe(e));
             throw new AiCallFailedException("ai 서비스에 작업을 시작하지 못했습니다.", e);

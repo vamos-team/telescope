@@ -62,7 +62,7 @@ public class PythonAiClientStub implements PythonAiClient {
      */
     @Override
     public JobStartResponse startDataSync(DataSyncRequest request) {
-        throw new AiCallFailedException("가짜 ai에서는 재무 데이터를 적재하지 않습니다.");
+        throw new AiCallRejectedException("가짜 ai에서는 재무 데이터를 적재하지 않습니다.");
     }
 
     @Override
