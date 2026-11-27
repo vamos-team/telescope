@@ -9,7 +9,7 @@ import type { EventsResponse, TextVersions, UserRef } from "./protocol";
 export interface ServerCard {
   id: string; kind: string; x: number; y: number;
   text?: string | null; textVersion?: number; memo?: string | null; memoVersion?: number;
-  createdBy?: UserRef; [k: string]: unknown;
+  createdBy?: UserRef; memoBy?: UserRef | null; [k: string]: unknown;
 }
 
 export type ServerRole = "owner" | "edit" | "view";

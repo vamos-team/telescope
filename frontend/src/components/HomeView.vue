@@ -42,7 +42,7 @@ function del(m: CanvasMeta) { if (confirm(`'${m.name}' 페이지를 지울까요
     <nav class="hnav" aria-label="페이지 홈 메뉴">
       <button v-for="(t, k) in MENU" :key="k" :aria-current="menu === k ? 'page' : undefined" @click="menu = k">{{ t }}<small>{{ count(k) }}</small></button>
       <div class="who"><span class="av" data-me="true">{{ cv.user!.name[0] }}</span>
-        <div><b>{{ cv.user!.name }}</b><small>{{ [cv.user!.dept, myJob].filter(Boolean).join(' · ') }}</small></div>
+        <div><b>{{ cv.user!.name }}</b><small v-if="cv.user!.dept">{{ cv.user!.dept }}</small><small v-if="myJob">{{ myJob }}</small></div>
         <button class="lo" @click="cv.logout()">로그아웃</button></div>
     </nav>
     <main class="hmain">

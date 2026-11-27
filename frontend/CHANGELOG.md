@@ -2,6 +2,8 @@
 
 형식: `- YYYY-MM-DD 무엇을 바꿨는지 (관련 파일)`. 최신이 위로 오게 쌓는다. 규칙은 [AGENTS.md](AGENTS.md).
 
+- 2026-11-27 #170 연결 바의 `메모 입력` · `메모 보기`를 누르면 `수정` 없이 바로 입력칸으로(선을 골라 자동으로 펼친 메모는 보기 그대로) (src/App.vue, src/components/MemoEditor.vue)
+- 2026-11-27 #170 새 페이지에서 초대할 사람마다 권한(편집 · 보기) 선택(보기 권한은 만든 뒤 PUT /shares), `/` 키로 마우스 커서 위치에 메모 카드 추가, 메모(메모 카드 · 선 메모 · 카드 메모)는 단 사람만 고치고 지움(작성자 id로 판단, 전체 지우기는 예외), 메모 목록 아바타를 사람 아이콘으로, 홈 왼쪽 메뉴 폭을 캔버스 사이드바(264px)에 맞추고 맨 아래 사용자를 이름 / 부서 / 직무 3줄로 (src/App.vue, src/components/NewCanvasDialog.vue, src/components/nodes/MemoNode.vue, src/components/LeftPanel.vue, src/components/HomeView.vue, src/stores/canvas.ts, src/sync/apply.ts, src/sync/snapshot.ts, src/style.css, 테스트)
 - 2026-11-27 #170 리뷰 반영: Safari gesture 이벤트는 캔버스 밖에서만 막아 캔버스 안 핀치(ctrl+wheel)가 살아 있게 함 (src/App.vue)
 - 2026-11-27 #170 리뷰 반영: 사이드바를 다시 열면 지난 검색을 지우고 탭 화면부터, 추천 검색어를 ↑ · ↓ · Enter로 고름, 검색창 Tab은 기본 포커스 이동, 빈 캔버스 안내 클래스를 `canvas-empty`로 바꿔 시각화 카드 상태 문구(`.cempty`)와 겹치지 않게 함 (src/App.vue, src/components/SourcePanel.vue, src/style.css)
 - 2026-11-27 #170 검색창을 골라도 위 탭을 숨기지 않음. 추천 검색어는 탭 화면 위 팝업으로만 뜨고 입력하면 사라짐 (src/components/SourcePanel.vue)

@@ -63,10 +63,10 @@ describe("applyRemote", () => {
 
   it("메모 카드를 만들고 본문을 고친다", () => {
     const s = empty();
-    applyRemote(s, { type: "add_memo", card_id: "p", text: "초안 메모" }, "박망");
-    applyRemote(s, { type: "edit_memo", card_id: "p", text: "고친 메모" }, "박망");
+    applyRemote(s, { type: "add_memo", card_id: "p", text: "초안 메모" }, "박망", 2);
+    applyRemote(s, { type: "edit_memo", card_id: "p", text: "고친 메모" }, "박망", 2);
 
-    expect(s.cards[0] as MemoCard).toMatchObject({ kind: "memo", author: "박망", text: "고친 메모" });
+    expect(s.cards[0] as MemoCard).toMatchObject({ kind: "memo", author: "박망", authorId: 2, text: "고친 메모" });
   });
 
   it("선 메모와 작성자를 반영한다", () => {
@@ -74,9 +74,20 @@ describe("applyRemote", () => {
     applyRemote(s, { type: "add_card", card_id: "a", table_id: "t", rows: [], cols: [] }, "x");
     applyRemote(s, { type: "add_memo", card_id: "m", text: "" }, "x");
     applyRemote(s, { type: "add_link", link_id: "l", source: "m", target: "a" }, "x");
-    applyRemote(s, { type: "set_link_memo", link_id: "l", text: "근거로 쓸 것", baseVersion: 0 }, "박망");
+    applyRemote(s, { type: "set_link_memo", link_id: "l", text: "근거로 쓸 것", baseVersion: 0 }, "박망", 2);
 
-    expect(s.links[0]).toMatchObject({ memo: "근거로 쓸 것", memoBy: "박망" });
+    expect(s.links[0]).toMatchObject({ memo: "근거로 쓸 것", memoBy: "박망", memoById: 2 });
+  });
+
+  it("전체 지우기는 남의 메모까지 카드와 연결을 모두 지운다", () => {
+    const s = empty();
+    applyRemote(s, { type: "add_memo", card_id: "m", text: "남의 메모" }, "박망", 2);
+    applyRemote(s, { type: "add_card", card_id: "a", table_id: "t", rows: [], cols: [] }, "x");
+    applyRemote(s, { type: "add_link", link_id: "l", source: "m", target: "a" }, "x");
+
+    expect(applyRemote(s, { type: "clear_cards" }, "이재무", 1)).toBe(true);
+    expect(s).toEqual({ cards: [], links: [] });
+    expect(applyRemote(s, { type: "clear_cards" }, "이재무", 1)).toBe(false);
   });
 });
 

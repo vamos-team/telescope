@@ -7,7 +7,7 @@ import type { UserRef } from "./protocol";
 
 /** 서버 카드 → 화면 카드. 모르는 종류는 버린다. */
 export function toLocalCard(c: ServerCard, authorName: (u: UserRef | null | undefined) => string): Card | null {
-  const base = { id: c.id, x: c.x, y: c.y, memo: c.memo ?? undefined };
+  const base = { id: c.id, x: c.x, y: c.y, memo: c.memo ?? undefined, memoBy: c.memo ? authorName(c.memoBy) : undefined, memoById: c.memo ? c.memoBy?.id : undefined };
   switch (c.kind) {
     case "table": {
       const sort = Array.isArray(c.sort) ? { key: c.sort[0] as string | number, desc: Boolean(c.sort[1]) } : null;
@@ -18,7 +18,7 @@ export function toLocalCard(c: ServerCard, authorName: (u: UserRef | null | unde
     case "doc": return { ...base, kind: "doc", docId: String(c.docId) };
     case "dash": return { ...base, kind: "dash", panel: String(c.panel) };
     case "chart": return { ...base, kind: "chart", sources: (c.sources as string[]) ?? [], version: 0 };
-    case "memo": return { ...base, kind: "memo", author: authorName(c.createdBy), text: c.text ?? "" };
+    case "memo": return { ...base, kind: "memo", author: authorName(c.createdBy), authorId: c.createdBy?.id, text: c.text ?? "" };
     default: return null;
   }
 }
@@ -27,7 +27,7 @@ export function toLocalCard(c: ServerCard, authorName: (u: UserRef | null | unde
 export function fromSnapshot(s: CanvasSnapshot, authorName: (u: UserRef | null | undefined) => string): { cards: Card[]; links: Link[] } {
   return {
     cards: s.cards.map((c) => toLocalCard(c, authorName)).filter((c): c is Card => c !== null),
-    links: s.links.map((l) => ({ id: l.id, source: l.source, target: l.target, memo: l.memo ?? undefined, memoBy: l.memo ? authorName(l.memoBy) : undefined })),
+    links: s.links.map((l) => ({ id: l.id, source: l.source, target: l.target, memo: l.memo ?? undefined, memoBy: l.memo ? authorName(l.memoBy) : undefined, memoById: l.memo ? l.memoBy?.id : undefined })),
   };
 }
 

@@ -12,6 +12,7 @@ function fold(g: string) { const s = new Set(folded.value); s.has(g) ? s.delete(
 // 데이터 성격(src): dart 공시 / ir·ar / news / internal / viz(비교·시각화·대시보드). 색은 style.css의 data-src
 const SRC_GROUP: Record<string, string> = { ir: "IR·AR", ar: "IR·AR", news: "뉴스", internal: "사내 자료" };
 const cardTitle = cv.cardTitle;
+const myJob = computed(() => cv.user?.job ?? memberOf(cv.user!.name)?.job);  // 내 직무: 서버 로그인은 응답 값, local은 목업 구성원
 const groups = computed(() => {
   const g: Record<string, { id: string; title: string; sub: string; co?: string; src: string }[]> = { "공시 표": [], "IR·AR": [], "뉴스": [], "사내 자료": [], "비교·시각화": [] };
   for (const c of cv.cards) {
@@ -43,7 +44,7 @@ const notes = computed(() => cv.notes.map((n) => ({ ...n, label: KIND[n.kind] + 
       <p v-if="!notes.length" class="none">아직 메모가 없습니다. 카드 오른쪽 위 +로 메모 카드를 달거나, 선을 눌러 메모를 입력하세요.</p>
       <!-- 메모 목록: 사람 · 내용 · 연결 (종류 표시 · 노란 박스 없음) -->
       <button v-for="n in notes" :key="n.key" class="mi" @click="n.go()">
-        <span class="av">{{ n.author ? n.author[0] : "·" }}</span>
+        <span class="av" :data-me="n.mine">{{ n.author ? n.author[0] : "·" }}</span>
         <span class="mt"><b>{{ n.author ?? "작성자 없음" }}</b><span class="tx">{{ n.text }}</span><small>{{ n.where }}</small></span></button>
     </section>
 
@@ -60,7 +61,7 @@ const notes = computed(() => cv.notes.map((n) => ({ ...n, label: KIND[n.kind] + 
     </section>
 
     <div class="who"><span class="av" data-me="true">{{ cv.user!.name[0] }}</span>
-      <div><b>{{ cv.user!.name }}</b><small>{{ [cv.user!.dept, cv.user!.job ?? memberOf(cv.user!.name)?.job].filter(Boolean).join(' · ') }}</small></div>
+      <div><b>{{ cv.user!.name }}</b><small v-if="cv.user!.dept">{{ cv.user!.dept }}</small><small v-if="myJob">{{ myJob }}</small></div>
       <button class="lo" @click="cv.logout()">로그아웃</button></div>
   </aside>
 </template>
