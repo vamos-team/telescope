@@ -157,7 +157,7 @@ sequenceDiagram
   B-->>A: /user/queue/canvases revoked · deleted → 페이지 홈, role_changed → 편집 도구 맞춤
 ```
 
-backend 로그인(#34)은 구현됐지만 화면이 아직 로그인 API를 부르지 않아, 서버 모드는 토큰을 직접 넣어야 연결된다(API 명세 2.1).
+서버 모드는 로그인 화면이 `POST /auth/login`(또는 회원가입 `POST /auth/signup`, 응답 형식 같음)으로 받은 토큰을 저장해 이후 HTTP와 STOMP `CONNECT`에 붙인다. 새로고침은 `GET /users/me`로 복원한다(API 명세 2.1, 2.2, 2.4).
 
 ## 4. 자료 검색
 

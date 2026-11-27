@@ -58,6 +58,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @Import({TestcontainersConfig.class, CanvasRealtimeTest.TestAuth.class})
 class CanvasRealtimeTest {
 
+    private static final String DEPT = "네트워크센터";
+
     private static final long WAIT_SECONDS = 5;
 
     @TestConfiguration
@@ -126,7 +128,7 @@ class CanvasRealtimeTest {
         Map<String, Object> received = toViewer.poll(WAIT_SECONDS, TimeUnit.SECONDS);
         assertThat(received).isNotNull();
         assertThat(received.get("firstSeq")).isEqualTo(received.get("lastSeq"));
-        assertThat(received.get("author")).isEqualTo(Map.of("id", owner.intValue()));
+        assertThat(received.get("author")).isEqualTo(person(owner));
         assertThat((List<?>) received.get("events")).hasSize(1);
         assertThat(toEditor.poll(WAIT_SECONDS, TimeUnit.SECONDS)).isNotNull();
     }
@@ -178,7 +180,7 @@ class CanvasRealtimeTest {
 
         Map<String, Object> cursor = toViewer.poll(WAIT_SECONDS, TimeUnit.SECONDS);
         assertThat(cursor).isNotNull();
-        assertThat(cursor.get("user")).isEqualTo(Map.of("id", editor.intValue()));
+        assertThat(cursor.get("user")).isEqualTo(person(editor));
         assertThat(cursor.get("x")).isEqualTo(512.5);
     }
 
@@ -220,17 +222,17 @@ class CanvasRealtimeTest {
         StompSession editorSession = connect(editor);
         subscribe(editorSession, presence());
         Map<String, Object> joined = presence.poll(WAIT_SECONDS, TimeUnit.SECONDS);
-        assertThat(joined).isEqualTo(Map.of("type", "join", "user", Map.of("id", editor.intValue())));
+        assertThat(joined).isEqualTo(Map.of("type", "join", "user", person(editor)));
 
         BlockingQueue<Map<String, Object>> snapshot = subscribe(connect(viewer), "/app/canvases/" + canvasId + "/presence");
         Map<String, Object> users = snapshot.poll(WAIT_SECONDS, TimeUnit.SECONDS);
         assertThat(users).isNotNull();
         assertThat((List<Object>) users.get("users"))
-                .contains(Map.of("id", owner.intValue()), Map.of("id", editor.intValue()));
+                .contains(person(owner), person(editor));
 
         editorSession.disconnect();
         Map<String, Object> left = presence.poll(WAIT_SECONDS, TimeUnit.SECONDS);
-        assertThat(left).isEqualTo(Map.of("type", "leave", "user", Map.of("id", editor.intValue())));
+        assertThat(left).isEqualTo(Map.of("type", "leave", "user", person(editor)));
     }
 
     // ---- 도우미 ----
@@ -331,8 +333,14 @@ class CanvasRealtimeTest {
     private Long user() {
         String no = "rt-" + UUID.randomUUID();
         return jdbc.queryForObject(
-                "insert into app.users (employee_no, password_hash, name, role) values (?, 'x', ?, 'USER') returning id",
-                Long.class, no, no);
+                "insert into app.users (employee_no, password_hash, name, dept, role) values (?, 'x', ?, ?, 'USER') returning id",
+                Long.class, no, "이름-" + no, DEPT);
+    }
+
+    /** 메시지의 사람 정보(#149): 구독할 때 읽어 둔 이름·부서가 함께 온다. */
+    private Map<String, Object> person(Long id) {
+        String name = jdbc.queryForObject("select name from app.users where id = ?", String.class, id);
+        return Map.of("id", id.intValue(), "name", name, "dept", DEPT);
     }
 
     private static CanvasEventsRequest batch(Map<String, Object> event) {

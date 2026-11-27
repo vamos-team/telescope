@@ -23,6 +23,14 @@ final class CanvasTestSupport {
                 Long.class, employeeNo, employeeNo);
     }
 
+    /** 이름·부서를 정해 테스트 사용자를 만든다(#149 이름 채우기 확인용). */
+    static Long user(JdbcTemplate jdbc, String name, String dept) {
+        String employeeNo = "t-" + UUID.randomUUID();
+        return jdbc.queryForObject(
+                "insert into app.users (employee_no, password_hash, name, dept, role) values (?, 'x', ?, ?, 'USER') returning id",
+                Long.class, employeeNo, name, dept);
+    }
+
     /** 새 requestId로 이벤트 묶음을 만든다. */
     @SafeVarargs
     static CanvasEventsRequest batch(Map<String, Object>... events) {

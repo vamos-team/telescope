@@ -9,7 +9,7 @@
 
 - **backend**: 배치를 돌리는 일. 언제 시작할지(스케줄), 시작 요청, 결과 확인, 실행 이력(`DataSyncRun`), 지금 쓰는 판(`DataVersion`) 전환. ai/server(backend 담당)에 "데이터 적재" 작업 추가
 - **ai**: 수집기(`pipelines/collectors/dart_xbrl.py`)와 적재기(`pipelines/loaders/xbrl.py`) 코드와 그 입출력
-- 담당 구분은 사용자 확인(2026-11-27). CLAUDE.md 2장에는 폴더 담당만 있고 "배치를 누가 돌리나"는 없었다.
+- 담당 구분은 사용자 확인(2026-11-27). AGENTS.md 2장에는 폴더 담당만 있고 "배치를 누가 돌리나"는 없었다.
 
 ## 2. 흐름
 
@@ -79,7 +79,7 @@ ai/server: `DATASYNC_DATA_DIR`(작업 폴더, 값이 있을 때만 real 모드�
 | 후보 | 판단 |
 |---|---|
 | **(a) ai/server 작업** (선택) | 업로드와 같은 "시작 → 작업 번호 → 폴링 → 결과 저장"(#63)을 쓴다. backend가 이력·판을 직접 기록한다 |
-| (b) K8s CronJob으로 pipelines 이미지 실행 | 자원이 분리되지만, PostgreSQL은 backend만 쓰고(CLAUDE.md 3장) 콜백도 없어서(1장) 결과를 받을 길이 없다 |
+| (b) K8s CronJob으로 pipelines 이미지 실행 | 자원이 분리되지만, PostgreSQL은 backend만 쓰고(AGENTS.md 3장) 콜백도 없어서(1장) 결과를 받을 길이 없다 |
 
 - 약점: ai/server가 무거워진다(duckdb, 적재기의 임베딩 모델). #109(파서 실행 환경)와 같은 일이라 함께 푼다.
 - ai/server 쪽 연결(`jobs/datasync.py`)은 backend 담당이고, 수집기·적재기 함수를 그대로 부른다. 실행할 때만 불러와서(지연 import) 의존성이 없는 가짜 모드·테스트에는 영향이 없다.

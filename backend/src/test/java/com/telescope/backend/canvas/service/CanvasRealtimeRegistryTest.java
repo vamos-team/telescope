@@ -1,5 +1,6 @@
 package com.telescope.backend.canvas.service;
 
+import com.telescope.backend.canvas.dto.UserRef;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -34,7 +35,7 @@ class CanvasRealtimeRegistryTest {
         assertThat(registry.add(sub("s2", "b", CanvasDestination.PRESENCE))).isFalse();
 
         assertThat(registry.removeSession("s1")).isEmpty();
-        assertThat(registry.presentUsers(1L)).containsExactly(7L);
+        assertThat(registry.presentUsers(1L)).extracting(UserRef::id).containsExactly(7L);
         assertThat(registry.removeSession("s2")).hasSize(1);
         assertThat(registry.presentUsers(1L)).isEmpty();
     }
@@ -51,6 +52,6 @@ class CanvasRealtimeRegistryTest {
     }
 
     private static CanvasRealtimeRegistry.Subscription sub(String session, String id, String channel) {
-        return new CanvasRealtimeRegistry.Subscription(session, id, 1L, 7L, channel);
+        return new CanvasRealtimeRegistry.Subscription(session, id, 1L, new UserRef(7L, "이재무", "네트워크센터"), channel);
     }
 }

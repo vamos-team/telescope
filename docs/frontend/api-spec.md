@@ -3,14 +3,14 @@
 v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화면에서 부르는 기능을 서버 API로 옮겨 적은 문서다. 데모는 `frontend/src/api.ts`의 `api` 객체가 브라우저 안 구현(`local/server.ts`, `local/ai.ts`)을 부른다. 실제 서비스에서는 같은 자리에서 아래 API를 부른다.
 
 - 근거 코드: `frontend/src/api.ts`(타입), `stores/canvas.ts`(캔버스·이벤트), `local/server.ts`(검색·비교·컨텍스트), `local/ai.ts`(검토·정리 글·질문·평가), `local/validate.ts`(업로드 검증), `local/period.ts`(기준 시점 비교), `local/dashboard.ts`·`local/dart.ts`(대시보드 패널), `sync/`(서버 연동 계층)
-- 경로와 필드는 **제안**이다. backend·ai 담당자와 합의한 뒤 확정한다. `CLAUDE.md` 7장의 미정 항목은 여기서 정하지 않는다.
+- 경로와 필드는 **제안**이다. backend·ai 담당자와 합의한 뒤 확정한다. `AGENTS.md` 7장의 미정 항목은 여기서 정하지 않는다.
 
 ## 1. 공통 규칙
 
 | 항목 | 규칙 |
 |---|---|
 | 기반 경로 | `/api/v1` (`docs/backend/job.md`와 같음) |
-| 인증 | 로그인 응답의 JWT를 `Authorization: Bearer <token>`으로 보냄. 로그인 외 모든 API에 필요 |
+| 인증 | 로그인 응답의 JWT를 `Authorization: Bearer <token>`으로 보냄. 로그인(`POST /auth/login`) · 회원가입(`POST /auth/signup`) 외 모든 API에 필요 |
 | 응답 형식 | `{ "data": ..., "error": null }`, 실패 시 `{ "data": null, "error": { "code", "message" } }` (`ApiResponse`) |
 | 필드 이름 | camelCase. 데모 타입의 snake_case(`table_id`, `card_id`)는 camelCase(`tableId`, `cardId`)로 바꿔 받음 |
 | 시각 | ISO 8601 문자열, 시간대 표기 없음(한국 시간) (`2026-11-25T09:30:00`). 날짜만은 `2026-11-25` |
@@ -18,15 +18,16 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | 금액 단위 | 원본 표는 공시 단위 그대로(`unit`). 비교·근거 값은 서버가 십억원으로 변환(`UNIT_TO_BIL`). 화면은 표시만 바꿈 |
 | 오래 걸리는 작업 | `202` + `{ jobId }`를 받고 `GET /api/v1/jobs/{id}`를 `SUCCEEDED`·`FAILED`까지 폴링한 뒤 결과 조회 API를 부름. 콜백 없음 |
 | 권한 | 페이지(캔버스)마다 소유자 · 편집 · 보기 권한(3.9). 공유 설정은 소유자만 바꾼다. 일반 액세스(회사 전체 보기)는 없다. 권한 없는 페이지는 403. 분석 세션은 화면이 지금 요청한 본인 것만 보여 준다(backend 규약과 다름, 9장). 공용 문서 수집·삭제는 관리자만 |
-| 오류 코드 | 화면은 `error.code`로 나눈다: `A001`~`A003`(인증), `K001`(캔버스 권한 없음), `K002`(보기 권한), `K003`(글 충돌), `D001`(업로드 거절), `C001`·`C002`(입력 오류·없음). 목록은 `docs/backend/api-spec.md` 2장 |
-| 연동 방식 | 환경변수 `VITE_CANVAS_SYNC=server`일 때만 캔버스 열기·이벤트·실시간·업로드를 서버로 보낸다. 기본(`local`)은 브라우저 목업과 `localStorage`. 서버 모드에서도 검색·비교·카드 태그·분석은 아직 목업이 계산한다 |
+| 오류 코드 | 화면은 `error.code`로 나눈다: `A001`~`A003`(인증), `A005`(가입된 사번), `K001`(캔버스 권한 없음), `K002`(보기 권한), `K003`(글 충돌), `D001`(업로드 거절), `C001`·`C002`(입력 오류·없음). 목록은 `docs/backend/api-spec.md` 2장 |
+| 연동 방식 | 환경변수 `VITE_CANVAS_SYNC=server`일 때만 로그인·회원가입·내 정보와 캔버스 열기·이벤트·실시간·업로드를 서버로 보낸다. 기본(`local`)은 브라우저 목업과 `localStorage`. 서버 모드에서도 검색·비교·카드 태그·분석은 아직 목업이 계산한다 |
 | 용어 | 화면의 "페이지" = 캔버스 + 분석. API 경로는 `canvases`를 그대로 쓴다 |
 
 ### 1.1 화면별 호출 요약
 
 | 화면 | 기능 | API | 데모 함수 |
 |---|---|---|---|
-| 로그인 | 로그인 | `POST /auth/login` | `canvas.login` |
+| 로그인 | 로그인 | `POST /auth/login` | `canvas.signIn` (local: `canvas.login`) |
+| 로그인 → 회원가입 | 회원가입 | `POST /auth/signup` | `canvas.signUp` (local: 없음) |
 | 로그인 | 내 정보 | `GET /users/me` | `restoreUser` |
 | 페이지 홈 (C00) | 볼 수 있는 페이지 목록·삭제 | `GET /canvases`, `DELETE /canvases/{id}` | `canvases`, `removeCanvas`, `thumb` |
 | 새 페이지 (C14) | 이름 · 기준 시점 · 편집할 사람으로 생성, 사람 찾기 | `POST /canvases`, `GET /users?q=` | `newCanvas`, `findPeople` |
@@ -54,7 +55,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 데모에만 있는 기능은 API를 두지 않는다: 로그인 화면의 데모 계정 미리 입력, `예시 불러오기`(`api.meta.example`), 평가의 `다음 분기 자료 반영 (데모)` 버튼, 홈 미리보기(`thumb`, 실제 서비스는 서버가 만든 썸네일 또는 카드 좌표), `api.warmup`·`api.ask`(LLM 없음).
 
-지금 서버로 부르는 것은 서버 모드의 캔버스 열기(3.4) · 이벤트(3.6) · 실시간(3.10) · 업로드(5.2, 5.3) · 작업 조회뿐이다(`sync/http.ts`, `sync/realtime.ts`). 나머지는 같은 자리의 목업 함수가 대신한다.
+지금 서버로 부르는 것은 서버 모드의 로그인 · 회원가입 · 내 정보(2.1, 2.2, 2.4), 캔버스 열기(3.4) · 이벤트(3.6) · 실시간(3.10) · 업로드(5.2, 5.3) · 작업 조회뿐이다(`sync/http.ts`, `sync/realtime.ts`). 나머지는 같은 자리의 목업 함수가 대신한다.
 
 ## 2. 인증·사용자
 
@@ -76,16 +77,17 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 | HTTP | 코드 | 상황 | 화면 문구 |
 |---|---|---|---|
-| 401 | `A001` | 사번 없음 또는 비밀번호 불일치(구분하지 않음) | "사번을 확인하세요" |
+| 401 | `A001` | 사번 없음 또는 비밀번호 불일치(구분하지 않음) | "사번 또는 비밀번호가 올바르지 않습니다." |
 | 401 | `A002` / `A003` | 다른 API에서 토큰 없음·위조 / 만료 | 로그인 화면으로 |
+| — | (네트워크 오류) | 서버에 닿지 않음 | "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요." |
 
-화면 구현 상태: 로그인 화면(`LoginView.vue`)은 아직 이 API를 부르지 않는다. 사번이 목업 명단(`ALL_MEMBERS`)에 있으면 통과하고 비밀번호는 검사하지 않는다(빈 칸만 막음, "사번과 비밀번호를 입력하세요"). 서버 모드의 토큰은 `sessionStorage` `telescope-token`에서 읽는다(`sync/config.ts` `accessToken`·`setAccessToken`). 로그인 API를 붙이면 응답의 `accessToken`을 여기에 저장한다.
+화면 구현 상태(#143): 서버 모드(`VITE_CANVAS_SYNC=server`)는 이 API를 부르고(`canvas.signIn` → `sync/http.ts` `login`), 응답의 `accessToken`을 `sessionStorage` `telescope-token`에 저장한다(`sync/config.ts` `setAccessToken`). 이후 HTTP와 STOMP `CONNECT`에 이 토큰을 붙인다. 화면 사용자는 backend와 같은 `{ id: 숫자, employeeNo, name, dept }`이다(`CanvasUser`). 공유 · 사람 찾기 · 커서 · 접속자는 숫자 `id`로 주고받고, 사번은 로그인 · 표시에만 쓴다. local 모드(데모)는 이 API를 부르지 않고 사번이 목업 명단(`ALL_MEMBERS`)에 있으면 통과하며 비밀번호는 검사하지 않는다(없는 사번 "사번을 확인하세요"). 빈 칸은 두 모드 모두 "사번과 비밀번호를 입력하세요".
 
 로그아웃은 서버 호출 없이 토큰을 버린다. 그 전에 남은 이벤트를 보낸다(`canvas.logout`의 `flush`).
 
 ### 2.2 `GET /api/v1/users/me`
 
-새로고침 뒤 토큰으로 사용자를 복원한다. 응답은 2.1의 `user`. 데모는 `sessionStorage` `telescope-canvas:v1:user`에 저장한 사용자로 다시 로그인한다(`restoreUser`).
+새로고침 뒤 토큰으로 사용자를 복원한다(서버 모드 `restoreUser`). 응답은 2.1의 `user`. 토큰이 없으면 부르지 않는다. 토큰이 있으면 응답이 올 때까지 로그인 화면 대신 빈 화면을 보여 준다(`restoring`, 로그인 화면 깜빡임 방지). 응답을 기다리는 동안 새로 로그인해 토큰이 바뀌면 늦게 온 응답은 버린다. `401`(`A002`·`A003`)이면 토큰을 지우고 로그인 화면에 남는다. 서버에 닿지 않으면 토큰은 남기고 로그인 화면을 보여 준다. 데모(local)는 `sessionStorage` `telescope-canvas:v1:user`에 저장한 사용자로 다시 로그인한다.
 
 ### 2.3 `GET /api/v1/users?q={검색어}`
 
@@ -95,7 +97,29 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 { "data": [{ "id": 12, "employeeNo": "2001", "name": "최예산", "dept": "AIDC사업본부", "job": "재무기획" }], "error": null }
 ```
 
-데모 명단은 사번을 ID로 쓴다(`id: "2001"`). 서버는 숫자 `id`와 사번 `employeeNo`를 따로 두므로, 연동할 때 공유 · 초대 요청의 사람 ID는 숫자 `id`로 보낸다.
+데모 명단도 서버와 같이 숫자 `id`와 사번 `employeeNo`를 따로 둔다(`{ id: 4, employeeNo: "2001", ... }`). 공유 · 초대 요청의 사람 ID는 숫자 `id`로 보낸다. 예전 데모 저장분(소유자 · 공유를 사번으로 저장)은 읽을 때 숫자 `id`로 바꾼다(`shareOf`).
+
+### 2.4 `POST /api/v1/auth/signup`
+
+로그인 화면 아래 `회원가입`에서 가입한다(서버 모드만, `canvas.signUp` → `sync/http.ts` `signup`). 규약은 `docs/backend/api-spec.md` 3.3(#133). 응답은 `201` + 2.1과 같은 `data`라서 토큰을 저장하고 바로 로그인 상태가 된다.
+
+| 요청 | 설명 | 타입 |
+|---|---|---|
+| `employeeNo` | 사번 | string |
+| `password` | 8자 이상, UTF-8 72바이트 이하 | string |
+| `name` | 이름 | string |
+| `dept` | 부서(선택, 비우면 보내지 않음) | string? |
+| `job` | 직무(선택, 비우면 보내지 않음) | string? |
+
+- `role`은 보내지 않는다. 서버가 항상 `USER`로 만든다. 관리자는 배포 환경변수로만 생긴다.
+- 화면 검증(안내용): 필수값, 비밀번호 8자 이상 · 72바이트 이하, 비밀번호 확인 일치. 최종 검증은 서버가 한다.
+
+| HTTP | 코드 | 상황 | 화면 문구 |
+|---|---|---|---|
+| 409 | `A005` | 이미 가입된 사번(관리자 사번 포함) | "이미 가입된 사번입니다." |
+| 400 | `C001` | 필수값 누락, 비밀번호 규칙 위반 | 서버 메시지(`필드명: 사유`) |
+
+local 모드는 backend가 없어 가입할 수 없다("회원가입은 서버 연결 모드(VITE_CANVAS_SYNC=server)에서만 할 수 있습니다.").
 
 ## 3. 캔버스
 
@@ -479,7 +503,7 @@ C16 데이터 입력 창에서 여러 파일을 고르면 파일마다 `multipar
 | AI 인사이트 | 3사 비교 인사이트(1Q26)는 기준 시점이 2026년 1분기 이후일 때만 · 위 조건을 통과한 값만, 연간 인사이트(2025)는 2025년 4분기 이후일 때만, 캔버스 표 변화는 두 열이 모두 조건을 통과할 때만 |
 | 평가(7.5) | 기준 시점 이후 자료(다음 분기 실적 · 리포트)는 평가에만 쓴다 |
 
-필터 결과가 비어도 전체 자료로 되돌아가지 않는다(`CLAUDE.md` 4장). 서버로 보낼 때 기준 시점을 분기 문자열로 보낼지 `asOfDate`(날짜)로 바꿔 보낼지는 정하지 않았다(9장).
+필터 결과가 비어도 전체 자료로 되돌아가지 않는다(`AGENTS.md` 4장). 서버로 보낼 때 기준 시점을 분기 문자열로 보낼지 `asOfDate`(날짜)로 바꿔 보낼지는 정하지 않았다(9장).
 
 ### 7.1 `GET /api/v1/canvases/{id}/analyses`
 
@@ -590,12 +614,12 @@ C16 데이터 입력 창에서 여러 파일을 고르면 파일마다 `multipar
 - 공유 링크 복사 기능 여부
 - 분석 작업 결과를 받는 경로 (`GET /jobs/{id}`에 `analysisId`를 넣을지, 7.1 목록을 다시 부를지)
 - 다음 분기 자료가 "들어왔다"를 판단하는 방법과 평가를 자동으로 돌릴지
-- 분석 결과 조회 범위: 화면은 지금 요청한 본인만 보여 주지만, backend 규약(`docs/backend/api-spec.md` 4장)은 그 캔버스 권한자 모두가 보고 `createdBy`를 남기기로 정했다. 루트 `CLAUDE.md` 1장도 권한자 기준이다. 화면을 권한자 기준으로 바꿀지 정해야 한다
+- 분석 결과 조회 범위: 화면은 지금 요청한 본인만 보여 주지만, backend 규약(`docs/backend/api-spec.md` 4장)은 그 캔버스 권한자 모두가 보고 `createdBy`를 남기기로 정했다. 루트 `AGENTS.md` 1장도 권한자 기준이다. 화면을 권한자 기준으로 바꿀지 정해야 한다
 - 기준 시점 전달 형식: 화면은 분기 문자열(`2026년 1분기`)을 갖고 backend는 `asOfDate`(날짜)를 필수로 받는다. 분기 → 날짜 변환(분기 마지막 날 등)을 화면과 서버 중 어디서 할지
 - 로그인 연동: `LoginView`가 2.1을 부르고 토큰 · 사용자(숫자 `id`)를 저장하도록 바꾸는 시점. 그 전까지 서버 모드는 토큰이 없음
 - 캔버스 목록 · 생성 · 이름 변경 · 삭제 · 공유(3.1~3.3, 3.9)를 서버 모드에서 부를 시점 (지금은 서버 모드에서도 `localStorage`)
 - 자료 검색 인사이트 탭에도 기준 시점 필터를 걸지 (지금은 분석에서만)
 - 메모 분류 · 주장 판정을 LLM으로 바꿀 때 판정 기준과 검증
 - 통합 검색을 서버 한 API(`GET /search`)로 합칠지, 화면이 공시 · 문서 검색을 나눠 부를지
-- 업로드 허용 형식과 업로드 문서 정책 (`CLAUDE.md` 7장)
-- 채팅 응답 방식 (`CLAUDE.md` 7장). 데모에 채팅 화면이 없어 이 문서에 넣지 않음
+- 업로드 허용 형식과 업로드 문서 정책 (`AGENTS.md` 7장)
+- 채팅 응답 방식 (`AGENTS.md` 7장). 데모에 채팅 화면이 없어 이 문서에 넣지 않음

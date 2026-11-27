@@ -322,19 +322,83 @@ table.g.facts tr.b td{font-weight:700;color:var(--t-strong);background:var(--pri
 .log small{margin-left:auto}
 
 /* 로그인 */
-.login{flex:1;display:grid;place-items:center;padding:16px;background:var(--bg-grey)}
-.lcard{width:min(400px,100%);display:grid;gap:14px;padding:32px 28px;background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow)}
-.lcard .logo{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:var(--primary);color:var(--on-primary);font-weight:800;font-size:20px}
-.lcard h1{margin:0;font-size:22px;color:var(--t-strong)}
-.lcard p{margin:-6px 0 4px;font-size:13.5px;color:var(--t-sub)}
-.lcard label{display:grid;gap:6px;font-size:13px;font-weight:700;color:var(--t-sub)}
-.lcard select,.lcard input{height:44px;border:1px solid var(--line);border-radius:var(--r-md);padding:0 10px;background:var(--surface);font-size:14px;font-weight:400;color:var(--t-strong)}
-.lcard input:focus{outline:2px solid var(--primary-text);outline-offset:-1px}
-.lcard .lerr{margin:-4px 0 0;font-size:13px;color:var(--red)}
-.lcard .ppl{display:flex;align-items:center;gap:2px}
-.lcard .ppl small{margin-left:8px}
-.lcard button.primary{height:46px;border-radius:var(--r-md);background:var(--primary);color:var(--on-primary);font-weight:700;font-size:15px}
-.lcard button.primary:hover{background:var(--primary-press)}
+/* 로그인·회원가입: 왼쪽 우주 배경 + 로고, 오른쪽 폼. 배경은 테마와 관계없이 어둡게 */
+.auth-restoring{flex:1 0 auto;background:var(--surface)}  /* 새로고침 복원 중: 로그인 화면 대신 빈 화면 */
+.auth{flex:1 0 auto;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(380px,1fr);background:var(--surface)}
+.auth-hero{position:relative;overflow:hidden;display:grid;place-items:center;padding:48px 32px;color:#F4F2FF;--logo:#D9D1FF;
+  background:radial-gradient(ellipse 70% 55% at 22% 18%,rgba(123,104,232,.45),transparent 70%),
+    radial-gradient(ellipse 60% 50% at 85% 82%,rgba(54,23,206,.42),transparent 70%),
+    radial-gradient(ellipse 45% 35% at 70% 30%,rgba(232,104,190,.16),transparent 70%),
+    linear-gradient(160deg,#07061A 0%,#0E0B2E 55%,#050414 100%)}
+.auth-stars{position:absolute;inset:0;pointer-events:none}
+.auth-stars i{position:absolute;inset:0;background-repeat:repeat;animation:auth-twinkle 6s ease-in-out infinite alternate}
+.auth-stars i:nth-child(1){background-size:180px 180px;opacity:.9;
+  background-image:radial-gradient(1px 1px at 22px 38px,#fff 50%,transparent 51%),radial-gradient(1px 1px at 96px 12px,#fff 50%,transparent 51%),
+    radial-gradient(1px 1px at 150px 120px,#fff 50%,transparent 51%),radial-gradient(1px 1px at 60px 150px,#fff 50%,transparent 51%),
+    radial-gradient(1px 1px at 130px 70px,#DCD6FF 50%,transparent 51%)}
+.auth-stars i:nth-child(2){background-size:260px 260px;opacity:.75;animation-delay:-2s;
+  background-image:radial-gradient(1.5px 1.5px at 40px 200px,#fff 50%,transparent 51%),radial-gradient(1.5px 1.5px at 210px 60px,#E8E3FF 50%,transparent 51%),
+    radial-gradient(1.5px 1.5px at 120px 110px,#fff 50%,transparent 51%)}
+.auth-stars i:nth-child(3){background-size:420px 420px;opacity:.85;animation-delay:-4s;
+  background-image:radial-gradient(2px 2px at 300px 80px,#fff 50%,transparent 51%),radial-gradient(2px 2px at 90px 330px,#CFC6FF 50%,transparent 51%)}
+@keyframes auth-twinkle{from{opacity:.35}to{opacity:1}}
+.auth-brand{position:relative;display:grid;justify-items:center;gap:18px;text-align:center}
+.auth-logo{display:flex;align-items:center;gap:14px}
+.auth-mark{width:clamp(40px,4.6vw,58px);height:clamp(40px,4.6vw,58px);flex:none;filter:drop-shadow(0 0 14px rgba(169,150,255,.35))}
+.auth-brand h1{margin:0;font-size:clamp(28px,3vw,40px);line-height:1;font-weight:600;letter-spacing:.2em;margin-right:-.2em;color:#fff}
+.auth-copy{display:grid;gap:4px}
+.auth-tagline{margin:0;font-size:clamp(16px,1.55vw,19px);line-height:1.35;font-weight:500;letter-spacing:.01em;white-space:nowrap;color:rgba(255,255,255,.92)}
+.auth-desc{margin:0;font-size:clamp(12px,1vw,13px);line-height:1.5;letter-spacing:.01em;white-space:nowrap;color:rgba(244,242,255,.55)}
+.auth-panel{display:grid;place-items:center;padding:40px 24px;background:var(--surface)}
+.auth-form{width:min(352px,100%);display:grid;gap:14px}
+.auth-form h2{margin:0;font-size:26px;line-height:1.25;color:var(--t-strong)}
+.auth-sub{margin:-8px 0 6px;font-size:13.5px;color:var(--t-sub)}
+.auth-form label{display:grid;gap:6px;font-size:13px;font-weight:700;color:var(--t-sub)}
+.auth-form label small{font-weight:400;color:var(--t-cap)}
+.auth-form input{height:44px;min-width:0;border:1px solid var(--line);border-radius:10px;padding:0 13px;background:var(--surface);font-size:14px;font-weight:400;color:var(--t-strong)}
+.auth-form input:focus{outline:2px solid var(--primary-text);outline-offset:-1px}
+.auth-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.auth-err{margin:-4px 0 0;font-size:13px;color:var(--red)}
+/* 왼쪽 밤하늘과 같은 계열: 짙은 남보라에서 성운 보라로 */
+.auth-submit{height:46px;margin-top:4px;border-radius:10px;color:#fff;font-weight:600;font-size:15px;letter-spacing:.01em;
+  background:linear-gradient(120deg,#130F38 0%,#2A1F73 55%,#4A3AB4 100%);box-shadow:0 6px 18px rgba(42,31,115,.28),inset 0 1px 0 rgba(255,255,255,.12);transition:filter .15s,box-shadow .15s}
+.auth-submit:hover:not(:disabled){filter:brightness(1.15);box-shadow:0 8px 24px rgba(74,58,180,.38),inset 0 1px 0 rgba(255,255,255,.16)}
+.auth-submit:disabled{opacity:.6;cursor:default}
+.auth-switch{margin:2px 0 0;text-align:center;font-size:12.5px;color:var(--t-cap)}
+.auth-switch button{font-size:12.5px;font-weight:700;color:var(--t-strong);text-decoration:underline;text-underline-offset:2px}
+/* 회원가입: 한 칸씩 나타나는 단계형(한 줄에 한 칸). 칸은 넓고 높게, 맞으면 오른쪽에 체크. 분석 화면 .steps와 겹치지 않게 su- 접두어 */
+.auth-form.signup{width:min(400px,100%)}
+.su-steps{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+.su-step{display:grid;gap:8px;font-size:13px;font-weight:700;color:var(--t-sub)}
+.su-field{position:relative;display:block}
+.su-field input{width:100%;height:52px;padding:0 44px 0 16px;border-radius:12px;font-size:15px;transition:border-color .2s,box-shadow .2s}
+.su-field input:focus{outline:none;border-color:var(--primary-text);box-shadow:0 0 0 3px var(--primary-weak)}
+.su-step.bad .su-field input{border-color:var(--red)}
+.su-tick{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;opacity:0;transform:scale(.6);transition:opacity .2s,transform .2s}
+.su-field .su-tick{position:absolute;right:14px;top:50%;margin-top:-10px;color:var(--green)}
+.su-step.ok .su-field .su-tick{opacity:1;transform:scale(1)}
+.su-hint{margin:-2px 0 0;font-size:12.5px;font-weight:400;color:var(--red)}
+.su-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+.su-pick{max-height:138px;overflow-y:auto;overscroll-behavior:contain;scroll-snap-type:y proximity;display:grid;gap:4px;padding:6px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.su-pick button{scroll-snap-align:start;display:flex;align-items:center;justify-content:space-between;gap:6px;min-height:40px;padding:0 10px 0 12px;border-radius:9px;font-size:14px;font-weight:500;color:var(--t);text-align:left;white-space:nowrap;transition:background .15s,color .15s}
+.su-pick button:hover{background:var(--hover)}
+.su-pick button.on{background:var(--primary-weak);color:var(--primary-text);font-weight:700}
+.su-pick button .su-tick{color:var(--primary-text)}
+.su-pick button.on .su-tick{opacity:1;transform:scale(1)}
+.su-chosen{display:flex;align-items:center;justify-content:space-between;width:100%;height:52px;padding:0 14px 0 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-size:15px;font-weight:500;color:var(--t-strong);text-align:left;transition:border-color .2s}
+.su-chosen:hover{border-color:var(--line-2)}
+.su-chosen span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.su-chosen .su-tick{opacity:1;transform:none;color:var(--green)}
+.su-leave-active{transition:opacity .15s ease}
+.su-leave-to{opacity:0}
+.su-enter-active{transition:opacity .35s ease,transform .35s ease}
+.su-enter-from{opacity:0;transform:translateY(-8px)}
+@media (max-width:860px){
+  .auth{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .auth-hero{padding:36px 16px}
+  .auth-brand{gap:14px} .auth-logo{gap:12px} .auth-mark{width:52px;height:52px} .auth-brand h1{font-size:36px} .auth-tagline{font-size:18px;white-space:normal} .auth-desc{font-size:13px;white-space:normal}
+  .auth-panel{place-items:start center;padding:28px 16px 40px}
+}
 
 
 /* 왼쪽 패널: 근거 데이터 / 활동 로그 */

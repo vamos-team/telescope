@@ -97,9 +97,16 @@ jobs:
             name: web
             annotations:
               nginx.ingress.kubernetes.io/whitelist-source-range: "$ALLOWED_IPS"
+          ---
+          apiVersion: networking.k8s.io/v1
+          kind: Ingress
+          metadata:
+            name: api
+            annotations:
+              nginx.ingress.kubernetes.io/whitelist-source-range: "$ALLOWED_IPS"
           EOF
           printf 'patches:\n  - path: ingress-allowed-ips.yaml\n' >> kustomization.yaml
-          kubectl kustomize . | grep -q 'whitelist-source-range' || { echo "허용 IP 가 렌더링 결과에 없음"; exit 1; }
+          test "$(kubectl kustomize . | grep -c 'whitelist-source-range')" -eq 2 || { echo "허용 IP 가 두 Ingress에 모두 들어가지 않음"; exit 1; }
 
       - name: 배포
         working-directory: infra/k8s

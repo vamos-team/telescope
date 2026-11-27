@@ -7,10 +7,12 @@ import com.telescope.backend.canvas.dto.CanvasLinkResponse;
 import com.telescope.backend.canvas.dto.CanvasSharesResponse;
 import com.telescope.backend.canvas.dto.CanvasSummaryResponse;
 import com.telescope.backend.canvas.dto.ShareMember;
+import com.telescope.backend.canvas.dto.ShareMemberResponse;
 import com.telescope.backend.canvas.dto.UserRef;
 import com.telescope.backend.canvas.entity.Canvas;
 import com.telescope.backend.canvas.entity.CanvasCard;
 import com.telescope.backend.canvas.entity.CanvasEvent;
+import com.telescope.backend.canvas.entity.CanvasLink;
 import com.telescope.backend.canvas.entity.CanvasRole;
 import com.telescope.backend.canvas.entity.CanvasShare;
 import com.telescope.backend.canvas.entity.CardKind;
@@ -71,6 +73,7 @@ public class CanvasService {
     private final CanvasLinkRepository linkRepository;
     private final CanvasEventRepository eventRepository;
     private final CanvasAccessService access;
+    private final CanvasPeople people;
     private final ApplicationEventPublisher publisher;
     private final Clock clock;
 
@@ -97,9 +100,10 @@ public class CanvasService {
         for (Object[] row : cardRepository.countByCanvasIds(ids)) {
             counts.put((Long) row[0], (Long) row[1]);
         }
+        Map<Long, UserRef> refs = people.refs(canvases.stream().flatMap(c -> summaryPeople(c).stream()).toList());
         return canvases.stream()
                 .map(c -> summary(c, c.getOwnerId().equals(userId) ? CanvasRole.OWNER : invited.get(c.getId()),
-                        counts.getOrDefault(c.getId(), 0L)))
+                        counts.getOrDefault(c.getId(), 0L), refs))
                 .toList();
     }
 
@@ -115,7 +119,7 @@ public class CanvasService {
         editors.remove(userId);
         List<CanvasShare> shares = editors.stream().map(id -> CanvasShare.of(canvas.getId(), id, CanvasRole.EDIT)).toList();
         saveSharesOrNotFound(shares);
-        return summary(canvas, CanvasRole.OWNER, 0);
+        return summary(canvas, CanvasRole.OWNER, 0, people.refs(summaryPeople(canvas)));
     }
 
     /** 이름을 바꾼다(소유자·편집). 비면 "제목 없는 캔버스". */
@@ -125,7 +129,8 @@ public class CanvasService {
         CanvasRole role = access.requireEdit(canvas, userId);
         canvas.rename(name);
         canvas.markEdited(userId, LocalDateTime.now(clock));
-        return summary(canvasRepository.save(canvas), role, cardCount(canvasId));
+        Canvas saved = canvasRepository.save(canvas);
+        return summary(saved, role, cardCount(canvasId), people.refs(summaryPeople(saved)));
     }
 
     /**
@@ -151,19 +156,26 @@ public class CanvasService {
         Canvas canvas = access.loadActive(canvasId);
         CanvasRole role = access.requireView(canvas, userId);
         List<CanvasCard> cards = cardRepository.findByCanvasIdOrderByCreatedAtAsc(canvasId);
+        List<CanvasLink> linkRows = linkRepository.findByCanvasIdOrderByCreatedAtAsc(canvasId);
+        // 카드 작성자·선 메모 작성자·소유자·마지막 수정자를 모아 한 번에 읽는다
+        List<Long> personIds = new ArrayList<>(summaryPeople(canvas));
+        cards.forEach(c -> personIds.add(c.getCreatedBy()));
+        linkRows.forEach(l -> personIds.add(l.getMemoBy()));
+        Map<Long, UserRef> refs = people.refs(personIds);
+
         Set<String> cardIds = cards.stream().map(c -> c.getId().toString()).collect(Collectors.toSet());
         List<String> warnings = new ArrayList<>();
         List<Map<String, Object>> cardViews = new ArrayList<>();
         for (CanvasCard card : cards) {
-            Map<String, Object> view = cardView(card);
+            Map<String, Object> view = cardView(card, refs);
             warnings.addAll(restoreWarnings(card, view, cardIds));
             cardViews.add(view);
         }
-        List<CanvasLinkResponse> links = linkRepository.findByCanvasIdOrderByCreatedAtAsc(canvasId).stream()
+        List<CanvasLinkResponse> links = linkRows.stream()
                 .map(l -> new CanvasLinkResponse(l.getId(), l.getSourceCardId(), l.getTargetCardId(),
-                        l.getMemo(), l.getMemoVersion(), l.getMemoBy() == null ? null : new UserRef(l.getMemoBy())))
+                        l.getMemo(), l.getMemoVersion(), CanvasPeople.of(refs, l.getMemoBy())))
                 .toList();
-        return new CanvasDetailResponse(summary(canvas, role, cards.size()), cardViews, links,
+        return new CanvasDetailResponse(summary(canvas, role, cards.size(), refs), cardViews, links,
                 canvas.getLastSeq(), warnings);
     }
 
@@ -172,14 +184,16 @@ public class CanvasService {
     public List<CanvasActivityResponse> activities(Long canvasId, Long userId) {
         Canvas canvas = access.loadActive(canvasId);
         access.requireView(canvas, userId);
-        return eventRepository.findByCanvasIdAndTypeInOrderBySeqDesc(
-                        canvasId, ACTIVITY_TEXT.keySet(), PageRequest.of(0, ACTIVITY_LIMIT)).stream()
-                .map(e -> new CanvasActivityResponse(new UserRef(e.getAuthorId()), ACTIVITY_TEXT.get(e.getType()),
+        List<CanvasEvent> events = eventRepository.findByCanvasIdAndTypeInOrderBySeqDesc(
+                canvasId, ACTIVITY_TEXT.keySet(), PageRequest.of(0, ACTIVITY_LIMIT));
+        Map<Long, UserRef> refs = people.refs(events.stream().map(CanvasEvent::getAuthorId).toList());
+        return events.stream()
+                .map(e -> new CanvasActivityResponse(CanvasPeople.of(refs, e.getAuthorId()), ACTIVITY_TEXT.get(e.getType()),
                         cardIdOf(e), e.getCreatedAt()))
                 .toList();
     }
 
-    /** 공유 명단(권한자 모두). 소유자는 {@code ownerId}로만 나온다. */
+    /** 공유 명단(권한자 모두). 소유자는 {@code ownerId}·{@code owner}로만 나온다. 이름·부서를 함께 준다(#149). */
     @Transactional(readOnly = true)
     public CanvasSharesResponse shares(Long canvasId, Long userId) {
         Canvas canvas = access.loadActive(canvasId);
@@ -230,7 +244,7 @@ public class CanvasService {
             long seq = canvas.nextSeq();
             UUID requestId = UUID.randomUUID();
             eventRepository.save(CanvasEvent.of(canvasId, seq, requestId, userId, SET_SHARE, CanvasJson.write(payload)));
-            publisher.publishEvent(new CanvasEventsCommitted(canvasId, seq, seq, requestId, userId,
+            publisher.publishEvent(new CanvasEventsCommitted(canvasId, seq, seq, requestId, people.ref(userId),
                     List.of(payload), Map.of()));
             publisher.publishEvent(new CanvasAccessChanged(canvasId, revoked, changed, false));
         }
@@ -253,7 +267,7 @@ public class CanvasService {
         return wanted;
     }
 
-    /** 초대를 저장한다. 없는 사용자(FK 위반)면 404로 바꾼다. 사용자 조회는 user 도메인(#34) 이후 서비스로 바꾼다. */
+    /** 초대를 저장한다. 없는 사용자(FK 위반)면 404로 바꾼다. 저장 한 번으로 존재 확인까지 끝나서 미리 조회하지 않는다. */
     private void saveSharesOrNotFound(List<CanvasShare> shares) {
         if (shares.isEmpty()) {
             return;
@@ -265,11 +279,16 @@ public class CanvasService {
         }
     }
 
+    /** 공유 명단 응답. 소유자와 명단의 사람을 한 번에 읽어 이름·부서를 붙인다. */
     private CanvasSharesResponse sharesOf(Canvas canvas) {
-        List<ShareMember> members = shareRepository.findByCanvasIdOrderByIdAsc(canvas.getId()).stream()
-                .map(s -> new ShareMember(s.getUserId(), s.getRole()))
+        List<CanvasShare> shares = shareRepository.findByCanvasIdOrderByIdAsc(canvas.getId());
+        List<Long> ids = new ArrayList<>(List.of(canvas.getOwnerId()));
+        shares.forEach(s -> ids.add(s.getUserId()));
+        Map<Long, UserRef> refs = people.refs(ids);
+        List<ShareMemberResponse> members = shares.stream()
+                .map(s -> ShareMemberResponse.of(s.getUserId(), s.getRole(), CanvasPeople.of(refs, s.getUserId())))
                 .toList();
-        return new CanvasSharesResponse(canvas.getOwnerId(), members);
+        return new CanvasSharesResponse(canvas.getOwnerId(), CanvasPeople.of(refs, canvas.getOwnerId()), members);
     }
 
     private long cardCount(Long canvasId) {
@@ -277,15 +296,25 @@ public class CanvasService {
                 .findFirst().map(r -> (Long) r[1]).orElse(0L);
     }
 
-    private static CanvasSummaryResponse summary(Canvas c, CanvasRole myRole, long cardCount) {
-        LocalDateTime updatedAt = c.getLastEditedAt() != null ? c.getLastEditedAt() : c.getCreatedAt();
-        Long updatedBy = c.getLastEditedBy() != null ? c.getLastEditedBy() : c.getOwnerId();
-        return new CanvasSummaryResponse(c.getId(), c.getName(), c.getQuarter(), new UserRef(c.getOwnerId()),
-                myRole, updatedAt, new UserRef(updatedBy), cardCount);
+    /** 목록 한 줄에 나오는 사람(소유자, 마지막 수정자). 이름을 한 번에 읽으려고 먼저 모은다. */
+    private static List<Long> summaryPeople(Canvas c) {
+        return List.of(c.getOwnerId(), updatedByOf(c));
     }
 
-    /** 카드 하나를 화면이 쓰는 모양(공통 필드 + 종류별 필드)으로 편다. */
-    private static Map<String, Object> cardView(CanvasCard card) {
+    /** 마지막으로 고친 사람. 아직 아무도 고치지 않았으면 소유자. */
+    private static Long updatedByOf(Canvas c) {
+        return c.getLastEditedBy() != null ? c.getLastEditedBy() : c.getOwnerId();
+    }
+
+    /** 목록 한 줄. 사람 이름은 미리 읽어 둔 표({@code refs})에서 꺼낸다. */
+    private static CanvasSummaryResponse summary(Canvas c, CanvasRole myRole, long cardCount, Map<Long, UserRef> refs) {
+        LocalDateTime updatedAt = c.getLastEditedAt() != null ? c.getLastEditedAt() : c.getCreatedAt();
+        return new CanvasSummaryResponse(c.getId(), c.getName(), c.getQuarter(), CanvasPeople.of(refs, c.getOwnerId()),
+                myRole, updatedAt, CanvasPeople.of(refs, updatedByOf(c)), cardCount);
+    }
+
+    /** 카드 하나를 화면이 쓰는 모양(공통 필드 + 종류별 필드)으로 편다. 작성자 이름은 미리 읽어 둔 표에서 꺼낸다. */
+    private static Map<String, Object> cardView(CanvasCard card, Map<Long, UserRef> refs) {
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("id", card.getId());
         view.put("kind", card.getKind());
@@ -299,7 +328,7 @@ public class CanvasService {
             view.put("memo", card.getMemo());
             view.put("memoVersion", card.getMemoVersion());
         }
-        view.put("createdBy", new UserRef(card.getCreatedBy()));
+        view.put("createdBy", CanvasPeople.of(refs, card.getCreatedBy()));
         return view;
     }
 
