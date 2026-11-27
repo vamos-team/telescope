@@ -3,6 +3,8 @@ package com.telescope.backend.global.auth;
 import com.telescope.backend.TestcontainersConfig;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -15,6 +17,7 @@ import org.springframework.test.web.servlet.RequestBuilder;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -59,6 +62,23 @@ class SecurityRulesTest {
 
         assertThat(result.getResponse().getStatus()).isNotEqualTo(401);
         assertThat(errorCodeOrNull(result)).isNotEqualTo("A002");
+    }
+
+    // ---- 2. 그 밖의 경로: 토큰이 없으면 401 A002 ----
+
+    /** 공개 경로가 아니면 모두 인증이 필요하다. 기능별로 하나씩 고른다(#148 리뷰: 작업 조회의 401 확인이 따로 없었음). */
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {
+            "/api/v1/users/me",
+            "/api/v1/jobs/1",
+            "/api/v1/canvases",
+            "/api/v1/documents/1",
+            "/api/v1/data-sync-runs",
+    })
+    void 공개_경로가_아니면_토큰_없이_부를_때_401_A002(String path) throws Exception {
+        mvc.perform(get(path))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("A002"));
     }
 
     // ---- 도움 함수 ----
