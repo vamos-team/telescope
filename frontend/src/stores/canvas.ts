@@ -178,6 +178,7 @@ export const useCanvas = defineStore("canvas", {
     // ---- 서버 모드(SYNC_MODE=server)에서만 쓰는 상태 ----
     serverRole: null as Role | null,  // 캔버스 열기 응답·권한 변경 알림의 내 권한
     serverQuarter: null as string | null,
+    myNewMemo: null as string | null,  // 이 화면에서 내가 마지막으로 만든 메모 카드. 그 메모만 쓰는 중 · 자동 포커스로 연다
     serverCanvases: [] as CanvasMeta[],  // 캔버스 홈 목록(GET /canvases)
     serverShares: null as CanvasShares | null,  // 지금 캔버스의 공유 명단(GET·PUT /shares). 공유 창을 열 때 읽는다
     people: {} as Record<number, string>,  // 실시간 메시지로 알게 된 사람 이름(커서·접속자 표시), 키는 사용자 ID
@@ -517,7 +518,7 @@ export const useCanvas = defineStore("canvas", {
     reset() {
       clearTimeout(this.timer); this.queue = []; this.error = "";
       this.closeServer();
-      Object.assign(this, { sessionId: crypto.randomUUID(), cards: [], links: [], tags: {}, activity: [], log: [], seq: 0, lastChangedLayer: null, focus: null, active: null, selected: [], analyses: [] });
+      Object.assign(this, { sessionId: crypto.randomUUID(), cards: [], links: [], tags: {}, activity: [], log: [], seq: 0, lastChangedLayer: null, focus: null, active: null, selected: [], analyses: [], myNewMemo: null });
       this.overlay = { tableId: null, match: [], cardId: null };
     },
     defaultName() { return `${this.user?.dept ?? ""} 페이지 ${this.canvases.filter((m) => roleOf(m, this.user) === "owner").length + 1}`; },
@@ -707,6 +708,7 @@ export const useCanvas = defineStore("canvas", {
       author ??= this.author;
       const id = this.newId();
       this.cards.push({ id, kind: "memo", author, text, ...pos });
+      this.myNewMemo = id;
       this.emit({ type: "add_memo", card_id: id, text, author });
       return id;
     },
