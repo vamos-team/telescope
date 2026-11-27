@@ -6,13 +6,20 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.RequestBuilder;
+
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -33,6 +40,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class SecurityRulesTest {
 
     @Autowired MockMvc mvc;
+    @Autowired JwtTokenProvider tokens;
+    @Value("${app.jwt.secret}") String secret;
+
+    /** 보호 경로 하나. 토큰 검증 결과만 보려고 어떤 사용자로든 200이 나오는 경로를 쓴다. */
+    private static final String PROTECTED = "/api/v1/canvases";
 
     // ---- 1. 공개 경로: 토큰 없이 열린다 ----
 
@@ -81,6 +93,42 @@ class SecurityRulesTest {
                 .andExpect(jsonPath("$.error.code").value("A002"));
     }
 
+    // ---- 3. 잘못된 토큰·만료된 토큰 ----
+
+    /** 서명 키가 다른(위조된) 토큰은 거절한다. 만료와 구분해 A002다. */
+    @Test
+    void 서명이_위조된_토큰이면_401_A002() throws Exception {
+        JwtTokenProvider forger = new JwtTokenProvider(
+                new JwtProperties("forged-secret-key-not-the-server-0123456789", Duration.ofHours(1)), Clock.systemUTC());
+
+        expectAuthError(bearer(forger.issue(1L, "ADMIN").accessToken()), "A002");
+    }
+
+    /** {@code Bearer <토큰>} 형식이 아니면(접두사 없음, 다른 방식, 빈 토큰) 토큰을 보지 않고 거절한다. */
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"RAW", "Token RAW", "Basic dXNlcjpwYXNz", "Bearer "})
+    void Bearer_형식이_아니면_401_A002(String header) throws Exception {
+        String valid = tokens.issue(1L, "USER").accessToken();
+
+        expectAuthError(header.replace("RAW", valid), "A002");
+    }
+
+    /** 만료된 토큰은 A003으로 알려 화면이 다시 로그인을 안내할 수 있게 한다. 서버 키로 두 시간 전에 발급해 만든다. */
+    @Test
+    void 만료된_토큰이면_401_A003() throws Exception {
+        Clock twoHoursAgo = Clock.fixed(Instant.now().minus(Duration.ofHours(2)), ZoneId.systemDefault());
+        JwtTokenProvider past = new JwtTokenProvider(new JwtProperties(secret, Duration.ofHours(1)), twoHoursAgo);
+
+        expectAuthError(bearer(past.issue(1L, "USER").accessToken()), "A003");
+    }
+
+    /** 위 거절이 토큰 때문인지 보려고, 같은 경로에 서버가 발급한 유효한 토큰은 통과하는지 함께 확인한다. */
+    @Test
+    void 서버가_발급한_유효한_토큰은_통과한다() throws Exception {
+        mvc.perform(get(PROTECTED).header(HttpHeaders.AUTHORIZATION, bearer(tokens.issue(1L, "USER").accessToken())))
+                .andExpect(status().isOk());
+    }
+
     // ---- 도움 함수 ----
 
     /** 공개 경로 응답: 401(A001)·400·201 중 하나이고, 인증 오류(A002)가 아니다. */
@@ -89,6 +137,16 @@ class SecurityRulesTest {
 
         assertThat(result.getResponse().getStatus()).isIn(201, 400, 401);
         assertThat(errorCodeOrNull(result)).isNotEqualTo("A002");
+    }
+
+    private void expectAuthError(String authorization, String code) throws Exception {
+        mvc.perform(get(PROTECTED).header(HttpHeaders.AUTHORIZATION, authorization))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value(code));
+    }
+
+    private static String bearer(String token) {
+        return "Bearer " + token;
     }
 
     /** 응답 본문의 {@code error.code}. JSON이 아니거나 오류가 없으면 {@code null}. */
