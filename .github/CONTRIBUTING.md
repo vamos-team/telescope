@@ -1,7 +1,7 @@
 # GitHub 작업 규칙
 
 사람과 AI 에이전트(Claude Code, Codex 등)가 브랜치 · 커밋 · 푸시 · 이슈 · PR을 만들 때 따르는 규칙이다.
-에이전트는 이 문서와 루트 `CLAUDE.md`를 함께 따른다. 둘이 다르면 `CLAUDE.md`가 우선한다.
+에이전트는 이 문서와 루트 `AGENTS.md`(`CLAUDE.md`는 이 파일을 가리키는 링크)를 함께 따른다. 둘이 다르면 `AGENTS.md`가 우선한다.
 
 ## 1. 담당 영역
 
