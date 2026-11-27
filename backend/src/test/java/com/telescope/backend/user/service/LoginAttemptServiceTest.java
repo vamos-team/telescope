@@ -135,16 +135,23 @@ class LoginAttemptServiceTest {
         ExecutorService pool = Executors.newFixedThreadPool(threads);
         CountDownLatch start = new CountDownLatch(1);
         List<Future<?>> futures = new ArrayList<>();
-        for (int i = 0; i < threads; i++) {
-            futures.add(pool.submit(() -> {
-                start.await();
-                service.recordFailure("RACE1");
-                return null;
-            }));
+        try {
+            for (int i = 0; i < threads; i++) {
+                futures.add(pool.submit(() -> {
+                    start.await();
+                    service.recordFailure("RACE1");
+                    return null;
+                }));
+            }
+            start.countDown();
+            for (Future<?> f : futures) f.get(30, TimeUnit.SECONDS);
+        } finally {
+            // 대기 중 실패·시간 초과여도 남은 작업과 스레드를 남기지 않는다
+            start.countDown();
+            futures.forEach(f -> f.cancel(true));
+            pool.shutdownNow();
+            pool.awaitTermination(10, TimeUnit.SECONDS);  // 여기서 단언하면 원래 실패 원인을 덮으므로 기다리기만 한다
         }
-        start.countDown();
-        for (Future<?> f : futures) f.get(30, TimeUnit.SECONDS);
-        pool.shutdown();
 
         LoginAttempt attempt = repository.findById("RACE1").orElseThrow();
         assertThat(attempt.getFailedCount()).isEqualTo(threads);
