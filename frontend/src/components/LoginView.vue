@@ -6,7 +6,6 @@ import { ref } from "vue";
 import { useCanvas } from "../stores/canvas";
 import { SYNC_MODE } from "../sync/config";
 import { authErrorMessage } from "../sync/http";
-import Logo from "./Logo.vue";
 import SignupForm from "./SignupForm.vue";
 
 const cv = useCanvas();
@@ -27,9 +26,24 @@ async function submit() {
     <section class="auth-hero">
       <div class="auth-stars" aria-hidden="true"><i /><i /><i /></div>
       <div class="auth-brand">
-        <Logo :size="88" />
-        <h1>Telescope</h1>
-        <p>공시 · IR · 리포트 · 뉴스로 보는<br />경영실적 다면 분석</p>
+        <div class="auth-logo">
+          <!-- 로그인 화면 전용 표지: 로고와 같은 별 모양에 밤하늘과 어울리는 은은한 그라데이션 -->
+          <svg class="auth-mark" viewBox="0 0 64 64" role="img" aria-label="Telescope">
+            <defs>
+              <linearGradient id="auth-mark-fill" x1="14" y1="6" x2="50" y2="58" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#FFFFFF" />
+                <stop offset=".55" stop-color="#E4DDFF" />
+                <stop offset="1" stop-color="#A996FF" />
+              </linearGradient>
+            </defs>
+            <path d="M32 4C34.6 22.6 41.4 29.4 60 32 41.4 34.6 34.6 41.4 32 60 29.4 41.4 22.6 34.6 4 32 22.6 29.4 29.4 22.6 32 4Z" fill="url(#auth-mark-fill)" />
+          </svg>
+          <h1>TELESCOPE</h1>
+        </div>
+        <div class="auth-copy">
+          <p class="auth-tagline">See the value together</p>
+          <p class="auth-desc">The collaborative canvas for earnings analysis</p>
+        </div>
       </div>
     </section>
 
