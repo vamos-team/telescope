@@ -7,11 +7,11 @@
 
 ## 1. 한눈에 보기
 
-엔티티 22개, 도메인 8개.
+엔티티 23개, 도메인 8개.
 
 | 도메인 | 엔티티 | 한 줄 역할 |
 |---|---|---|
-| user | `User` | 로그인 사용자와 역할(ADMIN/USER). 결과의 소유자 |
+| user | `User`, `LoginAttempt` | 로그인 사용자와 역할(ADMIN/USER). 결과의 소유자. 사번별 로그인 실패 횟수·잠금 |
 | document | `Document`, `DocumentVersion`, `DocumentPreparationResult` | 문서(공시, IR, 리포트, 뉴스, 예산서)와 그 버전, 업로드 문서의 파싱 결과 |
 | job | `Job` | 오래 걸리는 작업(자료 준비, 분석, 예측)의 상태. 폴링 대상 |
 | datasync | `DataSyncRun`, `DataVersion` | 재무 데이터(DuckDB) 적재 이력과 데이터 버전 |
@@ -255,8 +255,9 @@ erDiagram
 ### 3.1 인증
 
 1. 사용자가 사번(`employeeNo`)과 비밀번호로 로그인하면 서버가 JWT를 발급한다. 계정은 회원가입(역할 `USER`)과 배포 시 첫 관리자 시드로 만든다(#133, `docs/backend/api-spec.md` 3.3·3.4).
-2. 이후 요청은 JWT로 사용자와 역할(`role`)을 판별한다. 권한은 서버가 강제한다.
-3. 사내 SSO 연동은 MVP 이후 과제다.
+2. 같은 사번으로 연속 5회 틀리면 10분 동안 로그인을 막는다. 횟수와 잠금은 `LoginAttempt`에 둔다(#164, `docs/backend/auth.md`).
+3. 이후 요청은 JWT로 사용자와 역할(`role`)을 판별한다. 권한은 서버가 강제한다.
+4. 사내 SSO 연동은 MVP 이후 과제다.
 
 ### 3.2 자료 준비 (문서 업로드·수집)
 
@@ -370,6 +371,17 @@ erDiagram
 - `ADMIN`만 공용 문서(공시 등)를 수집·삭제할 수 있다.
 - 소유자 FK로 참조된다: `DocumentVersion.uploadedBy`, `AnalysisRun.requestedBy`, `PredictionRun.requestedBy`, `ChatSession.userId`, `Canvas.ownerId`.
 - 캔버스 공유 대상(`CanvasShare.userId`)과 캔버스 작성자 FK(`lastEditedBy`, `createdBy`, `memoBy`, `decidedBy`, `authorId`)로도 참조된다.
+
+**LoginAttempt** — 사번별 연속 로그인 실패 횟수와 잠금 (`V15__create_login_attempt.sql`, #164)
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `employeeNo` | string PK | 로그인에 쓴 사번(앞뒤 공백 제거). 없는 사번도 저장한다 |
+| `failedCount` | int | 연속 실패 횟수. 성공하면 0, 잠금 시간이 지난 뒤 틀리면 1부터 다시 센다 |
+| `lockedUntil` | datetime | 이 시각 전까지 로그인을 막는다. 잠기지 않았으면 비어 있음 |
+
+- `User`와 관계(FK)가 없다. 없는 사번도 같은 방식으로 세어야 응답으로 사번 존재 여부를 알 수 없기 때문이다. 그래서 관계도(2장)에도 그리지 않는다.
+- 성공해도 행은 지우지 않고 횟수만 0으로 되돌린다. 값은 원자적 갱신 쿼리로만 바꾼다(동시 실패에도 횟수가 빠지지 않게).
 
 ### 4.2 document
 

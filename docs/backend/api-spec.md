@@ -60,6 +60,7 @@
 | `A003` | 401 | 인증이 만료되었습니다. | 토큰 만료 | [현재] |
 | `A004` | 403 | 권한이 없습니다. | 관리자 전용 기능을 `USER`가 호출 | [현재] |
 | `A005` | 409 | 이미 가입된 사번입니다. | 회원가입 사번이 이미 있거나 관리자 사번(`ADMIN_EMPLOYEE_NO`)과 같음. 둘을 구분하지 않음 | [현재] |
+| `A006` | 429 | 로그인을 여러 번 실패해 잠시 잠겼습니다. 잠시 후 다시 시도해 주세요. | 같은 사번으로 연속 5회 로그인 실패 후 10분 동안. 남은 초는 `Retry-After` 헤더. 없는 사번도 같음 (3.2, `docs/backend/auth.md`) | [현재] |
 | `K001` | 403 | 이 캔버스를 볼 권한이 없습니다. | 권한 없는 캔버스(공유가 풀림 포함) | [제안] |
 | `K002` | 403 | 이 캔버스를 수정할 권한이 없습니다. | 보기 권한으로 쓰기, 소유자 전용 기능을 다른 사람이 호출 | [제안] |
 | `K003` | 409 | 다른 사람이 먼저 글을 고쳤습니다. | 프롬프트 글의 기준 버전이 현재 버전과 다름 (5.3) | [제안] |
@@ -69,7 +70,7 @@
 - 코드 형식: 영역 접두사 한 글자 + 번호 세 자리. `C` 공통, `J` 작업, `A` 인증, `K` 캔버스, `D` 문서, `S` 외부 서비스.
 - 화면이 같은 코드 안에서 이유를 더 나눠야 하면 코드는 늘리지 않고 실패 응답의 `data`에 이유를 담는다(예: `K003`의 현재 글, `D001`의 `reason`).
 
-## 3. 인증·사용자 [현재] (#34, 회원가입·관리자 시드 #133)
+## 3. 인증·사용자 [현재] (#34, 회원가입·관리자 시드 #133, 로그인 실패 잠금 #164)
 
 ### 3.1 사용자 필드 (`User`)
 
@@ -93,6 +94,7 @@
 - 역할(`role`)은 토큰에 담긴 값을 쓴다. 요청마다 DB를 조회하지 않는 대신, 역할이 바뀌어도 기존 토큰이 만료될 때까지(토큰 만료 시간 `JWT_ACCESS_TOKEN_EXPIRY`만큼, 기본 1시간) 예전 역할로 동작한다. 만료 시간을 늘리면 이 지연도 그만큼 길어진다. 캔버스 공유 권한은 요청마다 DB에서 확인하므로 이 영향이 없다.
 - 공개 경로: `GET /actuator/health`(하위 프로브 포함), `POST /api/v1/auth/login`, `POST /api/v1/auth/signup`, `GET /api/v1/ws`(WebSocket 연결. 인증은 STOMP `CONNECT`에서 같은 토큰 검증으로 한다). 그 밖은 모두 인증이 필요하다.
 - 계정 만들기(결정 2026-11-27, #133): **회원가입은 누구나** 한다(역할은 항상 `USER`, 같은 사번은 다시 가입할 수 없음, 3.3). **첫 관리자는 배포 때 환경변수로 시드**한다(3.4). 회원가입으로는 `ADMIN`이 생기지 않는다.
+- 로그인 실패 잠금(결정 2026-11-27, #164): 같은 사번으로 **연속 5회** 틀리면 그때부터 **10분** 동안 로그인을 막는다. 5번째 실패의 응답은 `A001`이고 6번째 시도부터 `429` `A006`(+ `Retry-After` 초)이며, 잠긴 동안은 맞는 비밀번호도 거절한다. 성공하면 횟수를 0으로 되돌린다. 없는 사번도 같은 방식으로 세고 같은 응답을 준다. 횟수·잠금은 DB(`login_attempt`)에 두어 재시작해도 유지된다. 횟수·시간은 `AUTH_LOGIN_MAX_FAILURES`, `AUTH_LOGIN_LOCK_DURATION`으로 바꿀 수 있다. 결정 이유와 한계는 `docs/backend/auth.md`.
 - 로그아웃은 서버 호출 없이 토큰을 버린다.
 - 사용자 검색(`GET /api/v1/users?q=`)은 사번·이름·부서 일부로 찾는다. 응답에 `role`은 담지 않는다.
 
@@ -103,6 +105,7 @@
 | 토큰 만료 | 401 | `A003` |
 | 관리자 전용 기능을 `USER`가 호출 | 403 | `A004` |
 | 회원가입 사번이 이미 있음, 관리자 사번으로 가입 | 409 | `A005` |
+| 같은 사번으로 연속 5회 실패한 뒤 10분 안에 로그인 시도 | 429 | `A006` |
 | 회원가입 필수값 누락, 비밀번호 규칙 위반 | 400 | `C001` |
 
 ### 3.3 회원가입 `POST /api/v1/auth/signup`
@@ -424,7 +427,7 @@ ai 서비스가 발급한 ID(`externalJobId`)는 화면에 노출하지 않는�
 | 1.2 응답 형식 | `global.response.ApiResponse`, `ErrorResponse` |
 | 1.3 목록 | `global.response.PageResponse` |
 | 2 에러 코드 | `global.exception.ErrorCode`, `GlobalExceptionHandler` (`S`는 아직 없음) |
-| 3 인증·사용자 | `user.controller.AuthController`·`UserController`, `user.service.AuthService`·`UserService`·`AdminSeeder`, `global.auth.SecurityConfig`·`JwtAuthenticationFilter`·`JwtTokenProvider` |
+| 3 인증·사용자 | `user.controller.AuthController`·`UserController`, `user.service.AuthService`·`UserService`·`AdminSeeder`·`LoginAttemptService`, `global.auth.SecurityConfig`·`JwtAuthenticationFilter`·`JwtTokenProvider` |
 | 4·5 캔버스 | `canvas.controller.CanvasController`, `canvas.service.CanvasService` |
 | 5.5·5.6 실시간 | `global.config.WebSocketConfig`, `global.auth.StompAuthChannelInterceptor`, `canvas.controller.CanvasStompInterceptor`·`CanvasOutboundInterceptor`·`CanvasRealtimeController` |
 | 6 MCP | 없음 (`mcp-server/http`, backend 호출 클라이언트) |
