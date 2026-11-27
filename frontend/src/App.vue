@@ -264,7 +264,9 @@ function pinch(e: WheelEvent) {
   const z = Math.min(2, Math.max(0.2, z0 * 2 ** (-e.deltaY * 0.02))), px = e.clientX - r.left, py = e.clientY - r.top;
   flow.setViewport({ x: px - (px - x) * z / z0, y: py - (py - y) * z / z0, zoom: z });
 }
-const noGesture = (e: Event) => e.preventDefault();  // Safari 핀치(gesture 이벤트) 화면 확대 막기
+// Safari 핀치(gesture 이벤트): 캔버스 밖에서만 막음. 캔버스 안은 통과시켜야 Safari 15+가 ctrl+wheel을 보내 위 pinch가 캔버스만 확대
+// ponytail: gesture만 보내는 Safari 14 이하는 캔버스 안 핀치가 화면을 확대함, 지원이 필요하면 gesturechange의 scale로 직접 확대
+const noGesture = (e: Event) => { if (!(e.target as Element).closest?.(".flow")) e.preventDefault(); };
 const typing = () => !!(document.activeElement as HTMLElement | null)?.closest("input,textarea,select,[contenteditable]");
 
 // ---- 서버 모드: 다른 사람 커서와 접속자 (docs/backend/api-spec.md 5.6) ----
