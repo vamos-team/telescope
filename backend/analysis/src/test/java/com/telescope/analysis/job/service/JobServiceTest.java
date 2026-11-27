@@ -1,6 +1,6 @@
 package com.telescope.analysis.job.service;
 
-import com.telescope.analysis.TestcontainersConfig;
+import com.telescope.common.test.TestcontainersConfig;
 import com.telescope.common.config.JpaAuditingConfig;
 import com.telescope.common.exception.BusinessException;
 import com.telescope.common.exception.ErrorCode;

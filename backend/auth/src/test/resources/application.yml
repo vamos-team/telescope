@@ -1,0 +1,16 @@
+# auth 모듈 테스트 설정. 스키마는 엔티티에서 생성(create-drop)하고 Flyway는 쓰지 않는다.
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  flyway:
+    enabled: false
+app:
+  # 테스트 전용 서명 키. 실제 키는 JWT_SECRET 환경변수로 넣는다.
+  jwt:
+    secret: test-only-jwt-secret-key-0123456789abcdef
+  internal-api-key: ${INTERNAL_API_KEY:}
+  auth:
+    login:
+      max-failures: 5
+      lock-duration: PT10M

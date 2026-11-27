@@ -1,13 +1,6 @@
 package com.telescope.analysis.document.service;
 
-import com.telescope.analysis.TestcontainersConfig;
-import com.telescope.canvas.canvas.entity.Canvas;
-import com.telescope.canvas.canvas.entity.CanvasRole;
-import com.telescope.canvas.canvas.entity.CanvasShare;
-import com.telescope.canvas.canvas.repository.CanvasRepository;
-import com.telescope.canvas.canvas.repository.CanvasShareRepository;
-import com.telescope.integration.bridge.LocalCanvasAccessClient;
-import com.telescope.canvas.canvas.service.CanvasAccessService;
+import com.telescope.common.test.TestcontainersConfig;
 import com.telescope.analysis.document.dto.DocumentResponse;
 import com.telescope.analysis.document.dto.DocumentUploadCommand;
 import com.telescope.analysis.document.dto.DocumentUploadResponse;
@@ -69,11 +62,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 실제 PostgreSQL에 커밋되는 상태로 확인한다. 파일 저장소와 ai 서비스는 가짜로 대신한다.
  */
 @DataJpaTest
-@org.springframework.test.context.ContextConfiguration(classes = com.telescope.integration.IntegrationTestApplication.class)
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfig.class, JpaAuditingConfig.class, DocumentService.class,
-        DocumentPreparationResultHandler.class, CanvasAccessService.class, LocalCanvasAccessClient.class, JobService.class,
-        DocumentServiceTest.TestBeans.class})
+        DocumentPreparationResultHandler.class, JobService.class,
+        DocumentServiceTest.TestBeans.class, DocumentServiceTest.FakeCanvasAccess.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class DocumentServiceTest {
 
@@ -85,8 +77,7 @@ class DocumentServiceTest {
     @Autowired DocumentVersionRepository versionRepository;
     @Autowired DocumentPreparationResultRepository resultRepository;
     @Autowired JobRepository jobRepository;
-    @Autowired CanvasRepository canvasRepository;
-    @Autowired CanvasShareRepository shareRepository;
+    @Autowired FakeCanvasAccess canvasAccess;
     @Autowired JdbcTemplate jdbc;
     @Autowired FakeStorage storage;
     @Autowired FakeAi ai;
@@ -105,9 +96,11 @@ class DocumentServiceTest {
         editor = user();
         viewer = user();
         stranger = user();
-        canvasId = canvasRepository.save(Canvas.create("업로드", "2026Q3", owner)).getId();
-        shareRepository.save(CanvasShare.of(canvasId, editor, CanvasRole.EDIT));
-        shareRepository.save(CanvasShare.of(canvasId, viewer, CanvasRole.VIEW));
+        canvasId = 1L;
+        canvasAccess.clear();
+        canvasAccess.grant(owner, "owner");
+        canvasAccess.grant(editor, "edit");
+        canvasAccess.grant(viewer, "view");
     }
 
     @Test
@@ -313,11 +306,26 @@ class DocumentServiceTest {
         return new ByteArrayInputStream(s.getBytes());
     }
 
+    private static final java.util.concurrent.atomic.AtomicLong USER_IDS = new java.util.concurrent.atomic.AtomicLong(1000);
+
+    // 사용자는 다른 서비스(auth) 소관이라 analysis 테스트는 행을 만들지 않고 id만 쓴다.
     private Long user() {
-        String loginId = "t-" + UUID.randomUUID();
-        return jdbc.queryForObject(
-                "insert into app.users (employee_no, password_hash, name, role) values (?, 'x', ?, 'USER') returning id",
-                Long.class, loginId, loginId);
+        return USER_IDS.incrementAndGet();
+    }
+
+    /** 문서가 쓰는 캔버스 권한 확인의 테스트 구현. 운영은 canvas 서비스를 HTTP로 부른다(HttpCanvasAccessClient). */
+    static class FakeCanvasAccess implements CanvasAccessClient {
+        private final java.util.Map<Long, String> roles = new java.util.HashMap<>();
+        void clear() { roles.clear(); }
+        void grant(Long userId, String role) { roles.put(userId, role); }
+        @Override public void requireView(Long canvasId, Long userId) {
+            if (!roles.containsKey(userId)) throw new BusinessException(ErrorCode.CANVAS_ACCESS_DENIED);
+        }
+        @Override public void requireEdit(Long canvasId, Long userId) {
+            requireView(canvasId, userId);
+            String r = roles.get(userId);
+            if (!"owner".equals(r) && !"edit".equals(r)) throw new BusinessException(ErrorCode.CANVAS_EDIT_DENIED);
+        }
     }
 
     @TestConfiguration

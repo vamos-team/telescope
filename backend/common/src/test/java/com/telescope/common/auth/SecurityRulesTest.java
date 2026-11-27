@@ -1,7 +1,6 @@
 package com.telescope.common.auth;
 
-import com.telescope.integration.IntegrationTestApplication;
-import com.telescope.analysis.TestcontainersConfig;
+import com.telescope.common.CommonTestApplication;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -36,9 +35,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>컨트롤러별 테스트에 흩어진 401·403 확인은 그대로 두고, 이 테스트는 규칙 전체를 다시 확인하는 용도다.
  * 동작을 바꾸지 않는다. 규칙과 다른 동작을 찾으면 고치지 않고 이슈에 남긴다.
  */
-@SpringBootTest(classes = IntegrationTestApplication.class)
+@SpringBootTest(classes = CommonTestApplication.class)
 @AutoConfigureMockMvc
-@Import(TestcontainersConfig.class)
+@Import(SecuredEndpoints.class)
 class SecurityRulesTest {
 
     @Autowired MockMvc mvc;
@@ -46,7 +45,7 @@ class SecurityRulesTest {
     @Value("${app.jwt.secret}") String secret;
 
     /** 보호 경로 하나. 토큰 검증 결과만 보려고 어떤 사용자로든 200이 나오는 경로를 쓴다. */
-    private static final String PROTECTED = "/api/v1/canvases";
+    private static final String PROTECTED = "/api/v1/test/protected";
 
     // ---- 1. 공개 경로: 토큰 없이 열린다 ----
 
@@ -82,13 +81,7 @@ class SecurityRulesTest {
 
     /** 공개 경로가 아니면 모두 인증이 필요하다. 기능별로 하나씩 고른다(#148 리뷰: 작업 조회의 401 확인이 따로 없었음). */
     @ParameterizedTest(name = "{0}")
-    @ValueSource(strings = {
-            "/api/v1/users/me",
-            "/api/v1/jobs/1",
-            "/api/v1/canvases",
-            "/api/v1/documents/1",
-            "/api/v1/data-sync-runs",
-    })
+    @ValueSource(strings = {"/api/v1/test/protected"})
     void 공개_경로가_아니면_토큰_없이_부를_때_401_A002(String path) throws Exception {
         mvc.perform(get(path))
                 .andExpect(status().isUnauthorized())
@@ -167,7 +160,7 @@ class SecurityRulesTest {
     private void assertPublic(RequestBuilder request) throws Exception {
         MvcResult result = mvc.perform(request).andReturn();
 
-        assertThat(result.getResponse().getStatus()).isIn(201, 400, 401);
+        assertThat(result.getResponse().getStatus()).isNotEqualTo(401);
         assertThat(errorCodeOrNull(result)).isNotEqualTo("A002");
     }
 

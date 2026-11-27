@@ -2,6 +2,7 @@ package com.telescope.canvas.canvas.service;
 
 import com.telescope.canvas.canvas.dto.CanvasEventsRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import java.util.concurrent.atomic.AtomicLong;
 
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -15,20 +16,15 @@ final class CanvasTestSupport {
     private CanvasTestSupport() {
     }
 
-    /** 테스트 사용자를 만든다. 테스트끼리 커밋된 데이터가 섞이지 않도록 사번을 매번 다르게 한다. */
+    private static final AtomicLong IDS = new AtomicLong(1000);
+
+    /** 테스트 사용자 id. 캔버스는 사용자 id만 Long으로 들고(FK 없음), 이름은 UserDirectory로 읽는다. */
     static Long user(JdbcTemplate jdbc) {
-        String employeeNo = "t-" + UUID.randomUUID();
-        return jdbc.queryForObject(
-                "insert into app.users (employee_no, password_hash, name, role) values (?, 'x', ?, 'USER') returning id",
-                Long.class, employeeNo, employeeNo);
+        return IDS.incrementAndGet();
     }
 
-    /** 이름·부서를 정해 테스트 사용자를 만든다(#149 이름 채우기 확인용). */
     static Long user(JdbcTemplate jdbc, String name, String dept) {
-        String employeeNo = "t-" + UUID.randomUUID();
-        return jdbc.queryForObject(
-                "insert into app.users (employee_no, password_hash, name, dept, role) values (?, 'x', ?, ?, 'USER') returning id",
-                Long.class, employeeNo, name, dept);
+        return IDS.incrementAndGet();
     }
 
     /** 새 requestId로 이벤트 묶음을 만든다. */

@@ -1,6 +1,6 @@
 package com.telescope.analysis.job.repository;
 
-import com.telescope.analysis.TestcontainersConfig;
+import com.telescope.common.test.TestcontainersConfig;
 import com.telescope.common.config.JpaAuditingConfig;
 import com.telescope.analysis.job.entity.Job;
 import com.telescope.analysis.job.entity.JobStatus;

@@ -1,8 +1,8 @@
 package com.telescope.auth.user.repository;
 
-import com.telescope.integration.IntegrationTestApplication;
+import com.telescope.auth.AuthApplication;
 import org.springframework.test.context.ContextConfiguration;
-import com.telescope.analysis.TestcontainersConfig;
+import com.telescope.common.test.TestcontainersConfig;
 import com.telescope.common.config.JpaAuditingConfig;
 import com.telescope.auth.user.entity.User;
 import com.telescope.auth.user.entity.UserRole;
@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 사번 조회·중복 확인·부분 검색이 맞게 동작하는지 확인한다.
  */
 @DataJpaTest
-@ContextConfiguration(classes = IntegrationTestApplication.class)
+@ContextConfiguration(classes = AuthApplication.class)
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfig.class, JpaAuditingConfig.class})
 class UserRepositoryTest {
@@ -47,7 +47,7 @@ class UserRepositoryTest {
         assertThat(found.getJob()).isEqualTo("Planner");
         assertThat(found.getRole()).isEqualTo(UserRole.ADMIN);
         assertThat(found.getCreatedAt()).isNotNull();
-        assertThat(em.createNativeQuery("select role from app.users where id = :id")
+        assertThat(em.createNativeQuery("select role from users where id = :id")
                 .setParameter("id", saved.getId()).getSingleResult()).isEqualTo("ADMIN");
     }
 

@@ -1,7 +1,9 @@
-package com.telescope.common.auth;
+package com.telescope.auth.user;
 
-import com.telescope.integration.IntegrationTestApplication;
-import com.telescope.analysis.TestcontainersConfig;
+import com.telescope.common.auth.InternalApiKeyFilter;
+
+import com.telescope.auth.AuthApplication;
+import com.telescope.common.test.TestcontainersConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -16,7 +18,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest(classes = IntegrationTestApplication.class, properties = "app.internal-api-key=test-internal-key")
+@SpringBootTest(classes = AuthApplication.class, properties = "app.internal-api-key=test-internal-key")
 @AutoConfigureMockMvc
 @Import(TestcontainersConfig.class)
 class InternalApiTest {

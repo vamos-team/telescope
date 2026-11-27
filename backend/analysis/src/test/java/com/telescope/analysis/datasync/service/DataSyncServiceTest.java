@@ -1,6 +1,6 @@
 package com.telescope.analysis.datasync.service;
 
-import com.telescope.analysis.TestcontainersConfig;
+import com.telescope.common.test.TestcontainersConfig;
 import com.telescope.analysis.datasync.dto.DataSyncRunResponse;
 import com.telescope.analysis.datasync.entity.DataSyncRun;
 import com.telescope.analysis.datasync.entity.DataVersion;
@@ -80,11 +80,10 @@ class DataSyncServiceTest {
 
     Long admin;
 
+    // 사용자는 auth 소관이라(FK 없음) 행을 만들지 않고 id만 쓴다.
     @BeforeEach
     void createAdmin() {
-        String no = "admin-" + java.util.UUID.randomUUID();
-        admin = jdbc.queryForObject("insert into app.users (employee_no, password_hash, name, role)"
-                + " values (?, 'x', ?, 'ADMIN') returning id", Long.class, no, no);
+        admin = java.util.concurrent.ThreadLocalRandom.current().nextLong(1000, 1_000_000);
     }
 
     @BeforeEach

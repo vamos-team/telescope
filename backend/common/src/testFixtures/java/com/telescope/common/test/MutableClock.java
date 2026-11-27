@@ -1,4 +1,4 @@
-package com.telescope.analysis;
+package com.telescope.common.test;
 
 import java.time.Clock;
 import java.time.Duration;

@@ -1,7 +1,7 @@
 package com.telescope.canvas.canvas.controller;
 
-import com.telescope.integration.IntegrationTestApplication;
-import com.telescope.analysis.TestcontainersConfig;
+import com.telescope.canvas.CanvasApplication;
+import com.telescope.common.test.TestcontainersConfig;
 import com.telescope.canvas.canvas.dto.CanvasCreateRequest;
 import com.telescope.canvas.canvas.dto.CanvasEventsRequest;
 import com.telescope.canvas.canvas.dto.ShareMember;
@@ -55,8 +55,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * <p>인증(#34) 전이므로 테스트용 토큰 검증기("user-{id}" → id)를 쓴다. 구독이 브로커에 실제로 등록됐는지는
  * 시간이 아니라 브로커의 구독 목록을 조회해 확인한다.
  */
-@SpringBootTest(classes = IntegrationTestApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import({TestcontainersConfig.class, CanvasRealtimeTest.TestAuth.class})
+@SpringBootTest(classes = CanvasApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import({TestcontainersConfig.class, CanvasRealtimeTest.TestAuth.class, com.telescope.canvas.canvas.service.StubUserDirectory.class})
 class CanvasRealtimeTest {
 
     private static final String DEPT = "네트워크센터";
@@ -83,6 +83,9 @@ class CanvasRealtimeTest {
     @Autowired CanvasEventService eventService;
     @Autowired SimpleBrokerMessageHandler broker;
     @Autowired JdbcTemplate jdbc;
+    @Autowired com.telescope.canvas.canvas.service.StubUserDirectory directory;
+    private final java.util.Map<Long, String> names = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicLong userIds = new java.util.concurrent.atomic.AtomicLong(1000);
 
     WebSocketStompClient client;
     final List<StompSession> sessions = new ArrayList<>();
@@ -332,15 +335,16 @@ class CanvasRealtimeTest {
     }
 
     private Long user() {
-        String no = "rt-" + UUID.randomUUID();
-        return jdbc.queryForObject(
-                "insert into app.users (employee_no, password_hash, name, dept, role) values (?, 'x', ?, ?, 'USER') returning id",
-                Long.class, no, "이름-" + no, DEPT);
+        Long id = userIds.incrementAndGet();
+        String name = "이름-rt-" + id;
+        names.put(id, name);
+        directory.register(id, name, DEPT);
+        return id;
     }
 
     /** 메시지의 사람 정보(#149): 구독할 때 읽어 둔 이름·부서가 함께 온다. */
     private Map<String, Object> person(Long id) {
-        String name = jdbc.queryForObject("select name from app.users where id = ?", String.class, id);
+        String name = names.get(id);
         return Map.of("id", id.intValue(), "name", name, "dept", DEPT);
     }
 

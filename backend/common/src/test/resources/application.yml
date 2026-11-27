@@ -1,0 +1,5 @@
+# common 모듈 테스트 설정. DB는 쓰지 않는다(보안·필터·JWT 검증만).
+app:
+  jwt:
+    secret: test-only-jwt-secret-key-0123456789abcdef
+  internal-api-key: ${INTERNAL_API_KEY:}

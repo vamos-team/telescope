@@ -1,8 +1,8 @@
 package com.telescope.canvas.canvas.repository;
 
-import com.telescope.integration.IntegrationTestApplication;
+import com.telescope.canvas.CanvasApplication;
 import org.springframework.test.context.ContextConfiguration;
-import com.telescope.analysis.TestcontainersConfig;
+import com.telescope.common.test.TestcontainersConfig;
 import com.telescope.canvas.canvas.entity.Canvas;
 import com.telescope.canvas.canvas.entity.CanvasCard;
 import com.telescope.canvas.canvas.entity.CanvasEvent;
@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.test.context.jdbc.Sql;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -32,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * JSONB 컬럼(문자열 매핑)이 그대로 저장·조회되는지, 목록 조회가 소유·초대를 구분하는지 확인한다.
  */
 @DataJpaTest
-@ContextConfiguration(classes = IntegrationTestApplication.class)
+@ContextConfiguration(classes = CanvasApplication.class)
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfig.class, JpaAuditingConfig.class})
 class CanvasRepositoryTest {
@@ -76,6 +77,14 @@ class CanvasRepositoryTest {
         assertThat(found.isNew()).isFalse();
     }
 
+    // 카드 삭제 시 연결을 지우는 건 마이그레이션의 ON DELETE CASCADE FK가 한다(엔티티로는 표현 못 함).
+    // create-drop 스키마에는 없으므로 이 검증에만 그 FK를 만들어 둔다.
+    @Sql(statements = {
+            "ALTER TABLE canvas_link DROP CONSTRAINT IF EXISTS fk_canvas_link_source",
+            "ALTER TABLE canvas_link ADD CONSTRAINT fk_canvas_link_source FOREIGN KEY (source_card_id) REFERENCES canvas_card(id) ON DELETE CASCADE",
+            "ALTER TABLE canvas_link DROP CONSTRAINT IF EXISTS fk_canvas_link_target",
+            "ALTER TABLE canvas_link ADD CONSTRAINT fk_canvas_link_target FOREIGN KEY (target_card_id) REFERENCES canvas_card(id) ON DELETE CASCADE"
+    })
     @Test
     void 카드를_지우면_닿는_연결도_DB가_지운다() {
         Canvas canvas = canvasRepository.save(Canvas.create("c", "2026년 1분기", owner));
@@ -85,7 +94,7 @@ class CanvasRepositoryTest {
         linkRepository.save(CanvasLink.create(link, canvas.getId(), a, b, owner));
         em.flush();
 
-        jdbc.update("delete from app.canvas_card where id = ?", a);
+        jdbc.update("delete from canvas_card where id = ?", a);
         em.clear();
 
         assertThat(linkRepository.findById(link)).isEmpty();
@@ -120,15 +129,16 @@ class CanvasRepositoryTest {
         // 같은 세션으로 다시 flush하면 세션이 깨지므로 중복 삽입은 JDBC로 확인한다.
         // PostgreSQL은 오류 뒤 같은 트랜잭션의 쿼리를 거부하므로 이 확인을 마지막에 둔다
         assertThatThrownBy(() -> jdbc.update(
-                "insert into app.canvas_event (canvas_id, seq, request_id, author_id, type, payload) "
+                "insert into canvas_event (canvas_id, seq, request_id, author_id, type, payload) "
                         + "values (?, 1, ?, ?, 'move_card', '{}'::jsonb)",
                 canvas.getId(), UUID.randomUUID(), owner))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    private static final java.util.concurrent.atomic.AtomicLong USER_IDS = new java.util.concurrent.atomic.AtomicLong(1000);
+
+    // 캔버스는 사용자 id만 Long으로 들고 FK가 없다. 테스트는 행을 만들지 않고 id만 쓴다.
     private Long insertUser(String employeeNo) {
-        return jdbc.queryForObject(
-                "insert into app.users (employee_no, password_hash, name, role) values (?, 'x', ?, 'USER') returning id",
-                Long.class, employeeNo, "사용자" + employeeNo);
+        return USER_IDS.incrementAndGet();
     }
 }
