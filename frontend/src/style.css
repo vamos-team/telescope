@@ -341,30 +341,30 @@ table.g.facts tr.b td{font-weight:700;color:var(--t-strong);background:var(--pri
 .auth-stars i:nth-child(3){background-size:420px 420px;opacity:.85;animation-delay:-4s;
   background-image:radial-gradient(2px 2px at 300px 80px,#fff 50%,transparent 51%),radial-gradient(2px 2px at 90px 330px,#CFC6FF 50%,transparent 51%)}
 @keyframes auth-twinkle{from{opacity:.35}to{opacity:1}}
-.auth-brand{position:relative;display:grid;justify-items:center;gap:28px;text-align:center}
-.auth-logo{display:flex;align-items:center;gap:24px}
-.auth-mark{width:clamp(56px,7.8vw,100px);height:clamp(56px,7.8vw,100px);flex:none;filter:drop-shadow(0 0 14px rgba(169,150,255,.35))}
-.auth-brand h1{margin:0;font-size:clamp(36px,5.1vw,66px);line-height:1;font-weight:600;letter-spacing:.2em;margin-right:-.2em;color:#fff}
-.auth-copy{display:grid;gap:6px}
-.auth-tagline{margin:0;font-size:clamp(18px,1.9vw,24px);line-height:1.35;font-weight:500;letter-spacing:.01em;white-space:nowrap;color:rgba(255,255,255,.92)}
-.auth-desc{margin:0;font-size:clamp(13px,1.2vw,15px);line-height:1.5;letter-spacing:.01em;white-space:nowrap;color:rgba(244,242,255,.55)}
+.auth-brand{position:relative;display:grid;justify-items:center;gap:22px;text-align:center}
+.auth-logo{display:flex;align-items:center;gap:19px}
+.auth-mark{width:clamp(48px,6.2vw,80px);height:clamp(48px,6.2vw,80px);flex:none;filter:drop-shadow(0 0 14px rgba(169,150,255,.35))}
+.auth-brand h1{margin:0;font-size:clamp(32px,4.1vw,53px);line-height:1;font-weight:600;letter-spacing:.2em;margin-right:-.2em;color:#fff}
+.auth-copy{display:grid;gap:4px}
+.auth-tagline{margin:0;font-size:clamp(16px,1.55vw,19px);line-height:1.35;font-weight:500;letter-spacing:.01em;white-space:nowrap;color:rgba(255,255,255,.92)}
+.auth-desc{margin:0;font-size:clamp(12px,1vw,13px);line-height:1.5;letter-spacing:.01em;white-space:nowrap;color:rgba(244,242,255,.55)}
 .auth-panel{display:grid;place-items:center;padding:40px 24px;background:var(--surface)}
-.auth-form{width:min(440px,100%);display:grid;gap:18px}
-.auth-form h2{margin:0;font-size:32px;line-height:1.25;color:var(--t-strong)}
-.auth-sub{margin:-10px 0 8px;font-size:15.5px;color:var(--t-sub)}
-.auth-form label{display:grid;gap:8px;font-size:14.5px;font-weight:700;color:var(--t-sub)}
+.auth-form{width:min(352px,100%);display:grid;gap:14px}
+.auth-form h2{margin:0;font-size:26px;line-height:1.25;color:var(--t-strong)}
+.auth-sub{margin:-8px 0 6px;font-size:13.5px;color:var(--t-sub)}
+.auth-form label{display:grid;gap:6px;font-size:13px;font-weight:700;color:var(--t-sub)}
 .auth-form label small{font-weight:400;color:var(--t-cap)}
-.auth-form input{height:54px;min-width:0;border:1px solid var(--line);border-radius:12px;padding:0 16px;background:var(--surface);font-size:16px;font-weight:400;color:var(--t-strong)}
+.auth-form input{height:44px;min-width:0;border:1px solid var(--line);border-radius:10px;padding:0 13px;background:var(--surface);font-size:14px;font-weight:400;color:var(--t-strong)}
 .auth-form input:focus{outline:2px solid var(--primary-text);outline-offset:-1px}
-.auth-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.auth-err{margin:-6px 0 0;font-size:14px;color:var(--red)}
+.auth-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.auth-err{margin:-4px 0 0;font-size:13px;color:var(--red)}
 /* 왼쪽 밤하늘과 같은 계열: 짙은 남보라에서 성운 보라로 */
-.auth-submit{height:56px;margin-top:6px;border-radius:12px;color:#fff;font-weight:600;font-size:17px;letter-spacing:.01em;
+.auth-submit{height:46px;margin-top:4px;border-radius:10px;color:#fff;font-weight:600;font-size:15px;letter-spacing:.01em;
   background:linear-gradient(120deg,#130F38 0%,#2A1F73 55%,#4A3AB4 100%);box-shadow:0 6px 18px rgba(42,31,115,.28),inset 0 1px 0 rgba(255,255,255,.12);transition:filter .15s,box-shadow .15s}
 .auth-submit:hover:not(:disabled){filter:brightness(1.15);box-shadow:0 8px 24px rgba(74,58,180,.38),inset 0 1px 0 rgba(255,255,255,.16)}
 .auth-submit:disabled{opacity:.6;cursor:default}
-.auth-switch{margin:4px 0 0;text-align:center;font-size:14px;color:var(--t-cap)}
-.auth-switch button{font-size:14px;font-weight:700;color:var(--t-strong);text-decoration:underline;text-underline-offset:2px}
+.auth-switch{margin:2px 0 0;text-align:center;font-size:12.5px;color:var(--t-cap)}
+.auth-switch button{font-size:12.5px;font-weight:700;color:var(--t-strong);text-decoration:underline;text-underline-offset:2px}
 @media (max-width:860px){
   .auth{grid-template-columns:1fr;grid-template-rows:auto 1fr}
   .auth-hero{padding:36px 16px}
