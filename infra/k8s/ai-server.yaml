@@ -25,9 +25,10 @@ spec:
               valueFrom: { secretKeyRef: { name: ai-server-secrets, key: OPENAI_API_KEY, optional: true } }
             - name: HF_TOKEN
               valueFrom: { secretKeyRef: { name: ai-server-secrets, key: HF_TOKEN, optional: true } }
+            - name: OPENDART_API_KEY
+              valueFrom: { secretKeyRef: { name: ai-server-secrets, key: OPENDART_API_KEY, optional: true } }
           envFrom:
             - configMapRef: { name: s3-config }
-          # TODO : 임시 값
           resources:
             requests: { cpu: 250m, memory: 512Mi }
             limits:   { cpu: 500m, memory: 1Gi }
@@ -47,7 +48,7 @@ spec:
       spec:
         accessModes: [ReadWriteOnce]
         storageClassName: gp3
-        resources: { requests: { storage: 1Gi } }
+        resources: { requests: { storage: 10Gi } }
 ---
 apiVersion: v1
 kind: Service

@@ -19,6 +19,8 @@ public enum ErrorCode {
     TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "A003", "인증이 만료되었습니다."),
     ACCESS_DENIED(HttpStatus.FORBIDDEN, "A004", "권한이 없습니다."),
     EMPLOYEE_NO_DUPLICATED(HttpStatus.CONFLICT, "A005", "이미 가입된 사번입니다."),
+    // 연속 로그인 실패로 잠김(#164). 남은 시간은 Retry-After 헤더(초)로 알린다
+    LOGIN_LOCKED(HttpStatus.TOO_MANY_REQUESTS, "A006", "로그인을 여러 번 실패해 잠시 잠겼습니다. 잠시 후 다시 시도해 주세요."),
     CANVAS_ACCESS_DENIED(HttpStatus.FORBIDDEN, "K001", "이 캔버스를 볼 권한이 없습니다."),
     CANVAS_EDIT_DENIED(HttpStatus.FORBIDDEN, "K002", "이 캔버스를 수정할 권한이 없습니다."),
     CANVAS_TEXT_CONFLICT(HttpStatus.CONFLICT, "K003", "다른 사람이 먼저 글을 고쳤습니다."),

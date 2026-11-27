@@ -2,11 +2,14 @@
 // 메모 입력 칸 (메모 카드 · 연결 메모 공용). Enter = 저장, Shift+Enter = 줄바꿈, 입력 완료 버튼 (화면에 사용법 문구는 두지 않음)
 // 저장하면 보기 모드가 되고, 수정 버튼으로 다시 고친다
 import { ref, watch, nextTick, onMounted } from "vue";
+import { receiveText } from "./memoDraft";
 
-const props = defineProps<{ text?: string; placeholder?: string; readonly?: boolean; autofocus?: boolean }>();
+// startEditing: 글이 비어 있을 때 쓰는 중으로 열지(기본 true). 다른 사람이 만든 빈 메모는 보기로 연다
+const props = defineProps<{ text?: string; placeholder?: string; readonly?: boolean; autofocus?: boolean; startEditing?: boolean }>();
 const emit = defineEmits<{ save: [text: string] }>();
-const editing = ref(!props.text && !props.readonly), draft = ref(props.text ?? ""), box = ref<HTMLTextAreaElement>();
-watch(() => props.text, (t) => { if (!editing.value) draft.value = t ?? ""; });
+const editing = ref(!props.text && !props.readonly && props.startEditing !== false), draft = ref(props.text ?? ""), box = ref<HTMLTextAreaElement>();
+// 다른 사람이 글을 바꾸면 반영한다. 내가 고치던 중이면 덮어쓰지 않는다(memoDraft.ts)
+watch(() => props.text, (t, prev) => { const s = receiveText({ editing: editing.value, draft: draft.value }, t, prev); editing.value = s.editing; draft.value = s.draft; });
 const focus = () => nextTick(() => { box.value?.focus(); box.value?.setSelectionRange(draft.value.length, draft.value.length); });
 onMounted(() => { if (props.autofocus && editing.value) focus(); });
 function save() { const t = draft.value.trim(); emit("save", t); editing.value = !t; }

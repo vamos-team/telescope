@@ -35,7 +35,7 @@ it("로그인하면 토큰을 저장하고 서버 숫자 ID·사번·이름으�
   const [url, init] = fetch.mock.calls[0];
   expect([url, init.method, JSON.parse(String(init.body))]).toEqual(["/api/v1/auth/login", "POST", { employeeNo: "E1001", password: "password-1" }]);
   expect(token).toBe("jwt-1");
-  expect(cv.user).toEqual({ id: 7, employeeNo: "E1001", name: "김예산", dept: "" });
+  expect(cv.user).toEqual({ id: 7, employeeNo: "E1001", name: "김예산", dept: "", job: "재무기획" });
   expect(cv.author).toBe("김예산");
 });
 

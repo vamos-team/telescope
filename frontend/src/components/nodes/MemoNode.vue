@@ -11,6 +11,8 @@ const props = defineProps<{ data: { cardId: string; onFlag?: (id: string) => voi
 const cv = useCanvas();
 const card = computed(() => cv.cards.find((c) => c.id === props.data.cardId) as MemoCard);
 const m = computed(() => memberOf(card.value.author));
+/** 내가 이 화면에서 방금 만든 메모인지 */
+const mine = computed(() => cv.myNewMemo === props.data.cardId);
 </script>
 
 <template>
@@ -20,6 +22,7 @@ const m = computed(() => memberOf(card.value.author));
     <header class="drag-handle">
       <div class="t"><b>{{ card.author }}</b><small v-if="m">{{ m.dept }} · {{ m.job }}</small></div>
       <button class="nodrag" @click="cv.remove(card.id)" aria-label="메모 닫기">✕</button></header>
-    <MemoEditor :key="card.id" :text="card.text" :readonly="cv.readOnly" autofocus @save="(t) => cv.editMemo(card.id, t)" />
+    <!-- 쓰는 중으로 열기 · 자동 포커스는 내가 방금 만든 메모만. 다른 사람이 만든 메모가 내 입력 포커스를 뺏지 않게 -->
+    <MemoEditor :key="card.id" :text="card.text" :readonly="cv.readOnly" :autofocus="mine" :start-editing="mine" @save="(t) => cv.editMemo(card.id, t)" />
   </section>
 </template>

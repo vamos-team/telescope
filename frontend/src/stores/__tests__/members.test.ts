@@ -15,7 +15,7 @@ it("local 로그인도 서버와 같은 모양(숫자 id + 사번)으로 사용�
 
   cv.login(" 1002 ");
 
-  expect(cv.user).toEqual({ id: 2, employeeNo: "1002", name: "박망", dept: "네트워크센터" });
+  expect(cv.user).toEqual({ id: 2, employeeNo: "1002", name: "박망", job: "네트워크 기술", dept: "네트워크센터" });
   expect(cv.login("9999")).toBe(false);
 });
 
