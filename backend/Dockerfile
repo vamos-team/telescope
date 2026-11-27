@@ -5,6 +5,7 @@ COPY gradle gradle
 COPY common/build.gradle common/
 COPY auth/build.gradle auth/
 COPY canvas/build.gradle canvas/
+COPY analysis/build.gradle analysis/
 RUN printf '%s\n' \
       "allprojects { tasks.register('resolveDependencies') { doLast {" \
       "  configurations.findAll { it.canBeResolved }.each { it.files } } } }" > /tmp/resolve.gradle \
@@ -12,11 +13,10 @@ RUN printf '%s\n' \
 COPY common/src common/src
 COPY auth/src auth/src
 COPY canvas/src canvas/src
-COPY src src
-ARG MODULE=
-RUN if [ -z "$MODULE" ]; then task=bootJar; out=build/libs; else task=":$MODULE:bootJar"; out="$MODULE/build/libs"; fi \
- && ./gradlew "$task" -x test --no-daemon \
- && cp "$(ls "$out"/*.jar | grep -v -- '-plain')" /app/service.jar
+COPY analysis/src analysis/src
+ARG MODULE=analysis
+RUN ./gradlew ":$MODULE:bootJar" -x test --no-daemon \
+ && cp "$(ls "$MODULE"/build/libs/*.jar | grep -v -- '-plain')" /app/service.jar
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
