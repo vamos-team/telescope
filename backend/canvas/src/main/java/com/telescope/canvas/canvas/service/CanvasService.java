@@ -25,7 +25,6 @@ import com.telescope.common.exception.BusinessException;
 import com.telescope.common.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -117,8 +116,9 @@ public class CanvasService {
         Canvas canvas = canvasRepository.save(Canvas.create(request.name(), request.quarter(), userId));
         Set<Long> editors = new LinkedHashSet<>(request.editorIds() == null ? List.of() : request.editorIds());
         editors.remove(userId);
+        people.requireExist(editors);
         List<CanvasShare> shares = editors.stream().map(id -> CanvasShare.of(canvas.getId(), id, CanvasRole.EDIT)).toList();
-        saveSharesOrNotFound(shares);
+        shareRepository.saveAllAndFlush(shares);
         return summary(canvas, CanvasRole.OWNER, 0, people.refs(summaryPeople(canvas)));
     }
 
@@ -238,7 +238,8 @@ public class CanvasService {
                 changed.put(id, role);
             }
         });
-        saveSharesOrNotFound(added);
+        people.requireExist(added.stream().map(CanvasShare::getUserId).toList());
+        shareRepository.saveAllAndFlush(added);
 
         if (!revoked.isEmpty() || !changed.isEmpty()) {
             Map<String, Object> payload = new LinkedHashMap<>();
@@ -270,17 +271,6 @@ public class CanvasService {
         return wanted;
     }
 
-    /** 초대를 저장한다. 없는 사용자(FK 위반)면 404로 바꾼다. 저장 한 번으로 존재 확인까지 끝나서 미리 조회하지 않는다. */
-    private void saveSharesOrNotFound(List<CanvasShare> shares) {
-        if (shares.isEmpty()) {
-            return;
-        }
-        try {
-            shareRepository.saveAllAndFlush(shares);
-        } catch (DataIntegrityViolationException e) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "초대할 사용자를 찾을 수 없습니다.");
-        }
-    }
 
     /** 공유 명단 응답. 소유자와 명단의 사람을 한 번에 읽어 이름·부서를 붙인다. */
     private CanvasSharesResponse sharesOf(Canvas canvas) {

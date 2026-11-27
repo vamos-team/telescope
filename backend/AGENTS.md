@@ -84,7 +84,7 @@
 
 - DB는 PostgreSQL이다(배포 환경: RDS PostgreSQL 18). MySQL이나 H2로 바꾸지 않는다.
 - 스키마 변경은 Flyway로만 한다. `db/migration/V<번호>__<설명>.sql`
-- JPA 설정은 `ddl-auto: validate`를 유지한다. `update`, `create`를 쓰지 않는다.
+- 운영 앱의 JPA 설정은 `ddl-auto: validate`를 유지한다. `update`, `create`를 쓰지 않는다. 모듈 테스트 슬라이스는 엔티티 기반 생성(`create-drop`)을 쓸 수 있고(마이그레이션은 analysis가 한곳에서 관리), 마이그레이션–엔티티 일치는 배포 시 `validate`로 보장한다.
 - **이미 적용된 마이그레이션 파일은 수정하지 않는다.** 변경은 새 번호의 파일을 추가한다.
 - 마이그레이션 번호가 겹치지 않게 새 파일을 만들기 전에 현재 최신 번호를 확인한다.
 - DB 접속 정보는 환경변수(`SPRING_DATASOURCE_*`)로 주입한다. 기본값에 비밀번호를 넣지 않는다.

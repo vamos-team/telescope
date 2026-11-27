@@ -3,6 +3,7 @@ plugins {
 }
 
 dependencies {
+	testImplementation testFixtures(project(':common'))
 	implementation project(':common')
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
@@ -20,14 +21,4 @@ dependencies {
 	implementation platform('software.amazon.awssdk:bom:2.58.0')
 	implementation 'software.amazon.awssdk:s3'
 	implementation 'software.amazon.awssdk:sts'
-	// 테스트는 전환 전까지 통합 컨텍스트(IntegrationTestApplication)로 auth·canvas를 함께 띄운다. 운영 코드는 의존하지 않는다
-	testImplementation project(':auth')
-	testImplementation project(':canvas')
-	testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
-	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
-	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
-	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
-	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
-	testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
-	testImplementation 'org.testcontainers:testcontainers-postgresql'
 }
