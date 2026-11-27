@@ -45,6 +45,8 @@ export interface Note { key: string; kind: "card" | "memo" | "link"; cardId?: st
 // 로그인: 사번 + 비밀번호(목업이라 아무 값이나 통과). 들어가면 캔버스 홈에서 볼 수 있는 캔버스를 고른다 (실제 서비스는 사내 SSO)
 // 부서는 기획서 1장의 사업 조직
 export const DEPTS = ["네트워크센터", "AIDC사업본부", "세일즈마케팅본부", "프로덕트브랜드본부"];
+// 직무: 회원가입에서 고르는 목록(목업 구성원의 직무와 같음)
+export const JOBS = ["재무기획", "네트워크 기술", "AIDC 사업", "세일즈", "상품", "부서장"];
 // 사람은 backend와 같은 모양: id는 숫자(users PK), 사번(employeeNo)은 로그인 · 표시에만 쓴다
 export const ALL_MEMBERS = [
   { id: 1, employeeNo: "1001", name: "이재무", dept: "네트워크센터", job: "재무기획" }, { id: 2, employeeNo: "1002", name: "박망", dept: "네트워크센터", job: "네트워크 기술" },
