@@ -1,12 +1,15 @@
 package com.telescope.backend.canvas.service;
 
+import com.telescope.backend.canvas.dto.UserRef;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -34,9 +37,15 @@ public class CanvasRealtimeRegistry {
     /**
      * 권한 확인을 통과한 구독 하나.
      *
+     * @param user    구독한 사람. 이름·부서는 구독할 때 한 번 읽어 둔다. 커서(초당 최대 20번)·접속자 알림이 매번 DB를 보지 않게(#149)
      * @param channel {@link CanvasDestination#EVENTS} / {@link CanvasDestination#CURSORS} / {@link CanvasDestination#PRESENCE}
      */
-    public record Subscription(String sessionId, String subscriptionId, Long canvasId, Long userId, String channel) {
+    public record Subscription(String sessionId, String subscriptionId, Long canvasId, UserRef user, String channel) {
+
+        /** 구독한 사람의 ID. */
+        public Long userId() {
+            return user.id();
+        }
     }
 
     /**
@@ -100,17 +109,26 @@ public class CanvasRealtimeRegistry {
         return subs != null && subs.values().stream().anyMatch(s -> s.canvasId().equals(canvasId));
     }
 
-    /** 이 캔버스에 지금 들어와 있는 사람(접속자 구독 기준). */
-    public synchronized Set<Long> presentUsers(Long canvasId) {
-        Set<Long> users = new LinkedHashSet<>();
+    /** 이 캔버스에 지금 들어와 있는 사람(접속자 구독 기준). 한 사람이 창을 여러 개 열어도 한 번만. */
+    public synchronized List<UserRef> presentUsers(Long canvasId) {
+        Map<Long, UserRef> users = new LinkedHashMap<>();
         for (Map<String, Subscription> subs : sessions.values()) {
             for (Subscription s : subs.values()) {
                 if (s.canvasId().equals(canvasId) && CanvasDestination.PRESENCE.equals(s.channel())) {
-                    users.add(s.userId());
+                    users.putIfAbsent(s.userId(), s.user());
                 }
             }
         }
-        return users;
+        return List.copyOf(users.values());
+    }
+
+    /** 이 세션이 이 캔버스를 구독할 때 기록한 사람 정보. 커서를 보낼 때 이름을 붙이려고 쓴다. 구독이 없으면 비어 있다. */
+    public Optional<UserRef> personOf(String sessionId, Long canvasId) {
+        Map<String, Subscription> subs = sessions.get(sessionId);
+        if (subs == null) {
+            return Optional.empty();
+        }
+        return subs.values().stream().filter(s -> s.canvasId().equals(canvasId)).map(Subscription::user).findFirst();
     }
 
     /**
@@ -132,7 +150,7 @@ public class CanvasRealtimeRegistry {
     }
 
     private boolean isPresent(Long canvasId, Long userId) {
-        return presentUsers(canvasId).contains(userId);
+        return presentUsers(canvasId).stream().anyMatch(u -> u.id().equals(userId));
     }
 
     /** 뺀 구독 중 접속자 구독에 대해, 그 사람이 그 캔버스에 더는 없으면 나감으로 돌려준다. */

@@ -33,7 +33,7 @@ public class CanvasRealtimeNotifier {
     public void onEventsCommitted(CanvasEventsCommitted committed) {
         messaging.convertAndSend(CanvasDestination.topicOf(committed.canvasId(), CanvasDestination.EVENTS),
                 new CanvasEventsMessage(committed.firstSeq(), committed.lastSeq(), committed.requestId(),
-                        new UserRef(committed.authorId()), committed.events(), committed.textVersions()));
+                        committed.author(), committed.events(), committed.textVersions()));
     }
 
     /**
@@ -50,19 +50,19 @@ public class CanvasRealtimeNotifier {
         for (Map.Entry<Long, CanvasRole> e : changed.changedRoles().entrySet()) {
             notifyUser(e.getKey(), new CanvasUserNotice("role_changed", changed.canvasId(), e.getValue()));
         }
-        left.forEach(s -> presence(s.canvasId(), "leave", s.userId()));
+        left.forEach(s -> presence(s.canvasId(), "leave", s.user()));
     }
 
-    /** 다른 사람에게 커서 위치를 보낸다(저장하지 않음). */
-    public void cursor(Long canvasId, Long userId, double x, double y) {
+    /** 다른 사람에게 커서 위치를 보낸다(저장하지 않음). 사람 정보는 구독할 때 읽어 둔 값이다. */
+    public void cursor(Long canvasId, UserRef user, double x, double y) {
         messaging.convertAndSend(CanvasDestination.topicOf(canvasId, CanvasDestination.CURSORS),
-                new CursorMessage(new UserRef(userId), x, y));
+                new CursorMessage(user, x, y));
     }
 
-    /** 접속자 들어옴({@code join})·나감({@code leave})을 그 캔버스 구독자에게 알린다. */
-    public void presence(Long canvasId, String type, Long userId) {
+    /** 접속자 들어옴({@code join})·나감({@code leave})을 그 캔버스 구독자에게 알린다. 사람 정보는 구독할 때 읽어 둔 값이다. */
+    public void presence(Long canvasId, String type, UserRef user) {
         messaging.convertAndSend(CanvasDestination.topicOf(canvasId, CanvasDestination.PRESENCE),
-                new PresenceMessage(type, new UserRef(userId)));
+                new PresenceMessage(type, user));
     }
 
     private void notifyUser(Long userId, CanvasUserNotice notice) {
