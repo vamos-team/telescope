@@ -19,6 +19,6 @@ public class CanvasSessionListener {
     @EventListener
     public void onDisconnect(SessionDisconnectEvent event) {
         registry.removeSession(event.getSessionId())
-                .forEach(s -> notifier.presence(s.canvasId(), "leave", s.userId()));
+                .forEach(s -> notifier.presence(s.canvasId(), "leave", s.user()));
     }
 }

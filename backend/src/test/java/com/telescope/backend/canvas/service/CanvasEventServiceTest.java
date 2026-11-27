@@ -12,10 +12,10 @@ import com.telescope.backend.canvas.entity.CanvasRole;
 import com.telescope.backend.canvas.entity.CardKind;
 import com.telescope.backend.canvas.repository.CanvasEventRepository;
 import com.telescope.backend.canvas.repository.CanvasMappingRepository;
-import com.telescope.backend.canvas.dto.UserRef;
 import com.telescope.backend.global.config.JpaAuditingConfig;
 import com.telescope.backend.global.exception.BusinessException;
 import com.telescope.backend.global.exception.ErrorCode;
+import com.telescope.backend.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,7 +56,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfig.class, JpaAuditingConfig.class, CanvasService.class, CanvasEventService.class,
-        CanvasAccessService.class, CanvasEventServiceTest.TestBeans.class})
+        CanvasAccessService.class, CanvasPeople.class, UserService.class, CanvasEventServiceTest.TestBeans.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @RecordApplicationEvents
 class CanvasEventServiceTest {
@@ -291,7 +291,7 @@ class CanvasEventServiceTest {
         List<CanvasEventsCommitted> sent = published.stream(CanvasEventsCommitted.class).toList();
         assertThat(sent).hasSize(1);
         assertThat(sent.get(0).firstSeq()).isEqualTo(sent.get(0).lastSeq()).isEqualTo(lastSeq());
-        assertThat(sent.get(0).authorId()).isEqualTo(owner);
+        assertThat(sent.get(0).author().id()).isEqualTo(owner);
     }
 
     @Test
@@ -313,7 +313,7 @@ class CanvasEventServiceTest {
         var written = canvasService.open(canvasId, owner).links().getFirst();
         assertThat(written.memo()).isEqualTo("표 감소를 설명");
         assertThat(written.memoVersion()).isEqualTo(1);
-        assertThat(written.memoBy()).isEqualTo(new UserRef(editor));
+        assertThat(written.memoBy().id()).isEqualTo(editor);
 
         eventService.apply(canvasId, owner, batch(event("set_link_memo", "linkId", link, "text", "", "baseVersion", 1)));
         var cleared = canvasService.open(canvasId, owner).links().getFirst();

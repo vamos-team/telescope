@@ -68,6 +68,7 @@ public class CanvasEventService {
             Map.entry("confirm_mapping", LAYER_EDITS));
 
     private final CanvasAccessService access;
+    private final CanvasPeople people;
     private final CanvasCardRepository cardRepository;
     private final CanvasLinkRepository linkRepository;
     private final CanvasMappingRepository mappingRepository;
@@ -106,7 +107,7 @@ public class CanvasEventService {
                 batch.firstSeq, canvas.getLastSeq(), CanvasJson.write(response)));
         if (batch.firstSeq != null) {
             publisher.publishEvent(new CanvasEventsCommitted(canvasId, batch.firstSeq, canvas.getLastSeq(),
-                    request.requestId(), userId, batch.stored, batch.versions));
+                    request.requestId(), people.ref(userId), batch.stored, batch.versions));
         }
         return response;
     }

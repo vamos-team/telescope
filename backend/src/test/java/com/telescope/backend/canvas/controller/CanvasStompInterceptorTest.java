@@ -1,7 +1,9 @@
 package com.telescope.backend.canvas.controller;
 
+import com.telescope.backend.canvas.dto.UserRef;
 import com.telescope.backend.canvas.entity.CanvasRole;
 import com.telescope.backend.canvas.service.CanvasAccessService;
+import com.telescope.backend.canvas.service.CanvasPeople;
 import com.telescope.backend.canvas.service.CanvasRealtimeNotifier;
 import com.telescope.backend.canvas.service.CanvasRealtimeRegistry;
 import com.telescope.backend.global.auth.UserPrincipal;
@@ -32,9 +34,11 @@ class CanvasStompInterceptorTest {
 
     private static final Long CANVAS = 1L;
     private static final Long USER = 7L;
+    private static final UserRef PERSON = new UserRef(USER, "이재무", "네트워크센터");
 
     CanvasAccessService access = mock(CanvasAccessService.class);
     CanvasRealtimeNotifier notifier = mock(CanvasRealtimeNotifier.class);
+    CanvasPeople people = mock(CanvasPeople.class);
     CanvasRealtimeRegistry registry = new CanvasRealtimeRegistry();
     CanvasStompInterceptor interceptor;
 
@@ -43,7 +47,8 @@ class CanvasStompInterceptorTest {
     void setUp() {
         ObjectProvider<CanvasRealtimeNotifier> provider = mock(ObjectProvider.class);
         when(provider.getObject()).thenReturn(notifier);
-        interceptor = new CanvasStompInterceptor(access, registry, provider);
+        when(people.ref(USER)).thenReturn(PERSON);
+        interceptor = new CanvasStompInterceptor(access, registry, people, provider);
     }
 
     @Test
@@ -55,7 +60,7 @@ class CanvasStompInterceptorTest {
                 .isInstanceOf(MessageDeliveryException.class)
                 .hasMessageContaining("K001");
         assertThat(registry.isSubscribed("s1", CANVAS)).isFalse();
-        verify(notifier, never()).presence(anyLong(), anyString(), anyLong());
+        verify(notifier, never()).presence(anyLong(), anyString(), any(UserRef.class));
     }
 
     @Test
@@ -65,7 +70,8 @@ class CanvasStompInterceptorTest {
         interceptor.preSend(subscribe("/topic/canvases/1/presence"), null);
 
         assertThat(registry.isSubscribed("s1", CANVAS)).isTrue();
-        verify(notifier, times(1)).presence(CANVAS, "join", USER);
+        verify(notifier, times(1)).presence(CANVAS, "join", PERSON);
+        assertThat(registry.personOf("s1", CANVAS)).contains(PERSON);  // 커서에 붙일 이름을 구독 때 기록
     }
 
     @Test

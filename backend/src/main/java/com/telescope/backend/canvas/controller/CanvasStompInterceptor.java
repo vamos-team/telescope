@@ -1,7 +1,9 @@
 package com.telescope.backend.canvas.controller;
 
+import com.telescope.backend.canvas.dto.UserRef;
 import com.telescope.backend.canvas.service.CanvasAccessService;
 import com.telescope.backend.canvas.service.CanvasDestination;
+import com.telescope.backend.canvas.service.CanvasPeople;
 import com.telescope.backend.canvas.service.CanvasRealtimeNotifier;
 import com.telescope.backend.canvas.service.CanvasRealtimeRegistry;
 import com.telescope.backend.global.auth.UserPrincipal;
@@ -35,6 +37,7 @@ public class CanvasStompInterceptor implements ChannelInterceptor {
 
     private final CanvasAccessService access;
     private final CanvasRealtimeRegistry registry;
+    private final CanvasPeople people;
     /** 메시지 전송 빈은 WebSocket 설정이 끝난 뒤 만들어지므로 늦게 가져온다(순환 참조 방지). */
     private final ObjectProvider<CanvasRealtimeNotifier> notifier;
 
@@ -68,8 +71,10 @@ public class CanvasStompInterceptor implements ChannelInterceptor {
         if (topic.isPresent()) {
             Long canvasId = topic.get().canvasId();
             requireRole(canvasId, userId);
+            // 이름·부서는 구독할 때 한 번만 읽는다. 커서·접속자 알림은 이 값을 쓴다(#149)
+            UserRef person = people.ref(userId);
             boolean joined = registry.add(new CanvasRealtimeRegistry.Subscription(accessor.getSessionId(),
-                    accessor.getSubscriptionId(), canvasId, userId, topic.get().channel()));
+                    accessor.getSubscriptionId(), canvasId, person, topic.get().channel()));
             // 첫 확인과 기록 사이에 공유가 풀렸을 수 있다(회수 처리는 아직 기록이 없어 지울 것이 없었음).
             // 기록한 뒤 다시 확인한다: 권한이 있으면 이후의 회수 처리가 이 기록을 지우고, 없으면 여기서 지운다.
             if (access.roleOf(canvasId, userId).isEmpty()) {
@@ -77,7 +82,7 @@ public class CanvasStompInterceptor implements ChannelInterceptor {
                 throw new MessageDeliveryException("K001 이 캔버스를 볼 권한이 없습니다.");
             }
             if (joined) {
-                notifier.getObject().presence(canvasId, "join", userId);
+                notifier.getObject().presence(canvasId, "join", person);
             }
             return message;
         }
@@ -91,7 +96,7 @@ public class CanvasStompInterceptor implements ChannelInterceptor {
 
     private Message<?> unsubscribe(StompHeaderAccessor accessor, Message<?> message) {
         registry.remove(accessor.getSessionId(), accessor.getSubscriptionId())
-                .forEach(s -> notifier.getObject().presence(s.canvasId(), "leave", s.userId()));
+                .forEach(s -> notifier.getObject().presence(s.canvasId(), "leave", s.user()));
         return message;
     }
 
