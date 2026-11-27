@@ -1,8 +1,6 @@
 package com.telescope.backend.canvas.service;
 
 import com.telescope.backend.canvas.dto.UserRef;
-import com.telescope.backend.user.dto.UserSummary;
-import com.telescope.backend.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -19,15 +17,15 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class CanvasPeople {
 
-    private final UserService userService;
+    private final UserDirectory userDirectory;
 
     /** 여러 사람을 한 번에 읽는다. 없는 사용자도 키는 있고 이름은 비어 있다. null ID는 건너뛴다. */
     public Map<Long, UserRef> refs(Collection<Long> ids) {
-        Map<Long, UserSummary> found = userService.summaries(ids);
+        Map<Long, UserRef> found = userDirectory.find(ids);
         Map<Long, UserRef> refs = new HashMap<>();
         for (Long id : ids) {
             if (id != null) {
-                refs.put(id, toRef(id, found.get(id)));
+                refs.put(id, found.getOrDefault(id, UserRef.unknown(id)));
             }
         }
         return refs;
@@ -41,9 +39,5 @@ public class CanvasPeople {
     /** 읽어 둔 표에서 꺼낸다. 표에 없으면 이름 없이 ID만. */
     static UserRef of(Map<Long, UserRef> refs, Long id) {
         return id == null ? null : refs.getOrDefault(id, UserRef.unknown(id));
-    }
-
-    private static UserRef toRef(Long id, UserSummary user) {
-        return user == null ? UserRef.unknown(id) : new UserRef(id, user.name(), user.dept());
     }
 }

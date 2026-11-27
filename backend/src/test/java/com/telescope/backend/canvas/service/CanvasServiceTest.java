@@ -11,6 +11,7 @@ import com.telescope.backend.canvas.entity.CanvasRole;
 import com.telescope.backend.global.config.JpaAuditingConfig;
 import com.telescope.backend.global.exception.BusinessException;
 import com.telescope.backend.global.exception.ErrorCode;
+import com.telescope.backend.bridge.LocalUserDirectory;
 import com.telescope.backend.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,7 +41,7 @@ import static org.assertj.core.api.Assertions.tuple;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfig.class, JpaAuditingConfig.class, CanvasService.class, CanvasEventService.class,
-        CanvasAccessService.class, CanvasPeople.class, UserService.class, CanvasServiceTest.TestBeans.class})
+        CanvasAccessService.class, CanvasPeople.class, UserService.class, LocalUserDirectory.class, CanvasServiceTest.TestBeans.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @RecordApplicationEvents
 class CanvasServiceTest {

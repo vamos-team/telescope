@@ -6,6 +6,7 @@ import com.telescope.backend.canvas.entity.CanvasRole;
 import com.telescope.backend.canvas.entity.CanvasShare;
 import com.telescope.backend.canvas.repository.CanvasRepository;
 import com.telescope.backend.canvas.repository.CanvasShareRepository;
+import com.telescope.backend.bridge.LocalCanvasAccessClient;
 import com.telescope.backend.canvas.service.CanvasAccessService;
 import com.telescope.backend.document.dto.DocumentResponse;
 import com.telescope.backend.document.dto.DocumentUploadCommand;
@@ -70,7 +71,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfig.class, JpaAuditingConfig.class, DocumentService.class,
-        DocumentPreparationResultHandler.class, CanvasAccessService.class, JobService.class,
+        DocumentPreparationResultHandler.class, CanvasAccessService.class, LocalCanvasAccessClient.class, JobService.class,
         DocumentServiceTest.TestBeans.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class DocumentServiceTest {

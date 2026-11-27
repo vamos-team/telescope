@@ -1,7 +1,5 @@
 package com.telescope.backend.document.service;
 
-import com.telescope.backend.canvas.entity.Canvas;
-import com.telescope.backend.canvas.service.CanvasAccessService;
 import com.telescope.backend.document.dto.DocumentResponse;
 import com.telescope.backend.document.dto.DocumentUploadCommand;
 import com.telescope.backend.document.dto.DocumentUploadResponse;
@@ -63,7 +61,7 @@ public class DocumentService {
     private final DocumentRepository documentRepository;
     private final DocumentVersionRepository versionRepository;
     private final DocumentPreparationResultRepository resultRepository;
-    private final CanvasAccessService canvasAccess;
+    private final CanvasAccessClient canvasAccess;
     private final FileStorage fileStorage;
     private final PythonAiClient aiClient;
     private final JobService jobService;
@@ -88,8 +86,7 @@ public class DocumentService {
         String company = properties.company(command.company())
                 .orElseThrow(() -> rejected("업로드할 수 없는 회사입니다. 고를 수 있는 회사: "
                         + String.join(", ", properties.companies()), UploadRejection.company()));
-        Canvas canvas = canvasAccess.loadActive(command.canvasId());
-        canvasAccess.requireEdit(canvas, userId);
+        canvasAccess.requireEdit(command.canvasId(), userId);
 
         String key = fileStorage.store(command.originalFilename(), content);
         LocalDate publishedDate = command.publishedDate() != null ? command.publishedDate() : LocalDate.now(clock);
@@ -97,7 +94,7 @@ public class DocumentService {
             Job job = jobService.create(JobType.DOCUMENT_PREPARATION);
             Document document = documentRepository.save(Document.upload(company, title));
             DocumentVersion version = versionRepository.save(DocumentVersion.upload(
-                    document, job.getId(), userId, canvas.getId(), publishedDate, key));
+                    document, job.getId(), userId, command.canvasId(), publishedDate, key));
             return new Saved(job.getId(), document.getId(), version.getId());
         });
 
@@ -117,7 +114,7 @@ public class DocumentService {
         DocumentVersion version = versionRepository.findFirstByDocumentIdOrderByVersionNoDesc(documentId)
                 .orElseThrow(() -> notFound(documentId));
         if (version.getCanvasId() != null) {
-            canvasAccess.requireView(canvasAccess.loadActive(version.getCanvasId()), userId);
+            canvasAccess.requireView(version.getCanvasId(), userId);
         }
         Map<String, Object> result = resultRepository.findByDocumentVersionId(version.getId())
                 .map(r -> DocumentJson.readMap(r.getResult()))

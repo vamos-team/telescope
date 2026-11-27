@@ -11,6 +11,7 @@ import com.telescope.backend.canvas.dto.ShareMemberResponse;
 import com.telescope.backend.canvas.dto.UserRef;
 import com.telescope.backend.canvas.entity.CanvasRole;
 import com.telescope.backend.global.config.JpaAuditingConfig;
+import com.telescope.backend.bridge.LocalUserDirectory;
 import com.telescope.backend.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,7 +50,7 @@ import static org.mockito.Mockito.verify;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfig.class, JpaAuditingConfig.class, CanvasService.class, CanvasEventService.class,
-        CanvasAccessService.class, CanvasPeople.class, UserService.class, CanvasPeopleNamesTest.TestBeans.class})
+        CanvasAccessService.class, CanvasPeople.class, UserService.class, LocalUserDirectory.class, CanvasPeopleNamesTest.TestBeans.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @RecordApplicationEvents
 class CanvasPeopleNamesTest {
@@ -142,7 +143,7 @@ class CanvasPeopleNamesTest {
 
     @Test
     void 사용자를_찾지_못하면_ID만_두고_이름은_비운다() {
-        CanvasPeople people = new CanvasPeople(userService);
+        CanvasPeople people = new CanvasPeople(new LocalUserDirectory(userService));
 
         Map<Long, UserRef> refs = people.refs(List.of(owner, -1L));
 
