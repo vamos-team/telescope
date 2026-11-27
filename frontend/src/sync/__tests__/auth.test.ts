@@ -133,6 +133,52 @@ it("복원 응답을 기다리는 동안 새로 로그인하면 늦게 온 401�
   expect(cv.user?.id).toBe(7);
 });
 
+it("로그인 응답 전에 회원가입하면 늦게 온 로그인 응답은 버리고 회원가입 결과로 남는다", async () => {
+  let answerLogin!: (r: Response) => void;
+  vi.stubGlobal("fetch", vi.fn((url: string) => url === "/api/v1/auth/login"
+    ? new Promise<Response>((r) => { answerLogin = r; })
+    : Promise.resolve(ok({ ...authData, accessToken: "signup-token", user: { ...user, id: 8, employeeNo: "E2002", name: "새사용자" } }, 201))));
+  const cv = useCanvas();
+
+  const signingIn = cv.signIn("E1001", "password-1");
+  await cv.signUp({ employeeNo: "E2002", password: "password-2", name: "새사용자" });
+  answerLogin(ok(authData));
+  await signingIn;
+
+  expect(token).toBe("signup-token");
+  expect(cv.user).toMatchObject({ id: 8, employeeNo: "E2002" });
+});
+
+it("더 새 요청이 있으면 늦게 실패한 이전 로그인은 오류를 던지지 않는다", async () => {
+  let answerLogin!: (r: Response) => void;
+  vi.stubGlobal("fetch", vi.fn((url: string) => url === "/api/v1/auth/login"
+    ? new Promise<Response>((r) => { answerLogin = r; })
+    : Promise.resolve(ok(authData, 201))));
+  const cv = useCanvas();
+
+  const signingIn = cv.signIn("E1001", "wrong-password");
+  await cv.signUp({ employeeNo: "E1001", password: "password-1", name: "김예산" });
+  answerLogin(fail(401, "A001", "사번 또는 비밀번호가 올바르지 않습니다."));
+
+  await expect(signingIn).resolves.toBeUndefined();
+  expect(token).toBe("jwt-1");
+  expect(cv.user?.id).toBe(7);
+});
+
+it("로그인 응답 전에 로그아웃하면 늦게 온 로그인 응답으로 들어가지 않는다", async () => {
+  let answerLogin!: (r: Response) => void;
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((r) => { answerLogin = r; })));
+  const cv = useCanvas();
+
+  const signingIn = cv.signIn("E1001", "password-1");
+  await cv.logout();
+  answerLogin(ok(authData));
+  await signingIn;
+
+  expect(token).toBeNull();
+  expect(cv.user).toBeNull();
+});
+
 it("토큰이 없으면 서버를 부르지 않는다", async () => {
   const fetch = vi.fn();
   vi.stubGlobal("fetch", fetch);

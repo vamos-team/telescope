@@ -20,6 +20,7 @@ let tracker: SeqTracker | null = null;
 let connection: RealtimeConnection | null = null;
 const serverDocIds = new Set<string>();
 let serverReload = 0;
+let authAttempt = 0;  // 로그인·회원가입 요청 번호. 응답이 늦게 와도 가장 최근 요청만 반영
 /** 서버 사용자 ID로 이름을 찾는다. 사용자 API(#34) 전이라 ID만 보인다. */
 const nameOfUser = (id: number | undefined) => (id == null ? "다른 사용자" : `사용자 ${id}`);
 
@@ -403,12 +404,23 @@ export const useCanvas = defineStore("canvas", {
      */
     async signIn(employeeNo: string, password: string) {
       if (SYNC_MODE !== "server") { if (this.login(employeeNo) === false) throw new Error("사번을 확인하세요"); return; }
-      return this.enter(await serverLogin(employeeNo.trim(), password));
+      return this.latestAuth(() => serverLogin(employeeNo.trim(), password));
     },
     /** 회원가입하고 바로 들어감. backend가 필요해 server 모드에서만 됨 */
     async signUp(input: SignupInput) {
       if (SYNC_MODE !== "server") throw new Error("회원가입은 서버 연결 모드(VITE_CANVAS_SYNC=server)에서만 할 수 있습니다.");
-      return this.enter(await serverSignup(input));
+      return this.latestAuth(() => serverSignup(input));
+    },
+    /**
+     * 로그인 요청이 끝나기 전에 회원가입으로 넘어가 가입하는 식으로 요청이 겹칠 수 있다.
+     * 그 사이 더 새 요청(또는 로그아웃)이 있었으면 늦게 온 응답은 성공이든 실패든 버린다
+     */
+    async latestAuth(request: () => Promise<AuthResult>) {
+      const n = ++authAttempt;
+      let result: AuthResult;
+      try { result = await request(); } catch (err) { if (n === authAttempt) throw err; return; }
+      if (n !== authAttempt) return;
+      return this.enter(result);
     },
     /** 서버 로그인·회원가입 응답으로 들어감. 토큰은 탭을 닫으면 사라지는 sessionStorage에 둠 */
     enter(result: AuthResult) {
@@ -436,6 +448,7 @@ export const useCanvas = defineStore("canvas", {
       try { sessionStorage.removeItem(KEY + ":canvas"); } catch { /* 무시 */ }
     },
     async logout() {  // 대기 중인 조작을 지금 사용자 이름으로 저장한 뒤 캔버스 상태를 비움 (다음 사용자가 이전 캔버스를 덮어쓰지 않게)
+      authAttempt++;  // 아직 진행 중인 로그인·회원가입 응답이 로그아웃 뒤에 들어오지 않게
       await this.flush(); this.save();
       this.reset(); this.canvasId = ""; this.canvasName = ""; this.user = null;
       if (SYNC_MODE === "server") setAccessToken(null);
