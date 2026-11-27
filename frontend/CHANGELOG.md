@@ -2,6 +2,9 @@
 
 형식: `- YYYY-MM-DD 무엇을 바꿨는지 (관련 파일)`. 최신이 위로 오게 쌓는다. 규칙은 [AGENTS.md](AGENTS.md).
 
+- 2026-11-27 #143 리뷰 반영: 새로고침 복원 중 로그인 화면 대신 빈 화면(깜빡임 방지), 늦게 온 복원 · 로그인 · 회원가입 응답이 새 로그인 상태를 덮어쓰지 않게 함, nameOfUser 주석 갱신 (src/App.vue, src/stores/canvas.ts, src/style.css)
+- 2026-11-27 #143 사용자 모양을 backend와 같이 `{ id: 숫자, employeeNo, name, dept }`로 바꾸고 `myUserId` 삭제. 목업 구성원도 숫자 id + 사번, 공유 · 사람 찾기 · 새 페이지 편집자를 숫자 id로, 예전 저장분(사번 기준 공유)은 읽을 때 변환 (src/stores/canvas.ts, src/components/PageInfo.vue, src/components/NewCanvasDialog.vue)
+- 2026-11-27 #143 로그인 화면 좌우 2분할(로고 · 우주 배경 / 로그인 폼, 아래 회원가입)과 회원가입 폼 추가, 서버 모드 로그인 · 회원가입 · 내 정보 API 연결(토큰 저장 · 새로고침 복원 · 로그아웃 삭제), 개발 서버 /api 프록시 (src/components/LoginView.vue, src/components/SignupForm.vue, src/stores/canvas.ts, src/sync/http.ts, src/style.css, vite.config.ts)
 - 2026-11-26 PR #122 사내 자료 업로드 대상 회사 선택과 D001의 포맷·회사 불일치 표시 추가 (src/components/DataInputDialog.vue, src/sync/http.ts, src/style.css)
 - 2026-11-26 PR #122 CodeRabbit 주요 리뷰 수정 및 사내 자료 단건 업로드·작업 폴링·캔버스 권한 기반 복원 연결 (src/App.vue, src/components/, src/local/, src/stores/canvas.ts, src/sync/http.ts)
 - 2026-11-26 #107 develop 병합: 동시 편집 연동(#84)을 메모 구조로 맞춤. 서버 이벤트를 add_memo · edit_memo · set_card_memo · set_link_memo로, 글 버전을 memoVersion으로, 시각화 카드는 create_compare(view: chart) + sources로, 선 관계(rel) · set_link · add_chart 삭제. 공유 설정은 소유자만(#100)을 페이지 정보 팝오버에 반영, MenuDrawer 삭제 유지 (src/sync/*, src/stores/canvas.ts, src/App.vue, src/components/PageInfo.vue, docs/frontend/*.md, docs/planning/기획서.md)

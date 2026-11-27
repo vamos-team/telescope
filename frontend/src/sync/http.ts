@@ -45,6 +45,37 @@ async function call<T>(method: string, path: string, body?: unknown, signal?: Ab
   return json?.data as T;
 }
 
+// ---------- 인증 (docs/backend/api-spec.md 3장) ----------
+/** 로그인한 사용자. `id`는 서버 숫자 ID, 사번은 `employeeNo`. */
+export interface AuthUser { id: number; employeeNo: string; name: string; dept: string | null; job: string | null; role: "ADMIN" | "USER" }
+/** 로그인·회원가입 응답의 data. */
+export interface AuthResult { accessToken: string; tokenType: "Bearer"; expiresIn: number; user: AuthUser }
+export interface SignupInput { employeeNo: string; password: string; name: string; dept?: string; job?: string }
+
+/** 사번·비밀번호로 로그인한다. 틀리면 401 A001. */
+export function login(employeeNo: string, password: string): Promise<AuthResult> {
+  return call("POST", "/auth/login", { employeeNo, password });
+}
+
+/** 회원가입하고 로그인과 같은 형식으로 토큰을 받는다. 역할은 서버가 항상 USER로 정한다. 중복 사번은 409 A005. */
+export function signup(input: SignupInput): Promise<AuthResult> {
+  return call("POST", "/auth/signup", input);
+}
+
+/** 저장된 토큰의 본인 정보. 토큰이 없거나 만료되면 401(A002·A003). */
+export function fetchMe(): Promise<AuthUser> {
+  return call("GET", "/users/me");
+}
+
+/** 인증 실패를 화면 문구로 바꾼다. 검증 실패(C001)는 서버 메시지를 그대로 쓴다. */
+export function authErrorMessage(err: unknown): string {
+  if (!(err instanceof SyncError)) return err instanceof Error && err.message ? err.message : "요청을 처리하지 못했습니다.";
+  if (err.status === 0) return "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.";
+  if (err.code === "A001") return "사번 또는 비밀번호가 올바르지 않습니다.";
+  if (err.code === "A005") return "이미 가입된 사번입니다.";
+  return err.message || "요청을 처리하지 못했습니다.";
+}
+
 /** 캔버스를 연다: 카드·연결·마지막 이벤트 번호. */
 export function openCanvas(canvasId: string): Promise<CanvasSnapshot> {
   return call("GET", `/canvases/${canvasId}`);
