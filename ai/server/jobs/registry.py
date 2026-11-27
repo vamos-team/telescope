@@ -1,13 +1,19 @@
 import importlib
+import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from jobs.datasync import make_data_sync_pipeline
 from jobs.files import FileSource, LocalFileSource, S3FileSource, with_staged_file
 from jobs.models import JobType
 from jobs.pipeline import JobContext, PipelineError, PipelineFn
 
 if TYPE_CHECKING:
     from config import Settings
+
+logger = logging.getLogger(__name__)
+
+FAKE_DATA_SYNC_MESSAGE = "가짜 모드에서는 재무 데이터를 적재하지 않습니다."
 
 
 class PipelineRegistry:
@@ -41,11 +47,18 @@ def make_fake_pipeline(mode: str, delay_seconds: float) -> PipelineFn:
     return fake
 
 
+def _fake_data_sync(ctx: JobContext, payload: dict[str, Any]) -> dict[str, Any]:
+    """가짜 모드의 데이터 적재. 가짜 판(DuckDB 파일 없는 DataVersion)이 생기지 않게 늘 실패한다."""
+    raise PipelineError(FAKE_DATA_SYNC_MESSAGE)
+
+
 def build_fake_registry(mode: str, delay_seconds: float) -> PipelineRegistry:
-    """모든 작업 종류에 가짜 구현을 붙인다. 로컬 개발·화면 연동용(PIPELINE_MODE=fake)."""
+    """모든 작업 종류에 가짜 구현을 붙인다. 로컬 개발·화면 연동용(PIPELINE_MODE=fake).
+    데이터 적재만은 가짜 결과를 내지 않고 실패한다(backend가 없는 파일을 활성 판으로 쓰지 않게)."""
     registry = PipelineRegistry()
     for job_type in JobType:
         registry.register(job_type, make_fake_pipeline(mode, delay_seconds))
+    registry.register(JobType.DATA_SYNC, _fake_data_sync)
     return registry
 
 
@@ -81,13 +94,21 @@ def build_real_registry(settings: "Settings", file_source: FileSource | None = N
       배포에서 가짜 결과가 실제처럼 저장되는 일을 막으려고 섞어 쓰지 않는다.
     """
     registry = PipelineRegistry()
-    load_entrypoint(settings.pipeline_entrypoint)(registry)
+    if settings.pipeline_entrypoint:
+        load_entrypoint(settings.pipeline_entrypoint)(registry)
     if registry.supports(JobType.DOCUMENT_PREPARATION):
+        if file_source is None and not settings.s3_bucket and not settings.file_storage_dir:
+            raise ValueError("자료 준비가 등록되면 S3_BUCKET 또는 FILE_STORAGE_DIR이 필요합니다.")
         source = file_source or build_file_source(settings)
         registry.register(
             JobType.DOCUMENT_PREPARATION,
             with_staged_file(registry.get(JobType.DOCUMENT_PREPARATION), source),
         )
+    # 데이터 적재는 ai 등록 함수가 아니라 ai/server(backend 담당)가 붙인다. 작업 폴더가 있을 때만(#135)
+    if settings.datasync_data_dir:
+        registry.register(JobType.DATA_SYNC, make_data_sync_pipeline(settings.datasync_data_dir))
+    if not any(registry.supports(t) for t in JobType):
+        logger.warning("실제 모드인데 등록된 작업이 없습니다. 모든 시작 요청이 501로 거절됩니다")
     return registry
 
 

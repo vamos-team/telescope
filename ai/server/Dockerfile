@@ -10,7 +10,8 @@ COPY ai/server/requirements.txt ai/server/requirements.txt
 RUN pip install --no-cache-dir -r ai/server/requirements.txt
 COPY pipelines/ pipelines/
 COPY ai/ ai/
-# 저장소 루트를 모듈 경로에 둔다: "pipelines.…", "ai.…"로 불러온다
-ENV PYTHONPATH=/app
+# 모듈 경로: 저장소 루트("ai.…")와 pipelines 폴더. 수집기·적재기는 pipelines 폴더를 기준으로
+# "collectors.…", "loaders.…", "parsers.…"로 서로를 불러온다(데이터 적재 #135)
+ENV PYTHONPATH=/app:/app/pipelines
 WORKDIR /app/ai/server
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
