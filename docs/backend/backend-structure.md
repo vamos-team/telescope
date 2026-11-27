@@ -7,10 +7,10 @@ Gradle 멀티 모듈이다. 루트(`backend/`)에는 공통 빌드 설정만 두
 
 ```
 backend/
-├── common      com.telescope.common   서비스들이 함께 쓰는 응답/예외 처리, 검증, JWT 검증, 보안 설정, 공통 Entity
-├── auth        com.telescope.auth     auth 서비스
-├── canvas      com.telescope.canvas   canvas 서비스
-└── work        com.telescope.work     work 서비스 (Flyway 마이그레이션 포함)
+├── common      com.telescope.common    서비스들이 함께 쓰는 응답/예외 처리, 검증, JWT 검증, 보안 설정, 공통 Entity
+├── auth        com.telescope.auth      auth 서비스
+├── canvas      com.telescope.canvas    canvas 서비스
+└── analysis    com.telescope.analysis  analysis 서비스 (Flyway 마이그레이션 포함)
 ```
 
 ## 패키지 목록
@@ -25,8 +25,8 @@ com.telescope.canvas
 └── infra
     └── auth                auth 서비스 호출
 
-com.telescope.work
-├── global                  work 서비스 설정 (스케줄러)
+com.telescope.analysis
+├── global                  analysis 서비스 설정 (스케줄러)
 ├── document                문서 자료 관리
 ├── job                     비동기 작업(자료 준비/분석/예상 질문) 상태 관리
 ├── datasync                외부 데이터 수집·동기화
