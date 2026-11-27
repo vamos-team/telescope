@@ -1,28 +1,63 @@
 <script setup lang="ts">
-// 첫 화면: 사번 + 비밀번호로 로그인. backend 연결 전이라 비밀번호는 검사하지 않고, 기본 계정(1001)이 미리 입력됨
-// 부서는 사번의 구성원 정보에서 정해짐
+// 첫 화면: 왼쪽은 로고와 우주 배경, 오른쪽은 로그인 폼(아래 작은 회원가입 링크)과 회원가입 폼을 바꿔 보여 줌.
+// server 모드(VITE_CANVAS_SYNC=server)는 backend 로그인·회원가입(docs/backend/api-spec.md 3장),
+// local 모드는 목업 구성원으로 들어가고 비밀번호는 검사하지 않음(기본 계정 1001이 미리 입력됨)
 import { ref } from "vue";
 import { useCanvas } from "../stores/canvas";
-import Logo from "./Logo.vue";
+import { SYNC_MODE } from "../sync/config";
+import { authErrorMessage } from "../sync/http";
+import SignupForm from "./SignupForm.vue";
 
 const cv = useCanvas();
-const DEFAULT_ID = "1001";  // 미리 입력하는 계정
-const id = ref(DEFAULT_ID), pw = ref("demo"), err = ref("");
-function submit() {
+const local = SYNC_MODE !== "server";
+const view = ref<"login" | "signup">("login");
+const id = ref(local ? "1001" : ""), pw = ref(local ? "demo" : ""), err = ref(""), busy = ref(false);
+
+async function submit() {
+  if (busy.value) return;
   if (!id.value.trim() || !pw.value) { err.value = "사번과 비밀번호를 입력하세요"; return; }
-  if (cv.login(id.value) === false) err.value = "사번을 확인하세요";
+  busy.value = true;
+  try { await cv.signIn(id.value, pw.value); } catch (e) { err.value = authErrorMessage(e); } finally { busy.value = false; }
 }
 </script>
 
 <template>
-  <main class="login">
-    <form class="lcard" @submit.prevent="submit">
-      <Logo :size="52" />
-      <h1>Telescope</h1>
-      <label>사번<input v-model="id" inputmode="numeric" autocomplete="username" placeholder="예: 1001" @input="err = ''" /></label>
-      <label>비밀번호<input v-model="pw" type="password" autocomplete="current-password" placeholder="비밀번호" @input="err = ''" /></label>
-      <p v-if="err" class="lerr" role="alert">{{ err }}</p>
-      <button class="primary">로그인</button>
-    </form>
+  <main class="auth">
+    <section class="auth-hero">
+      <div class="auth-stars" aria-hidden="true"><i /><i /><i /></div>
+      <div class="auth-brand">
+        <div class="auth-logo">
+          <!-- 로그인 화면 전용 표지: 로고와 같은 별 모양에 밤하늘과 어울리는 은은한 그라데이션 -->
+          <svg class="auth-mark" viewBox="0 0 64 64" role="img" aria-label="Telescope">
+            <defs>
+              <linearGradient id="auth-mark-fill" x1="14" y1="6" x2="50" y2="58" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#FFFFFF" />
+                <stop offset=".55" stop-color="#E4DDFF" />
+                <stop offset="1" stop-color="#A996FF" />
+              </linearGradient>
+            </defs>
+            <path d="M32 4C34.6 22.6 41.4 29.4 60 32 41.4 34.6 34.6 41.4 32 60 29.4 41.4 22.6 34.6 4 32 22.6 29.4 29.4 22.6 32 4Z" fill="url(#auth-mark-fill)" />
+          </svg>
+          <h1>TELESCOPE</h1>
+        </div>
+        <div class="auth-copy">
+          <p class="auth-tagline">See the value together</p>
+          <p class="auth-desc">The collaborative canvas for earnings analysis</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="auth-panel">
+      <form v-if="view === 'login'" class="auth-form" @submit.prevent="submit">
+        <h2>로그인</h2>
+        <p class="auth-sub">사번과 비밀번호를 입력하세요</p>
+        <label>사번<input v-model="id" autocomplete="username" placeholder="예: 1001" @input="err = ''" /></label>
+        <label>비밀번호<input v-model="pw" type="password" autocomplete="current-password" placeholder="비밀번호" @input="err = ''" /></label>
+        <p v-if="err" class="auth-err" role="alert">{{ err }}</p>
+        <button class="auth-submit" :disabled="busy">{{ busy ? "로그인 중…" : "로그인" }}</button>
+        <p class="auth-switch">계정이 없으신가요? <button type="button" @click="view = 'signup'; err = ''">회원가입</button></p>
+      </form>
+      <SignupForm v-else @back="view = 'login'" />
+    </section>
   </main>
 </template>

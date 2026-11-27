@@ -86,7 +86,7 @@ it("열 때 문서와 본인 분석을 복원하고 권한 거절 시 문서 캐
     ? '{"13|1001":[{"id":"mine"}],"13|1002":[{"id":"other"}]}' : null });
   setActivePinia(createPinia());
   const canvas = useCanvas();
-  canvas.user = { id: "1001", name: "이재무", dept: "네트워크센터" };
+  canvas.user = { id: 1, employeeNo: "1001", name: "이재무", dept: "네트워크센터" };
   try {
     await canvas.restoreCanvas();
     expect(canvas.pageQuarter).toBe("2025년 4분기");

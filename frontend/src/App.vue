@@ -293,7 +293,8 @@ const staleDot = computed(() => !!cv.latest && cv.latest.sig !== cv.sig);
 </script>
 
 <template>
-  <LoginView v-if="!cv.user" />
+  <div v-if="!cv.user && cv.restoring" class="auth-restoring" aria-busy="true" aria-label="로그인 정보를 확인하는 중" />
+  <LoginView v-else-if="!cv.user" />
   <template v-else>
   <HomeView v-if="!cv.canvasId" />
   <template v-else>

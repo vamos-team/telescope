@@ -19,7 +19,7 @@
 | 기본 경로 | `/api/v1`. 리소스는 명사 복수형 | [현재] |
 | 본문 | JSON, UTF-8. 파일 업로드만 `multipart/form-data` | [현재] |
 | 필드 이름 | camelCase | [현재] |
-| 인증 | 로그인으로 받은 토큰을 `Authorization: Bearer {accessToken}`으로 보낸다. 로그인·`/actuator/health` 외 모든 API에 필요 | [제안] #34 |
+| 인증 | 로그인으로 받은 토큰을 `Authorization: Bearer {accessToken}`으로 보낸다. 로그인·회원가입(`POST /api/v1/auth/login`, `/signup`), `GET /actuator/health`, 실시간 연결 주소(`GET /api/v1/ws`, 토큰은 STOMP `CONNECT`에서 검사) 외 모든 API에 필요. 없거나 틀리면 `401` | [현재] #34, #133 |
 | 시각 | ISO 8601, 시간대 표기 없음, 한국 시간(배포 파드 `TZ=Asia/Seoul`): `"2026-11-25T09:30:00"`. 날짜만은 `"2026-11-25"` | [현재] |
 | 금액 단위 | 원본 표는 공시 단위 그대로. 비교·근거 값의 십억원 변환은 코드가 한다(LLM에 맡기지 않음, `AGENTS.md` 4번) | [제안] |
 | 기준 시점·허용 자료 | 초안·질문·평가처럼 예측에 쓰는 요청은 `asOfDate`가 필수다. backend가 허용 자료를 정해 ai·mcp-server에 넘기고, 필터 결과가 비어도 전체 자료로 넘어가지 않는다 | [제안] |
@@ -365,7 +365,7 @@ ai 서비스가 발급한 ID(`externalJobId`)는 화면에 노출하지 않는�
 | 404 | `C002` | 없는 작업 |
 
 - ai 호출이 일시적으로 실패해도 에러를 내지 않고 마지막 저장 상태를 돌려준다(`job.md` 3.3).
-- 지금은 인증 없이 열려 있다. #34 이후 인증이 필요하다.
+- 로그인이 필요하다(없거나 틀린 토큰은 `401`, 1.1). 로그인한 사용자는 누구의 작업이든 조회할 수 있다(MVP). 범위를 좁힐지는 #151.
 
 ### 7.3 사용자 문서 업로드 [결정] (#111)
 
@@ -413,12 +413,14 @@ ai 서비스가 발급한 ID(`externalJobId`)는 화면에 노출하지 않는�
 |---|---|
 | 1.2 응답 형식 | `global.response.ApiResponse`, `ErrorResponse` |
 | 1.3 목록 | `global.response.PageResponse` |
-| 2 에러 코드 | `global.exception.ErrorCode`, `GlobalExceptionHandler` (`A`, `K`, `S`는 아직 없음) |
-| 3 인증·사용자 | 없음 (#34) |
-| 4·5 캔버스 | 없음 (#82, #83) |
-| 5.5·5.6 실시간 | 없음 (#83. `spring-boot-starter-websocket` 추가 필요) |
+| 2 에러 코드 | `global.exception.ErrorCode`, `GlobalExceptionHandler` (`S`는 아직 없음) |
+| 3 인증·사용자 | `user.controller.AuthController`·`UserController`, `user.service.AuthService`·`UserService`·`AdminSeeder`, `global.auth.SecurityConfig`·`JwtAuthenticationFilter`·`JwtTokenProvider` |
+| 4·5 캔버스 | `canvas.controller.CanvasController`, `canvas.service.CanvasService` |
+| 5.5·5.6 실시간 | `global.config.WebSocketConfig`, `global.auth.StompAuthChannelInterceptor`, `canvas.controller.CanvasStompInterceptor`·`CanvasOutboundInterceptor`·`CanvasRealtimeController` |
 | 6 MCP | 없음 (`mcp-server/http`, backend 호출 클라이언트) |
 | 7.2 작업 상태 | `job.controller.JobController`, `job.dto.JobResponse` |
+| 7.3 사용자 문서 업로드 | `document.controller.DocumentController`, `document.service.DocumentService` |
+| 7.4 재무 데이터 적재 | `datasync.controller.DataSyncController`, `datasync.service.DataSyncService`·`DataSyncScheduler` |
 
 ## 9. 프론트 명세에 반영할 것
 
