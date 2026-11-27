@@ -79,6 +79,7 @@ QUEUED ──▶ RUNNING ──▶ SUCCEEDED
 | `markStarted(jobId, externalJobId)` | ai 시작 요청이 성공했을 때. 외부 ID 저장 후 `RUNNING` |
 | `markFailed(jobId, message)` | ai 시작 요청이 실패했을 때 |
 | `getJob(jobId)` | 상태 조회. 미종료 작업이면 ai 상태를 받아 저장한 뒤 반환 |
+| `isFinished(jobId)`, `unfinishedJobIds(jobType)`, `peek(jobIds)` | 저장된 상태만 읽는다(ai 호출 없음). 화면이 폴링하지 않는 배치(데이터 적재 #135)를 서버가 확인할 때와 목록 화면에 쓴다 |
 
 **다른 도메인이 작업을 시작하는 순서**
 
@@ -107,7 +108,7 @@ ai가 `SUCCEEDED`를 알려 주면, 대상 도메인이 결과를 저장하는 �
 
 - **`JobResultHandler`** (`job/service`): 대상 도메인(자료 준비·분석·예측)이 자기 작업 종류에 맞게 구현해 빈으로 등록한다. job은 대상 도메인을 직접 알지 않는다. 작업 종류마다 하나만 둔다(둘이면 기동 실패).
   처리기는 잠금 트랜잭션 안에서 불리므로 DB 저장만 하고 외부 호출을 하지 않는다. 저장하지 못하면 예외를 던진다.
-- **처리기가 없는 작업 종류**: 경고 로그만 남기고 결과 없이 완료한다(이전 동작 그대로). 대상 도메인이 처리기를 붙이면 그때부터 저장된다. 자료 준비는 `DocumentPreparationResultHandler`(#111)가 붙었고, 분석·예측은 아직 없다.
+- **처리기가 없는 작업 종류**: 경고 로그만 남기고 결과 없이 완료한다(이전 동작 그대로). 대상 도메인이 처리기를 붙이면 그때부터 저장된다. 자료 준비는 `DocumentPreparationResultHandler`(#111), 데이터 적재는 `DataSyncResultHandler`(#135)가 붙었고, 분석·예측은 아직 없다.
 
 | ai 호출 결과 | 처리 |
 |---|---|
@@ -143,7 +144,7 @@ ai가 `SUCCEEDED`를 알려 주면, 대상 도메인이 결과를 저장하는 �
 | 속성 | 설명 | 타입 |
 | --- | --- | --- |
 | `data.id` | 작업 ID | number |
-| `data.jobType` | `DOCUMENT_PREPARATION` / `ANALYSIS` / `PREDICTION` | string |
+| `data.jobType` | `DOCUMENT_PREPARATION` / `ANALYSIS` / `PREDICTION` / `DATA_SYNC` | string |
 | `data.status` | `QUEUED` / `RUNNING` / `SUCCEEDED` / `FAILED` | string |
 | `data.startedAt` | 시작 시각. 시작 전이면 `null` | string \| null |
 | `data.finishedAt` | 종료 시각. 끝나지 않았으면 `null` | string \| null |

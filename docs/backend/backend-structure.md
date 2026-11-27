@@ -38,4 +38,4 @@ com.telescope.backend
 
 ## 보류
 
-- `datasync.scheduler`: 트리거 주체(Jenkins 또는 Spring)가 정해질 때까지 생성하지 않는다.
+- (해결, #135) 데이터 적재 스케줄러는 Spring `@Scheduled`로 정했다. `datasync.service.DataSyncScheduler`, 설계는 `docs/backend/datasync.md`.

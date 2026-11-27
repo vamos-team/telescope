@@ -106,8 +106,8 @@ backend                                   ai
   backend가 "클라이언트"에게 보내는 응답 전용 규약이고, ai는 backend의 내부 호출 상대일
   뿐이라 `PythonAiClient`의 DTO(`JobStartResponse`, `JobStatusResponse`) 필드와 1:1로 맞는
   평평한 JSON이면 된다.
-- 재무 데이터 적재(`DataSyncRun`)와 예측 평가(`PredictionEvaluation`)는 `Job` 테이블을 쓰지
-  않지만(`docs/erd/entities.md` 3.3, 3.6), "시작 → id 발급 → 상태 조회" 패턴 자체는 이
+- 재무 데이터 적재(`DataSyncRun`)는 #135에서 `Job`(`DATA_SYNC`)을 쓰도록 바꿨다(2.13). 예측 평가(`PredictionEvaluation`)는
+  `Job` 테이블을 쓰지 않지만(`docs/erd/entities.md` 3.6), "시작 → id 발급 → 상태 조회" 패턴 자체는 이
   문서의 공통 규약을 그대로 따른다고 제안한다. 다만 평가가 폴링이 필요할 만큼 오래 걸리는
   작업인지조차 정해지지 않았다 — **작업별 이슈(prediction)에서 결정.**
 
@@ -380,6 +380,22 @@ backend                                   ai
      갈 것이 자연스럽고, 별도 파드라면 네트워크 호출(HTTP)만 가능하다.
 - **열림**: ai 담당자가 다른 이유로 함수 호출이나 다른 프로토콜(gRPC 등)을 선호하면 이 제안을
   바꿀 수 있다. 이 문서의 나머지 항목(2.4, 2.9, 2.10)은 HTTP를 전제로 적었다.
+
+### 2.13 재무 데이터 적재 — 구현 (#135)
+
+담당: 배치를 돌리는 일(스케줄·시작·결과 확인·이력·판 전환)과 ai/server 작업 추가는 **backend**, 수집기
+(`pipelines/collectors/dart_xbrl.py`)·적재기(`pipelines/loaders/xbrl.py`) 코드는 **ai**(사용자 확인, 2026-11-27).
+자료 준비 파싱 함수(#134)는 ai 담당이다. 설계와 결정 이유는 `docs/backend/datasync.md`.
+
+| 호출 | 메서드/경로 | 요청 | 결과(`result`) |
+|---|---|---|---|
+| 적재 시작 | `POST /internal/v1/jobs/data-sync` → `202 { jobId }` | `{ dataSyncRunId, corpCodes: [DART 고유번호], start, end }`(`yyyy-MM-dd`) | `{ duckdbPath, filings, replaced, collected: { 고유번호: 수집 통계 } }` |
+
+- 상태 조회·오류 규약은 다른 작업과 같다(2.4, 2.5). 화면이 폴링하지 않으므로 backend 스케줄러가 1분마다 확인한다.
+- ai/server는 `DATASYNC_DATA_DIR`이 있을 때만(실제 모드) 이 작업을 받는다. 없으면 `501`. 가짜 모드는 늘 실패한다(가짜 판을 만들지 않게).
+- 새 파일은 `<DATASYNC_DATA_DIR>/duckdb/finance-<dataSyncRunId>.duckdb`(판마다 다른 파일). backend는 `duckdbPath`를 `DataVersion.filePath`로 남기고 파일을 열지 않는다.
+- 실패 문구: "DART API 키가 설정되지 않았습니다." / "DART에서 공시를 받지 못했습니다." / "적재할 공시가 없습니다." / "재무 데이터를 적재하지 못했습니다." (내부 경로·키·예외 원문 없음)
+- 열린 것: DuckDB 파일을 읽는 쪽(mcp-server)과 같이 볼 저장 위치(S3·공유 저장소 등), 지난 판 보관 기간, ai/server 이미지의 수집·적재 의존성(#109와 함께)
 
 ## 3. 아직 정해지지 않은 것 (요약)
 

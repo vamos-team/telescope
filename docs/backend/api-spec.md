@@ -288,6 +288,7 @@ DuckDB·ChromaDB는 backend가 직접 열지 않는다(`CLAUDE.md` 3번).
 | 초안 생성, 질문 생성 | AI작업 |
 | 평가 | 10장 미정 |
 | 작업 상태 | BE |
+| 재무 데이터 적재 실행·이력 (관리자) | BE → AI작업 (7.4) |
 
 - `mcp-server/http`의 담당 범위와 조회 함수 규약, ai/server 동기 API 규약은 ai 담당자와 확정한다(10장).
 - 공시·문서 같은 공용 자료는 로그인 사용자 모두 조회한다. 캔버스 맥락의 조회(추천, 비교 등)는 캔버스 권한을 먼저 확인한다.
@@ -354,6 +355,18 @@ ai 서비스가 발급한 ID(`externalJobId`)는 화면에 노출하지 않는�
 - 허용 형식(임시): `pdf, xlsx, xlsm, csv, pptx, html, htm, xml, txt, md, json`. 업로드 정책이 정해지면 바꾼다(루트 `CLAUDE.md` 7장).
 - `GET /jobs/{jobId}`가 `SUCCEEDED`가 되면 `GET /api/v1/documents/{id}`로 카드 데이터(`Doc`)를 받는다. 업로드 문서는 그 캔버스 권한자(소유자·편집·보기)만 조회한다.
   `kind`는 `internal`, `publisher`는 `사내 업로드`, `url`은 빈 값, `uploaded`는 `true`. 준비 전에는 `summary`가 비어 있고 `figures`·`tags`는 빈 목록이다.
+
+### 7.4 재무 데이터 적재 (관리자) [결정] (#135)
+
+설계와 결정 이유는 `docs/backend/datasync.md`. 두 API 모두 `ADMIN`만(아니면 `403 A004`).
+
+| API | 응답 |
+|---|---|
+| `POST /api/v1/data-sync-runs` | 새로 시작 `202`, 이미 진행 중이면 `200`(그 실행). 대상 회사가 설정되지 않았으면 `400 C001` |
+| `GET /api/v1/data-sync-runs` | 최근 실행 20건 |
+
+응답(실행 하나): `{ id, source, requestedBy, createdAt, jobId, status, startedAt, finishedAt, errorMessage, dataVersionId, active }`.
+진행은 `GET /jobs/{jobId}`로도 본다. 예약 실행은 서버가 매일 정해진 시각(배포 설정 `DATASYNC_CRON`)에 시작한다.
 
 ## 8. 코드와의 대응
 
