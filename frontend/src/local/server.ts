@@ -121,6 +121,7 @@ function apply(w: Workspace, e: CanvasEvent) {
       for (const o of w.cards.values()) o.sources = o.sources.filter((s) => s !== e.card_id);
       for (const [id, l] of w.links) if (l.source === e.card_id || l.target === e.card_id) w.links.delete(id);
       break;
+    case "clear_cards": w.cards.clear(); w.memos.clear(); w.links.clear(); break;
     case "add_doc": case "add_memo": case "add_dash":
       w.cards.set(e.card_id as string, { card_id: e.card_id as string, kind: e.type === "add_doc" ? "doc" : e.type === "add_dash" ? "dash" : "memo", seq: w.seq,
         doc_id: e.doc_id as string | undefined, text: e.text as string | undefined, author: e.author as string | undefined, panel: e.panel as string | undefined,

@@ -409,9 +409,11 @@ table.g.facts tr.b td{font-weight:700;color:var(--t-strong);background:var(--pri
 
 /* 왼쪽 패널: 근거 데이터 / 활동 로그 */
 .lp{width:264px;flex:none;display:flex;flex-direction:column;background:var(--bg);border-right:1px solid var(--line);min-height:0}
-.lp .who{margin-top:auto;display:flex;align-items:center;gap:8px;padding:12px 14px;border-top:1px solid var(--line)}
-.lp .who div{display:grid;flex:1;min-width:0;line-height:1.3} .lp .who b{font-size:13.5px;color:var(--t-strong)}
-.lp .lo{font-size:12px;color:var(--t-cap);padding:4px 6px;border-radius:6px} .lp .lo:hover{background:var(--hover)}
+/* 왼쪽 아래 내 정보 (캔버스 · 홈 공통): 이름 / 부서 / 직무 */
+.who{margin-top:auto;display:flex;align-items:center;gap:8px;padding:12px 14px;border-top:1px solid var(--line)}
+.who div{display:grid;flex:1;min-width:0;line-height:1.3} .who b{font-size:13.5px;color:var(--t-strong)}
+.who b,.who small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .who small{font-size:12px;color:var(--t-cap)}
+.who .lo{flex:none;font-size:12px;color:var(--t-cap);padding:4px 6px;border-radius:6px} .who .lo:hover{background:var(--hover)}
 .lp .lh{display:flex;align-items:center;gap:6px;padding:12px 14px 6px}
 .lp h2{margin:0;font-size:12.5px;font-weight:700;color:var(--t-strong)}
 .lp .lh button{margin-left:auto;width:24px;height:24px;border-radius:6px;font-weight:700;color:var(--t-sub)} .lp .lh button:hover{background:var(--hover)}
@@ -689,16 +691,13 @@ table.g.facts tr.b td{font-weight:700;color:var(--t-strong);background:var(--pri
 
 /* 캔버스 홈 (C00): 왼쪽 메뉴 + 캔버스 타일 격자 (Figma 파일 목록처럼) */
 .home{flex:1;display:flex;min-height:0;background:var(--bg)}
-.hnav{width:240px;flex:none;display:flex;flex-direction:column;gap:2px;padding:16px 10px 0;background:var(--side);border-right:1px solid var(--line)}
+.hnav{width:264px;flex:none;display:flex;flex-direction:column;gap:2px;padding:16px 10px 0;background:var(--side);border-right:1px solid var(--line)}
 .hlogo{display:flex;align-items:center;gap:8px;padding:0 8px 14px;font-size:16px;color:var(--t-strong)}
 .hnav>button{display:flex;align-items:center;height:36px;padding:0 10px;border-radius:var(--r-sm);font-size:13.5px;color:var(--t-sub);text-align:left}
 .hnav>button small{margin-left:auto;color:var(--t-cap)}
 .hnav>button:hover{background:var(--hover)}
 .hnav>button[aria-current="page"]{background:var(--primary-weak);color:var(--primary-text);font-weight:700}
-.hnav .who{margin:auto -10px 0;display:flex;align-items:center;gap:8px;padding:12px 14px;border-top:1px solid var(--line)}
-.hnav .who div{display:grid;flex:1;min-width:0;line-height:1.3} .hnav .who b{font-size:13.5px;color:var(--t-strong)}
-.hnav .who small{font-size:12px;color:var(--t-cap)}
-.hnav .lo{font-size:12.5px;color:var(--t-sub);padding:4px 8px;border-radius:6px} .hnav .lo:hover{background:var(--hover)}
+.hnav .who{margin:auto -10px 0}  /* .hnav 좌우 여백만큼 넓혀 캔버스 왼쪽 패널과 같은 폭 */
 .hmain{flex:1;min-width:0;overflow:auto;padding:24px 32px}
 .hmain header{display:flex;align-items:center;gap:10px;margin-bottom:20px}
 .hmain h1{margin:0 auto 0 0;font-size:20px;color:var(--t-strong)}
@@ -1631,7 +1630,7 @@ body.resizing .vue-flow,body.resizing iframe{pointer-events:none}
 .lp .plist{gap:2px}
 .lp .mi{display:flex;align-items:flex-start;gap:10px;width:100%;text-align:left;padding:9px 10px;border-radius:var(--r-sm);background:none;border:0}
 .lp .mi:hover{background:var(--hover)}
-.lp .mi .av{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--c-memo);color:#1d1d1d;font-size:12px;font-weight:700;line-height:1}
+.lp .mi .av{flex:none}
 .lp .mi .mt{flex:1;min-width:0;display:grid;gap:2px;line-height:1.4}
 .lp .mi .mt b{font-size:12.5px;color:var(--t-strong)}
 .lp .mi .tx{font-size:13px;color:var(--t);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}

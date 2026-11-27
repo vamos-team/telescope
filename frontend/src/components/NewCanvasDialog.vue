@@ -1,18 +1,18 @@
 <script setup lang="ts">
-// 새 캔버스 창: 이름, 분기, 편집할 사람을 정해 만들고 바로 엶. 닫기는 ✕ · 취소 · Esc (빈 곳 클릭으로는 닫지 않음)
+// 새 캔버스 창: 이름, 분기, 초대할 사람과 사람별 권한(편집 · 보기)을 정해 만들고 바로 엶. 닫기는 ✕ · 취소 · Esc (빈 곳 클릭으로는 닫지 않음)
 import { ref } from "vue";
-import { useCanvas, QUARTERS, DEFAULT_QUARTER, type Person } from "../stores/canvas";
+import { useCanvas, QUARTERS, DEFAULT_QUARTER, ROLE, type Person } from "../stores/canvas";
 import { usePeopleSearch } from "./usePeopleSearch";
 
 const cv = useCanvas();
-const name = ref(cv.defaultName()), quarter = ref(DEFAULT_QUARTER), people = ref<Person[]>([]);  // people: 고른 편집할 사람
+const name = ref(cv.defaultName()), quarter = ref(DEFAULT_QUARTER), people = ref<(Person & { role: "edit" | "view" })[]>([]);  // people: 고른 사람과 권한(기본 편집)
 const q = ref(""), focused = ref(false);
 // 찾기: local은 목업 구성원, server는 사내 사람 검색(GET /users?q=). 나와 이미 고른 사람은 뺀다
 const { found, hint } = usePeopleSearch(q, () => new Set([cv.user!.id, ...people.value.map((p) => p.id)]));
-function add(p: Person) { people.value.push(p); q.value = ""; focused.value = false; }
+function add(p: Person) { people.value.push({ ...p, role: "edit" }); q.value = ""; focused.value = false; }
 function blur(e: FocusEvent) { if (!(e.relatedTarget as HTMLElement | null)?.closest(".found")) focused.value = false; }
 const close = () => (cv.creating = false);
-async function create() { close(); await cv.newCanvas({ name: name.value, quarter: quarter.value, editors: people.value.map((p) => p.id) }); }
+async function create() { close(); await cv.newCanvas({ name: name.value, quarter: quarter.value, members: people.value.map((p) => ({ id: p.id, role: p.role })) }); }
 </script>
 
 <template>
@@ -23,9 +23,9 @@ async function create() { close(); await cv.newCanvas({ name: name.value, quarte
       <label class="fld">이름<input v-model="name" aria-label="페이지 이름" autofocus /></label>
       <label class="fld">기준 시점<select v-model="quarter" aria-label="기준 시점"><option v-for="x in QUARTERS" :key="x">{{ x }}</option></select></label>
 
-      <h3>편집할 사람</h3>
+      <h3>초대할 사람</h3>
       <div class="inv one">
-        <input v-model="q" placeholder="사번, 이름, 부서로 사내 사람 찾기" aria-label="편집할 사람 찾기"
+        <input v-model="q" placeholder="사번, 이름, 부서로 사내 사람 찾기" aria-label="초대할 사람 찾기"
           @focus="focused = true" @click="focused = true" @input="focused = true" @blur="blur" @keydown.enter.prevent="found[0] && add(found[0])" />
         <ul v-if="focused" class="found">
           <li v-if="!q.trim() && found.length" class="cap">추천</li>
@@ -40,7 +40,7 @@ async function create() { close(); await cv.newCanvas({ name: name.value, quarte
           <span class="nm"><b>{{ cv.user!.name }} (나)</b><small>{{ cv.user!.dept }}</small></span><span class="rl">소유자</span></li>
         <li v-for="m in people" :key="m.id"><span class="av">{{ m.name[0] }}</span>
           <span class="nm"><b>{{ m.name }}</b><small>{{ [m.dept, m.job].filter(Boolean).join(' · ') }}</small></span>
-          <span class="rl">편집 가능</span>
+          <select v-model="m.role" :aria-label="m.name + ' 권한'"><option value="edit">{{ ROLE.edit }}</option><option value="view">{{ ROLE.view }}</option></select>
           <button type="button" class="x" :aria-label="m.name + ' 빼기'" @click="people = people.filter((x) => x.id !== m.id)">✕</button></li>
       </ul>
 

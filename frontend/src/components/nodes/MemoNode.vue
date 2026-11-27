@@ -13,6 +13,8 @@ const card = computed(() => cv.cards.find((c) => c.id === props.data.cardId) as 
 const m = computed(() => memberOf(card.value.author));
 /** 내가 이 화면에서 방금 만든 메모인지 */
 const mine = computed(() => cv.myNewMemo === props.data.cardId);
+/** 내가 단 메모인지. 남의 메모는 고치거나 지울 수 없음 */
+const own = computed(() => cv.ownsMemo(card.value.authorId, card.value.author));
 </script>
 
 <template>
@@ -21,8 +23,8 @@ const mine = computed(() => cv.myNewMemo === props.data.cardId);
     <SideHandles />
     <header class="drag-handle">
       <div class="t"><b>{{ card.author }}</b><small v-if="m">{{ m.dept }} · {{ m.job }}</small></div>
-      <button class="nodrag" @click="cv.remove(card.id)" aria-label="메모 닫기">✕</button></header>
+      <button v-if="own && !cv.readOnly" class="nodrag" @click="cv.remove(card.id)" aria-label="메모 닫기">✕</button></header>
     <!-- 쓰는 중으로 열기 · 자동 포커스는 내가 방금 만든 메모만. 다른 사람이 만든 메모가 내 입력 포커스를 뺏지 않게 -->
-    <MemoEditor :key="card.id" :text="card.text" :readonly="cv.readOnly" :autofocus="mine" :start-editing="mine" @save="(t) => cv.editMemo(card.id, t)" />
+    <MemoEditor :key="card.id" :text="card.text" :readonly="cv.readOnly || !own" :autofocus="mine" :start-editing="mine" @save="(t) => cv.editMemo(card.id, t)" />
   </section>
 </template>

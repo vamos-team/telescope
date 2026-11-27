@@ -5,9 +5,10 @@ import { ref, watch, nextTick, onMounted } from "vue";
 import { receiveText } from "./memoDraft";
 
 // startEditing: 글이 비어 있을 때 쓰는 중으로 열지(기본 true). 다른 사람이 만든 빈 메모는 보기로 연다
-const props = defineProps<{ text?: string; placeholder?: string; readonly?: boolean; autofocus?: boolean; startEditing?: boolean }>();
+// editNow: 글이 있어도 쓰는 중으로 연다(선 메모처럼 메모 칸을 직접 열었을 때)
+const props = defineProps<{ text?: string; placeholder?: string; readonly?: boolean; autofocus?: boolean; startEditing?: boolean; editNow?: boolean }>();
 const emit = defineEmits<{ save: [text: string] }>();
-const editing = ref(!props.text && !props.readonly && props.startEditing !== false), draft = ref(props.text ?? ""), box = ref<HTMLTextAreaElement>();
+const editing = ref(!props.readonly && (props.editNow || (!props.text && props.startEditing !== false))), draft = ref(props.text ?? ""), box = ref<HTMLTextAreaElement>();
 // 다른 사람이 글을 바꾸면 반영한다. 내가 고치던 중이면 덮어쓰지 않는다(memoDraft.ts)
 watch(() => props.text, (t, prev) => { const s = receiveText({ editing: editing.value, draft: draft.value }, t, prev); editing.value = s.editing; draft.value = s.draft; });
 const focus = () => nextTick(() => { box.value?.focus(); box.value?.setSelectionRange(draft.value.length, draft.value.length); });

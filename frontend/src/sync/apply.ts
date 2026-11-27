@@ -13,9 +13,10 @@ const pos = (e: CanvasEvent) => ({ x: Number(e.x ?? 0), y: Number(e.y ?? 0) });
  * 이벤트 한 건을 반영한다. 대상 카드·연결이 이미 없으면 아무것도 하지 않는다(서버와 같은 규칙).
  *
  * @param authorName 이벤트를 보낸 사람 이름(메모 카드·선 메모 작성자 표시용)
+ * @param authorId 이벤트를 보낸 사람 id(메모를 단 사람만 고치게 판단할 때 씀)
  * @return 화면 상태가 바뀌었으면 true
  */
-export function applyRemote(s: CanvasState, e: CanvasEvent, authorName: string): boolean {
+export function applyRemote(s: CanvasState, e: CanvasEvent, authorName: string, authorId?: number): boolean {
   const id = String(e.card_id ?? "");
   const card = s.cards.find((c) => c.id === id);
   const table = card?.kind === "table" ? (card as TableCard) : undefined;
@@ -29,7 +30,7 @@ export function applyRemote(s: CanvasState, e: CanvasEvent, authorName: string):
     }
     case "add_doc": return addOnce(s, card, { id, kind: "doc", docId: String(e.doc_id), ...pos(e) });
     case "add_dash": return addOnce(s, card, { id, kind: "dash", panel: String(e.panel), ...pos(e) });
-    case "add_memo": return addOnce(s, card, { id, kind: "memo", author: authorName, text: String(e.text ?? ""), ...pos(e) });
+    case "add_memo": return addOnce(s, card, { id, kind: "memo", author: authorName, authorId, text: String(e.text ?? ""), ...pos(e) });
     case "create_compare": {
       const sources = (e.sources as string[]) ?? [];
       return addOnce(s, card, e.view === "chart" ? { id, kind: "chart", sources, version: 0, ...pos(e) } : { id, kind: "compare", sources, version: 0, ...pos(e) });
@@ -47,9 +48,12 @@ export function applyRemote(s: CanvasState, e: CanvasEvent, authorName: string):
       return true;
     case "revert_card": if (!table) return false; table.edits = {}; return true;
     case "edit_memo": if (card?.kind !== "memo") return false; (card as MemoCard).text = String(e.text ?? ""); return true;
-    case "set_card_memo": if (!card) return false; card.memo = String(e.text ?? "") || undefined; return true;
+    case "set_card_memo":
+      if (!card) return false;
+      card.memo = String(e.text ?? "") || undefined; card.memoBy = card.memo ? authorName : undefined; card.memoById = card.memo ? authorId : undefined; return true;
     case "move_card": if (!card) return false; card.x = Number(e.x); card.y = Number(e.y); return true;
     case "remove_card": return removeCard(s, id);
+    case "clear_cards": if (!s.cards.length) return false; s.cards = []; s.links = []; return true;
     case "add_link": {
       const linkId = String(e.link_id);
       if (s.links.some((l) => l.id === linkId)) return false;
@@ -59,7 +63,7 @@ export function applyRemote(s: CanvasState, e: CanvasEvent, authorName: string):
     }
     case "set_link_memo": {
       const l = s.links.find((x) => x.id === e.link_id); if (!l) return false;
-      l.memo = String(e.text ?? "") || undefined; l.memoBy = l.memo ? authorName : undefined; return true;
+      l.memo = String(e.text ?? "") || undefined; l.memoBy = l.memo ? authorName : undefined; l.memoById = l.memo ? authorId : undefined; return true;
     }
     case "remove_link": { const before = s.links.length; s.links = s.links.filter((l) => l.id !== e.link_id); return s.links.length !== before; }
     default: return false;  // confirm_mapping(화면 상태 없음), set_share(공유 변경은 알림으로 처리) 등

@@ -34,16 +34,18 @@ export interface TableCard { id: string; kind: "table"; tableId: string; rows: n
 export interface CompareCard { id: string; kind: "compare"; sources: string[]; x: number; y: number; version: number; memo?: string }
 export interface DocCard { id: string; kind: "doc"; docId: string; x: number; y: number; memo?: string }
 // 메모 카드 (F-07): 다른 카드에 선으로 이어 다는 메모. 카드 메모 칸은 없음
-export interface MemoCard { id: string; kind: "memo"; author: string; text: string; x: number; y: number; memo?: string }
+// authorId: 단 사람의 사용자 id(예전 local 저장본에는 없어 이름으로 비교)
+export interface MemoCard { id: string; kind: "memo"; author: string; authorId?: number; text: string; x: number; y: number; memo?: string }
 // 시각화 카드: 고른 표 카드(sources)의 계정 대응 결과를 막대그래프로. 서버에는 비교 카드와 같은 계산(create_compare, view chart)으로 등록
 export interface ChartCard { id: string; kind: "chart"; sources: string[]; compareId?: string; version: number; x: number; y: number; memo?: string }
 // 대시보드 카드: 자료 검색 대시보드 패널을 캔버스로 가져온 것 (panel = DASH_PANELS id)
 export interface DashCard { id: string; kind: "dash"; panel: string; x: number; y: number; memo?: string }
-export type Card = TableCard | CompareCard | DocCard | MemoCard | ChartCard | DashCard;
+// 카드 메모를 단 사람(이름 · id). 서버는 카드 메모 작성자를 주지 않아 서버에서 연 카드에는 없다
+export type Card = (TableCard | CompareCard | DocCard | MemoCard | ChartCard | DashCard) & { memoBy?: string; memoById?: number };
 // 선: 관계 태그 없음(에이전트가 판단). memo = 선 메모. rel은 예전 저장본 호환용
-export interface Link { id: string; source: string; target: string; rel?: string; memo?: string; memoBy?: string }  // memoBy: 선 메모를 단 사람
+export interface Link { id: string; source: string; target: string; rel?: string; memo?: string; memoBy?: string; memoById?: number }  // memoBy · memoById: 선 메모를 단 사람
 // 메모 3종 (카드 메모 · 메모 카드 · 선 메모). 왼쪽 메모 목록과 분석 입력에 씀
-export interface Note { key: string; kind: "card" | "memo" | "link"; cardId?: string; linkId?: string; where: string; text: string; author?: string }
+export interface Note { key: string; kind: "card" | "memo" | "link"; cardId?: string; linkId?: string; where: string; text: string; author?: string; mine?: boolean }
 // 데이터 성격(강조색): dart 공시 / ir / news / internal / viz(비교·시각화·대시보드) / memo
 // 팀 공유 목업: 같은 캔버스를 보는 팀원. 실제 서비스에서는 로그인 사용자와 이벤트 로그의 작성자
 // 로그인: 사번 + 비밀번호(목업이라 아무 값이나 통과). 들어가면 캔버스 홈에서 볼 수 있는 캔버스를 고른다 (실제 서비스는 사내 SSO)
@@ -132,7 +134,7 @@ const writeAll = (all: Record<string, Saved>) => { try { localStorage.setItem(KE
 const now = () => new Date().toISOString();
 const ACT: Record<string, string> = { add_card: "공시 표를 올림", add_doc: "자료를 올림", add_memo: "메모를 남김", edit_memo: "메모를 고침", set_card_memo: "카드 메모를 고침", set_link_memo: "선 메모를 고침", add_dash: "대시보드를 올림",
   create_compare: "비교 카드를 만듦", add_link: "카드를 연결함", remove_link: "연결을 지움",
-  remove_card: "카드를 지움", edit_cell: "값을 수정함", confirm_mapping: "계정 대응을 확정함" };
+  remove_card: "카드를 지움", clear_cards: "카드를 모두 지움", edit_cell: "값을 수정함", confirm_mapping: "계정 대응을 확정함" };
 
 // 예전 저장본 읽기: 프롬프트 → 메모, 메모 종류 · 선 관계는 버림. 이벤트 로그도 같이 바꿔 재생
 function migrate(x: Saved) {
@@ -199,6 +201,10 @@ export const useCanvas = defineStore("canvas", {
     role(): Role | null { return SYNC_MODE === "server" ? this.serverRole : this.meta ? roleOf(this.meta, this.user) : null; },
     readOnly(): boolean { return this.role === "view"; },
     canEdit(): boolean { return this.role === "owner" || this.role === "edit"; },  // 소유자 · 편집 권한만 편집
+    /** 내가 단 메모인지: id가 있으면 id로, 없으면(예전 local 저장본) 이름으로. 작성자를 모르면 남의 것으로 본다. 소유자도 예외 없음 */
+    ownsMemo(): (id?: number, name?: string) => boolean {
+      return (id, name) => (id != null ? id === this.user?.id : !!name && name === this.author);
+    },
     // 이 캔버스에 권한 있는 사람 (활동 로그 목록, 공유 창)
     members(): (typeof ALL_MEMBERS[number] & { role: Role })[] {
       const m = this.meta; if (!m) return [];
@@ -217,9 +223,10 @@ export const useCanvas = defineStore("canvas", {
     // 메모 3종 전부: 카드 메모, 메모 카드(이어진 카드 이름), 선 메모
     notes(): Note[] {
       const linkedTo = (id: string) => this.links.filter((l) => l.source === id || l.target === id).map((l) => this.cardTitle(l.source === id ? l.target : l.source));
-      return [...this.cards.flatMap((c): Note[] => c.kind !== "memo" && c.memo ? [{ key: "cm" + c.id, kind: "card", cardId: c.id, where: this.cardTitle(c.id), text: c.memo }] : []),
-        ...this.cards.flatMap((c): Note[] => c.kind === "memo" && c.text.trim() ? [{ key: "mc" + c.id, kind: "memo", cardId: c.id, where: linkedTo(c.id).join(", ") || "연결 없음", text: c.text.trim(), author: c.author }] : []),
-        ...this.links.flatMap((l): Note[] => l.memo ? [{ key: "lm" + l.id, kind: "link", linkId: l.id, where: `${this.cardTitle(l.source)} → ${this.cardTitle(l.target)}`, text: l.memo, author: l.memoBy }] : [])];
+      const mine = this.ownsMemo;
+      return [...this.cards.flatMap((c): Note[] => c.kind !== "memo" && c.memo ? [{ key: "cm" + c.id, kind: "card", cardId: c.id, where: this.cardTitle(c.id), text: c.memo, author: c.memoBy, mine: mine(c.memoById, c.memoBy) }] : []),
+        ...this.cards.flatMap((c): Note[] => c.kind === "memo" && c.text.trim() ? [{ key: "mc" + c.id, kind: "memo", cardId: c.id, where: linkedTo(c.id).join(", ") || "연결 없음", text: c.text.trim(), author: c.author, mine: mine(c.authorId, c.author) }] : []),
+        ...this.links.flatMap((l): Note[] => l.memo ? [{ key: "lm" + l.id, kind: "link", linkId: l.id, where: `${this.cardTitle(l.source)} → ${this.cardTitle(l.target)}`, text: l.memo, author: l.memoBy, mine: mine(l.memoById, l.memoBy) }] : [])];
     },
     memos: (s) => s.cards.filter((c): c is MemoCard => c.kind === "memo" && !!c.text.trim()),
     latest: (s): Session | null => s.analyses[0] ?? null,
@@ -289,7 +296,9 @@ export const useCanvas = defineStore("canvas", {
         else if (link) link.memo = text ?? undefined;
         this.error = "다른 사람이 먼저 고쳤습니다. 최신 글로 바꿨으니 확인한 뒤 다시 고쳐 주세요.";
       } else if (result.status === "rejected") {
-        this.error = result.error.code === "K002" ? "보기 권한만 있습니다." : "조작을 반영하지 못했습니다. 새로고침 후 다시 시도하세요.";
+        this.error = result.error.code === "K002" ? "보기 권한만 있습니다."
+          : result.error.code === "K004" ? "다른 사람이 단 메모는 고치거나 지울 수 없습니다. 새로고침하면 서버 상태로 돌아갑니다."
+          : "조작을 반영하지 못했습니다. 새로고침 후 다시 시도하세요.";
       } else if (result.status === "retry") {
         this.error = "서버에 연결하지 못했습니다. 연결되면 다시 보냅니다.";
       }
@@ -356,11 +365,11 @@ export const useCanvas = defineStore("canvas", {
       if (d.action !== "apply" && d.action !== "own") return;
       outbox?.updateVersions(d.message.textVersions ?? {});
       if (d.action === "own") return;  // 내 조작은 이미 화면에 있다
-      const author = nameOfUser(d.message.author);
+      const author = nameOfUser(d.message.author), authorId = d.message.author?.id;
       const local = d.message.events.map(fromServerEvent);
       let changed = false;
       for (const e of local) {
-        if (applyRemote(this, e, author)) changed = true;
+        if (applyRemote(this, e, author, authorId)) changed = true;
         if (ACT[e.type]) this.activity.unshift({ author, text: ACT[e.type], time: hhmm(new Date()) });
       }
       if (!changed) return;
@@ -522,21 +531,31 @@ export const useCanvas = defineStore("canvas", {
       this.overlay = { tableId: null, match: [], cardId: null };
     },
     defaultName() { return `${this.user?.dept ?? ""} 페이지 ${this.canvases.filter((m) => roleOf(m, this.user) === "owner").length + 1}`; },
-    // 새 캔버스: 이름, 분기, 편집할 사람을 받아 만들고 엶
-    async newCanvas(opt: { name?: string; quarter?: string; editors?: number[] } = {}) {
+    // 새 캔버스: 이름, 분기, 초대할 사람과 권한(편집 · 보기)을 받아 만들고 엶
+    async newCanvas(opt: { name?: string; quarter?: string; members?: { id: number; role: "edit" | "view" }[] } = {}) {
+      const members = opt.members ?? [];
       if (SYNC_MODE === "server") {
         let made: CanvasSummary;
         try {
-          made = await createCanvas({ name: opt.name?.trim() || this.defaultName(), quarter: opt.quarter ?? DEFAULT_QUARTER, editorIds: opt.editors ?? [] });
+          made = await createCanvas({ name: opt.name?.trim() || this.defaultName(), quarter: opt.quarter ?? DEFAULT_QUARTER,
+            editorIds: members.filter((m) => m.role === "edit").map((m) => m.id) });
         } catch (err) { this.error = `페이지를 만들지 못했습니다. ${canvasErrorMessage(err)}`; return; }
         this.upsertServerCanvas(made);
-        return this.open(String(made.id));
+        // 만들기 요청은 편집할 사람만 받으므로, 보기 권한이 있으면 공유 명단을 한 번 더 저장한다
+        let shareError = "";
+        if (members.some((m) => m.role === "view")) {
+          try { await putShares(String(made.id), members.map((m) => ({ userId: m.id, role: m.role }))); }
+          catch (err) { shareError = `공유 설정을 바꾸지 못했습니다. 페이지 정보에서 다시 설정해 주세요. ${canvasErrorMessage(err)}`; }
+        }
+        await this.open(String(made.id));
+        if (shareError) this.error = shareError;  // open()이 오류를 비우므로 연 뒤에 알린다
+        return;
       }
       await this.flush(); this.save(); this.reset();
       this.canvasId = "cv" + Date.now().toString(36); this.canvasName = opt.name?.trim() || this.defaultName();
       this.save();
       const all = readAll(), x = all[this.canvasId];
-      if (x) { x.meta = { ...x.meta, quarter: opt.quarter ?? DEFAULT_QUARTER, share: Object.fromEntries((opt.editors ?? []).map((id) => [String(id), "edit" as const])) }; writeAll(all); this.saved++; }
+      if (x) { x.meta = { ...x.meta, quarter: opt.quarter ?? DEFAULT_QUARTER, share: Object.fromEntries(members.map((m) => [String(m.id), m.role])) }; writeAll(all); this.saved++; }
       try { sessionStorage.setItem(KEY + ":canvas", this.canvasId); } catch { /* 무시 */ }
     },
     async open(id: string) {
@@ -642,6 +661,8 @@ export const useCanvas = defineStore("canvas", {
     },
     // 화면 상태를 바꾸기 전에 권한 확인. 편집 권한이 없으면 안내만 하고 막음 (키보드로 버튼을 눌러도 상태가 바뀌지 않게)
     blocked() { if (this.canEdit) return false; this.error = "보기 권한만 있습니다."; return true; },
+    /** 남이 단 메모면 안내하고 true. 메모는 단 사람만 고치고 지운다 */
+    notMyMemo(id?: number, name?: string) { if (this.ownsMemo(id, name)) return false; this.error = "다른 사람이 단 메모는 고치거나 지울 수 없습니다."; return true; },
     /** 카드·연결 ID. 여러 사람이 동시에 만들어도 겹치지 않게 UUID로 만든다(docs/backend/canvas.md D1). */
     newId() { this.seq++; return crypto.randomUUID(); },
     addTableCard(tableId: string, rows: number[], cols: number[], vcol = cols[0], pos = { x: 0, y: 0 }) {
@@ -667,7 +688,12 @@ export const useCanvas = defineStore("canvas", {
       if (add.length) this.addRows(id, add);
       del.forEach((r) => this.removeRow(id, r));
     },
-    clear() { [...this.cards].forEach((c) => this.remove(c.id)); },
+    // 전체 지우기: 카드와 연결을 모두 지운다. 남의 메모도 지우는 유일한 길이라 서버에도 한 이벤트(clear_cards)로 보낸다
+    clear() {
+      if (this.blocked() || !this.cards.length) return;
+      this.cards = []; this.links = []; this.selected = [];
+      this.emit({ type: "clear_cards" });
+    },
     removeRow(id: string, r: number) {
       if (this.blocked()) return;
       const c = this.cards.find((x) => x.id === id) as TableCard;
@@ -707,7 +733,7 @@ export const useCanvas = defineStore("canvas", {
       if (this.blocked()) return "";
       author ??= this.author;
       const id = this.newId();
-      this.cards.push({ id, kind: "memo", author, text, ...pos });
+      this.cards.push({ id, kind: "memo", author, authorId: author === this.author ? this.user?.id : undefined, text, ...pos });
       this.myNewMemo = id;
       this.emit({ type: "add_memo", card_id: id, text, author });
       return id;
@@ -721,21 +747,24 @@ export const useCanvas = defineStore("canvas", {
       return id;
     },
     editMemo(id: string, text: string) {
-      if (this.blocked()) return;
-      (this.cards.find((c) => c.id === id) as MemoCard).text = text;
+      const c = this.cards.find((x) => x.id === id) as MemoCard | undefined;
+      if (!c || this.blocked() || this.notMyMemo(c.authorId, c.author)) return;
+      c.text = text;
       this.emit({ type: "edit_memo", card_id: id, text });
     },
     // 카드 메모: 카드에 직접 적는 메모 (표·문서·비교·시각화·대시보드 카드)
     setCardMemo(id: string, text: string) {
       if (this.blocked()) return;
       const c = this.cards.find((x) => x.id === id); if (!c || (c.memo ?? "") === text) return;
-      c.memo = text;
+      if (c.memo && this.notMyMemo(c.memoById, c.memoBy)) return;
+      c.memo = text; c.memoBy = text ? this.author : undefined; c.memoById = text ? this.user?.id : undefined;
       this.emit({ type: "set_card_memo", card_id: id, text });
     },
     setLinkMemo(id: string, text: string) {
       if (this.blocked()) return;
       const l = this.links.find((x) => x.id === id); if (!l || (l.memo ?? "") === text) return;
-      l.memo = text; l.memoBy = text ? this.author : undefined;
+      if (l.memo && this.notMyMemo(l.memoById, l.memoBy)) return;
+      l.memo = text; l.memoBy = text ? this.author : undefined; l.memoById = text ? this.user?.id : undefined;
       this.emit({ type: "set_link_memo", link_id: id, text });
     },
     addDash(panel: string, pos = { x: 0, y: 0 }) {
@@ -754,6 +783,8 @@ export const useCanvas = defineStore("canvas", {
     },
     removeLink(id: string) {
       if (this.blocked()) return;
+      const l = this.links.find((x) => x.id === id);
+      if (l?.memo && this.notMyMemo(l.memoById, l.memoBy)) return;  // 연결을 끊으면 남의 선 메모도 사라지므로
       this.links = this.links.filter((l) => l.id !== id);
       this.emit({ type: "remove_link", link_id: id });
     },
@@ -773,6 +804,12 @@ export const useCanvas = defineStore("canvas", {
     },
     remove(id: string) {
       if (this.blocked()) return;
+      const c = this.cards.find((x) => x.id === id);
+      if (c?.kind === "memo" && this.notMyMemo(c.authorId, c.author)) return;
+      // 카드를 지우면 그 카드의 카드 메모와 닿는 선 메모도 사라지므로, 남의 메모가 있으면 지우지 않는다
+      if (c?.memo && this.notMyMemo(c.memoById, c.memoBy)) return;
+      const other = this.links.find((l) => (l.source === id || l.target === id) && l.memo && !this.ownsMemo(l.memoById, l.memoBy));
+      if (other && this.notMyMemo(other.memoById, other.memoBy)) return;
       this.links = this.links.filter((l) => l.source !== id && l.target !== id);
       this.cards = this.cards.filter((c) => c.id !== id);
       this.selected = this.selected.filter((s) => s !== id);

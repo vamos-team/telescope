@@ -111,6 +111,7 @@ class CanvasEventServiceTest {
     @Test
     void 같은_글을_오래된_기준_버전으로_고치면_409_K003과_현재_글을_돌려주고_묶음_전체를_반영하지_않는다() {
         UUID card = addTable(owner);
+        // 같은 사람이 두 창에서 고친 경우(남의 메모는 403이라 충돌까지 가지 않음)
         eventService.apply(canvasId, owner, batch(
                 event("set_card_memo", "cardId", card, "text", "먼저 고친 글", "baseVersion", 0)));
         long seqBefore = lastSeq();
@@ -119,7 +120,7 @@ class CanvasEventServiceTest {
                 event("move_card", "cardId", card, "x", 999, "y", 999),
                 event("set_card_memo", "cardId", card, "text", "늦게 고친 글", "baseVersion", 0));
 
-        assertThatThrownBy(() -> eventService.apply(canvasId, editor, late))
+        assertThatThrownBy(() -> eventService.apply(canvasId, owner, late))
                 .isInstanceOfSatisfying(BusinessException.class, e -> {
                     assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CANVAS_TEXT_CONFLICT);
                     assertThat(e.getData()).isEqualTo(new TextConflict(card, "memo", "먼저 고친 글", 1));
@@ -144,10 +145,10 @@ class CanvasEventServiceTest {
                 event("edit_memo", "cardId", memo, "text", "고친 지시", "baseVersion", 1),
                 event("set_link_memo", "linkId", link, "text", "이 근거로 설명", "baseVersion", 0)));
 
-        assertThatThrownBy(() -> eventService.apply(canvasId, editor, batch(
+        assertThatThrownBy(() -> eventService.apply(canvasId, owner, batch(
                 event("edit_memo", "cardId", memo, "text", "다른 지시", "baseVersion", 1))))
                 .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.CANVAS_TEXT_CONFLICT);
-        assertThatThrownBy(() -> eventService.apply(canvasId, editor, batch(
+        assertThatThrownBy(() -> eventService.apply(canvasId, owner, batch(
                 event("set_link_memo", "linkId", link, "text", "다른 설명", "baseVersion", 0))))
                 .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.CANVAS_TEXT_CONFLICT);
     }
@@ -315,10 +316,57 @@ class CanvasEventServiceTest {
         assertThat(written.memoVersion()).isEqualTo(1);
         assertThat(written.memoBy().id()).isEqualTo(editor);
 
-        eventService.apply(canvasId, owner, batch(event("set_link_memo", "linkId", link, "text", "", "baseVersion", 1)));
+        eventService.apply(canvasId, editor, batch(event("set_link_memo", "linkId", link, "text", "", "baseVersion", 1)));
         var cleared = canvasService.open(canvasId, owner).links().getFirst();
         assertThat(cleared.memo()).isNull();
         assertThat(cleared.memoBy()).isNull();
+    }
+
+    @Test
+    void 메모는_단_사람만_고치고_지우며_소유자도_예외가_아니다() {
+        UUID memo = UUID.randomUUID();
+        UUID table = addTable(owner);
+        UUID link = UUID.randomUUID();
+        eventService.apply(canvasId, editor, batch(
+                event("add_memo", "cardId", memo, "text", "편집자 메모"),
+                event("add_link", "linkId", link, "source", memo, "target", table),
+                event("set_link_memo", "linkId", link, "text", "편집자 선 메모", "baseVersion", 0),
+                event("set_card_memo", "cardId", table, "text", "편집자 카드 메모", "baseVersion", 0)));
+        long seqBefore = lastSeq();
+
+        for (Map<String, Object> e : List.of(
+                event("edit_memo", "cardId", memo, "text", "소유자가 고침", "baseVersion", 1),
+                event("set_link_memo", "linkId", link, "text", "소유자가 고침", "baseVersion", 1),
+                event("set_card_memo", "cardId", table, "text", "소유자가 고침", "baseVersion", 1),
+                event("remove_link", "linkId", link),
+                event("remove_card", "cardId", memo),
+                event("remove_card", "cardId", table))) {  // 남의 카드 메모·선 메모가 같이 사라지므로
+            assertThatThrownBy(() -> eventService.apply(canvasId, owner, batch(e)))
+                    .extracting(x -> ((BusinessException) x).getErrorCode()).isEqualTo(ErrorCode.CANVAS_MEMO_NOT_MINE);
+        }
+        assertThat(lastSeq()).isEqualTo(seqBefore);
+        assertThat(cardView(owner, table).get("memoBy")).extracting("id").isEqualTo(editor);
+
+        eventService.apply(canvasId, editor, batch(event("edit_memo", "cardId", memo, "text", "내가 고침", "baseVersion", 1)));
+        assertThat(cardView(owner, memo).get("text")).isEqualTo("내가 고침");
+    }
+
+    @Test
+    void 전체_지우기는_남의_메모까지_카드와_연결을_모두_지운다() {
+        UUID memo = UUID.randomUUID();
+        UUID table = addTable(owner);
+        eventService.apply(canvasId, editor, batch(
+                event("add_memo", "cardId", memo, "text", "편집자 메모"),
+                event("add_link", "linkId", UUID.randomUUID(), "source", memo, "target", table)));
+
+        eventService.apply(canvasId, owner, batch(event("clear_cards")));
+
+        CanvasDetailResponse opened = canvasService.open(canvasId, owner);
+        assertThat(opened.cards()).isEmpty();
+        assertThat(opened.links()).isEmpty();
+        long seq = lastSeq();
+        eventService.apply(canvasId, owner, batch(event("clear_cards")));  // 지울 것이 없으면 기록하지 않음
+        assertThat(lastSeq()).isEqualTo(seq);
     }
 
     @Test

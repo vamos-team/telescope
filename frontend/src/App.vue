@@ -39,7 +39,8 @@ function resizeSp(e: PointerEvent) {
   const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); document.body.classList.remove("resizing"); };
   window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); document.body.classList.add("resizing");
 }
-const linkMemo = ref(false);  // 연결 바에서 메모 입력 칸 펼침
+const linkMemo = ref(false), linkEdit = ref(false);  // 연결 바에서 메모 입력 칸 펼침 · 버튼으로 펼쳤으면 바로 쓰는 중으로
+function toggleLinkMemo() { linkMemo.value = linkEdit.value = !linkMemo.value; }
 const infoOpen = ref(false);  // 페이지 정보 팝오버
 const renaming = ref(false);
 const vFocus = { mounted: (el: HTMLInputElement) => el.select() };
@@ -96,8 +97,10 @@ const nodes = computed<Node[]>(() => cv.cards.map((c) => {
 const onDragStop = (e: NodeDragEvent) => { for (const n of e.nodes) cv.move(n.id, n.position.x, n.position.y); };
 flow.onConnect((c) => cv.addLink(c.source, c.target));
 const onEdgeClick = ({ edge }: EdgeMouseEvent) => { if (cv.links.some((l) => l.id === edge.id)) selectLink(edge.id); };
-watch(selLink, () => { linkMemo.value = !!cv.links.find((l) => l.id === selLink.value)?.memo; });
+watch(selLink, () => { linkMemo.value = !!cv.links.find((l) => l.id === selLink.value)?.memo; linkEdit.value = false; });
 const link = computed(() => cv.links.find((l) => l.id === selLink.value) ?? null);
+/** 고른 선에 메모가 없거나 내가 단 메모인지. 남의 선 메모는 고치지 못하고 연결도 끊지 못함 */
+const linkOwn = computed(() => !link.value?.memo || cv.ownsMemo(link.value.memoById, link.value.memoBy));
 // 카드 누르기: 그냥 누르면 그 카드 하나(이어진 카드 강조), Shift를 누른 채면 여러 장 고르기
 function onNodeClick({ node, event }: NodeMouseEvent) {
   selLink.value = null;
@@ -171,8 +174,9 @@ function onDrop(e: DragEvent) {
 }
 const center = (dx = 0, dy = 0) => { const el = document.querySelector(".flow")!.getBoundingClientRect();
   return flow.screenToFlowCoordinate({ x: el.left + el.width / 2 - dx, y: el.top + el.height / 2 - dy }); };
-function addMemo() {
-  const id = cv.addMemo("", center(140, 60));
+// 메모 카드 추가: 버튼은 화면 가운데, / 키는 마우스 커서 위치(커서가 캔버스 밖이면 가운데)
+function addMemo(at?: { x: number; y: number }) {
+  const id = cv.addMemo("", at ? flow.screenToFlowCoordinate(at) : center(140, 60));
   setTimeout(() => (document.querySelector(`[data-id="${id}"] textarea`) as HTMLElement | null)?.focus(), 80);
 }
 // 자료 추가 · ⌘K: 사이드바만 열고 탭 화면부터 보여 줌 (검색창은 자동으로 고르지 않음)
@@ -279,7 +283,9 @@ const remoteCursors = computed(() => {
   }));
 });
 /** 내 마우스 위치를 캔버스 좌표로 바꿔 보낸다(보내는 빈도는 연결 쪽에서 50ms로 제한). */
+let pointer: { x: number; y: number } | null = null;  // 캔버스 위 마지막 마우스 위치(화면 좌표). / 키 메모 위치
 function onPointerMove(e: MouseEvent) {
+  pointer = (e.target as Element).closest?.(".flow") ? { x: e.clientX, y: e.clientY } : null;
   if (!realtime) return;
   const p = flow.screenToFlowCoordinate({ x: e.clientX, y: e.clientY });
   cv.sendCursor(p.x, p.y);
@@ -290,6 +296,10 @@ const key = (e: KeyboardEvent) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k" && !cv.readOnly) {
     e.preventDefault();
     if (view.value === "canvas" && spOpen.value) spOpen.value = false; else { view.value = "canvas"; openSearch(); }
+  }
+  // /: 마우스 커서 위치에 메모 카드
+  if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey && !typing() && view.value === "canvas" && cv.canEdit) {
+    e.preventDefault(); addMemo(pointer ?? undefined);
   }
   if (e.key === "Escape" && !typing()) { if (infoOpen.value) infoOpen.value = false; else clearSel(); }
 };
@@ -341,7 +351,7 @@ const staleDot = computed(() => !!cv.latest && cv.latest.sig !== cv.sig);
     <!-- 캔버스 화면 (숨겨도 Vue Flow 상태 유지) -->
     <div v-show="view === 'canvas'" ref="cview" class="cview">
       <LeftPanel v-if="lpOpen" @focus="focusCard" @link="focusLink" @close="lpOpen = false" />
-      <div class="flow-wrap" :class="{ ro: cv.readOnly, spc: !spOpen }" :style="{ '--iz': Math.min(4, 100 / zoom) }" @dragover.prevent @drop.prevent="onDrop" @mousemove="onPointerMove">
+      <div class="flow-wrap" :class="{ ro: cv.readOnly, spc: !spOpen }" :style="{ '--iz': Math.min(4, 100 / zoom) }" @dragover.prevent @drop.prevent="onDrop" @mousemove="onPointerMove" @mouseleave="pointer = null">
         <!-- 사이드바가 닫혀 있을 때만 헤더 아래 플로팅 버튼. 열려 있으면 접기 버튼은 사이드바 안에 -->
         <button v-if="!lpOpen" class="float fl" data-tip="근거 데이터 · 메모 보기" aria-label="왼쪽 사이드바 보기" @click="lpOpen = true">
           <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2" /><path d="M7.5 3.5v13" /></svg></button>
@@ -379,11 +389,11 @@ const staleDot = computed(() => !!cv.latest && cv.latest.sig !== cv.sig);
             <div class="lhead"><b class="lfrom">{{ cv.cardTitle(link.source) }}</b><span class="arr" aria-label="에서">→</span><b class="lto">{{ cv.cardTitle(link.target) }}</b>
               <button class="lx" aria-label="닫기" @click="selLink = null">✕</button></div>
             <div v-if="cv.canEdit" class="lacts">
-              <button @click="cv.removeLink(link.id); selLink = null">연결 해제</button>
-              <button :aria-pressed="linkMemo" @click="linkMemo = !linkMemo">{{ link.memo ? "메모 보기" : "메모 입력" }}</button>
+              <button v-if="linkOwn" @click="cv.removeLink(link.id); selLink = null">연결 해제</button>
+              <button :aria-pressed="linkMemo" @click="toggleLinkMemo">{{ link.memo ? "메모 보기" : "메모 입력" }}</button>
             </div>
             <div v-if="linkMemo || (cv.readOnly && link.memo)" class="lmemo">
-              <MemoEditor :key="link.id" :text="link.memo" :readonly="cv.readOnly" autofocus placeholder="메모" @save="(t) => cv.setLinkMemo(link!.id, t)" /></div>
+              <MemoEditor :key="link.id" :text="link.memo" :readonly="cv.readOnly || !linkOwn" :edit-now="linkEdit" autofocus placeholder="메모" @save="(t) => cv.setLinkMemo(link!.id, t)" /></div>
           </Panel>
           <!-- 자동 배치 · 비우기는 왼쪽 아래, 표시 단위는 오른쪽 위 그대로 -->
           <Panel v-if="!cv.readOnly" position="bottom-left" class="tools">
@@ -408,7 +418,7 @@ const staleDot = computed(() => !!cv.latest && cv.latest.sig !== cv.sig);
           <Panel position="bottom-center" class="dockbar">
             <button v-if="!cv.readOnly" data-tip="자료 추가 (⌘K)" aria-label="자료 추가" @click="openSearch">
               <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12" /></svg></button>
-            <button v-if="!cv.readOnly" data-tip="메모 카드 추가" aria-label="메모 카드 추가" @click="addMemo">
+            <button v-if="!cv.readOnly" data-tip="메모 카드 추가 (/)" aria-label="메모 카드 추가" @click="addMemo()">
               <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 3.5h12v9l-4 4H4z" /><path d="M12 16.5v-4h4" /></svg></button>
             <button class="primary" :disabled="!cv.cards.length" :data-tip="cv.cards.length ? '분석하기 (검토 · 질문 · 평가)' : '카드를 올린 뒤 분석할 수 있어요'" aria-label="분석하기" @click="analyze">
               <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5l1.8 4.4 4.7.4-3.6 3 1.1 4.6L10 12.4l-4 2.5 1.1-4.6-3.6-3 4.7-.4z" /></svg></button>
