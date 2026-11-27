@@ -10,7 +10,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 | 항목 | 규칙 |
 |---|---|
 | 기반 경로 | `/api/v1` (`docs/backend/job.md`와 같음) |
-| 인증 | 로그인 응답의 JWT를 `Authorization: Bearer <token>`으로 보냄. 로그인 외 모든 API에 필요 |
+| 인증 | 로그인 응답의 JWT를 `Authorization: Bearer <token>`으로 보냄. 로그인(`POST /auth/login`) · 회원가입(`POST /auth/signup`) 외 모든 API에 필요 |
 | 응답 형식 | `{ "data": ..., "error": null }`, 실패 시 `{ "data": null, "error": { "code", "message" } }` (`ApiResponse`) |
 | 필드 이름 | camelCase. 데모 타입의 snake_case(`table_id`, `card_id`)는 camelCase(`tableId`, `cardId`)로 바꿔 받음 |
 | 시각 | ISO 8601 문자열, 시간대 표기 없음(한국 시간) (`2026-11-25T09:30:00`). 날짜만은 `2026-11-25` |
