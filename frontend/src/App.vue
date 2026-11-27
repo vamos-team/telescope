@@ -29,7 +29,7 @@ import { selfCheck } from "./local/ai";
 const cv = useCanvas();
 const flow = useVueFlow("canvas");
 const view = ref<"canvas" | "analysis">("canvas");
-const lpOpen = ref(true), spOpen = ref(true);  // 캔버스 왼쪽(근거 데이터 · 메모) / 오른쪽(자료 검색) 사이드바
+const lpOpen = ref(true), spOpen = ref(false);  // 캔버스 왼쪽(근거 데이터 · 메모) / 오른쪽(자료 검색) 사이드바. 오른쪽은 캔버스를 열 때마다 닫힌 채 시작
 // 오른쪽 사이드바 폭: 처음 열면 캔버스 영역의 절반, 왼쪽 경계선을 끌어 조정 (360px ~ 화면의 75%)
 const cview = ref<HTMLElement>(), spW = ref(0);
 const fitSp = () => { if (!spW.value && cview.value) spW.value = Math.round(cview.value.clientWidth / 2); };
@@ -46,7 +46,6 @@ const vFocus = { mounted: (el: HTMLInputElement) => el.select() };
 const run = ref(0);  // 분석하기 누른 횟수 (분석 화면이 받아 새 세션 시작)
 const flagGo = ref<{ id: string; n: number } | null>(null);  // 캔버스 지적 라벨 → 분석 화면의 그 항목
 const selLink = ref<string | null>(null);
-const sp = ref<InstanceType<typeof SourcePanel>>();
 
 // 카드를 고르면 그 카드와 선 하나로 이어진 카드만 밝게(카드 성격색), 나머지는 흐리게 (빈 곳 클릭 · Esc로 해제)
 const { active } = storeToRefs(cv);
@@ -176,7 +175,8 @@ function addMemo() {
   const id = cv.addMemo("", center(140, 60));
   setTimeout(() => (document.querySelector(`[data-id="${id}"] textarea`) as HTMLElement | null)?.focus(), 80);
 }
-function openSearch() { spOpen.value = true; nextTick(() => { fitSp(); sp.value?.focusSearch(); }); }
+// 자료 추가 · ⌘K: 사이드바만 열고 탭 화면부터 보여 줌 (검색창은 자동으로 고르지 않음)
+function openSearch() { spOpen.value = true; nextTick(fitSp); }
 function analyze() { if (!cv.cards.length) return; view.value = "analysis"; run.value++; }
 
 // 근거 ID → 캔버스 화면으로 바꾸고 카드로 이동 · 강조. [셀ID] = 표ID#r행c열, [doc:ID#f번호], [dash:패널#행@열]
@@ -253,6 +253,20 @@ function clearFlagged() {
 }
 
 const zoom = computed(() => Math.round(flow.viewport.value.zoom * 100));
+// 트랙패드 핀치(ctrl+wheel)는 어디서든 브라우저 화면 확대를 막고 캔버스만 확대. 빈 캔버스는 Vue Flow가 처리하고,
+// 카드의 스크롤 영역(.nowheel)은 Vue Flow가 건너뛰므로 커서 위치를 기준으로 직접 확대
+function pinch(e: WheelEvent) {
+  if (!e.ctrlKey) return;
+  e.preventDefault();
+  const t = e.target as Element, el = t.closest?.(".flow");
+  if (!el || !t.closest(".nowheel")) return;
+  const { x, y, zoom: z0 } = flow.viewport.value, r = el.getBoundingClientRect();
+  const z = Math.min(2, Math.max(0.2, z0 * 2 ** (-e.deltaY * 0.02))), px = e.clientX - r.left, py = e.clientY - r.top;
+  flow.setViewport({ x: px - (px - x) * z / z0, y: py - (py - y) * z / z0, zoom: z });
+}
+// Safari 핀치(gesture 이벤트): 캔버스 밖에서만 막음. 캔버스 안은 통과시켜야 Safari 15+가 ctrl+wheel을 보내 위 pinch가 캔버스만 확대
+// ponytail: gesture만 보내는 Safari 14 이하는 캔버스 안 핀치가 화면을 확대함, 지원이 필요하면 gesturechange의 scale로 직접 확대
+const noGesture = (e: Event) => { if (!(e.target as Element).closest?.(".flow")) e.preventDefault(); };
 const typing = () => !!(document.activeElement as HTMLElement | null)?.closest("input,textarea,select,[contenteditable]");
 
 // ---- 서버 모드: 다른 사람 커서와 접속자 (docs/backend/api-spec.md 5.6) ----
@@ -280,15 +294,18 @@ const key = (e: KeyboardEvent) => {
   if (e.key === "Escape" && !typing()) { if (infoOpen.value) infoOpen.value = false; else clearSel(); }
 };
 // 다른 페이지(세션)를 열면 화면을 그 페이지에 맞춘다
-watch(() => cv.canvasId, () => { clearSel(); infoOpen.value = false; view.value = "canvas"; run.value = 0; flagGo.value = null;
+watch(() => cv.canvasId, () => { clearSel(); infoOpen.value = false; view.value = "canvas"; run.value = 0; flagGo.value = null; spOpen.value = false;
   setTimeout(() => flow.fitView({ padding: 0.1, duration: 300 }), 300); });
 // 캔버스 화면으로 돌아오면 Vue Flow 크기를 다시 맞춤 (숨겨져 있는 동안 크기가 0)
 watch(view, (v) => { if (v === "canvas") nextTick(() => { fitSp(); flow.updateNodeInternals(); }); });
 watch(() => cv.canvasId, () => nextTick(fitSp));
 // 열어 둔 페이지에 대한 권한이 사라지면(정보 창에서 내 권한 삭제 등) 홈으로
 watch(() => !realtime && !!cv.canvasId && !cv.meta, (lost) => { if (lost) { infoOpen.value = false; cv.goHome(); } });
-onMounted(() => { nextTick(fitSp); cv.restoreUser(); window.addEventListener("keydown", key); (window as unknown as Record<string, unknown>).__aiSelfCheck = () => selfCheck(api.analysis); });
-onUnmounted(() => window.removeEventListener("keydown", key));
+onMounted(() => { nextTick(fitSp); cv.restoreUser(); window.addEventListener("keydown", key);
+  window.addEventListener("wheel", pinch, { passive: false, capture: true });
+  document.addEventListener("gesturestart", noGesture); document.addEventListener("gesturechange", noGesture); (window as unknown as Record<string, unknown>).__aiSelfCheck = () => selfCheck(api.analysis); });
+onUnmounted(() => { window.removeEventListener("keydown", key); window.removeEventListener("wheel", pinch, { capture: true });
+  document.removeEventListener("gesturestart", noGesture); document.removeEventListener("gesturechange", noGesture); });
 const staleDot = computed(() => !!cv.latest && cv.latest.sig !== cv.sig);
 </script>
 
@@ -330,6 +347,12 @@ const staleDot = computed(() => !!cv.latest && cv.latest.sig !== cv.sig);
           <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2" /><path d="M7.5 3.5v13" /></svg></button>
         <button v-if="!spOpen" class="float fr" data-tip="자료 검색 보기" aria-label="오른쪽 사이드바 보기" @click="openSearch">
           <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2" /><path d="M12.5 3.5v13" /></svg></button>
+        <!-- 빈 캔버스 안내(가운데 흰 안내창): 사이드바가 닫혀 있으면 자료 추가 버튼, 열려 있으면 끌어다 올리라는 문구 -->
+        <div v-if="!cv.cards.length && cv.canEdit" class="canvas-empty"><div class="cebox">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 13V3M6 7l4-4 4 4M4 13v3h12v-3" /></svg>
+          <p>{{ spOpen ? "자료를 캔버스로 끌어다 올리세요" : "자료를 추가하세요" }}</p>
+          <button v-if="!spOpen" class="btn fill" @click="openSearch">자료 추가</button>
+        </div></div>
         <VueFlow id="canvas" class="flow" :nodes-draggable="!cv.readOnly" :nodes-connectable="!cv.readOnly" :connection-mode="ConnectionMode.Loose" :nodes="nodes" :edges="edges" :min-zoom="0.2" :max-zoom="2" :default-edge-options="{ type: 'default' }" :delete-key-code="null"
           :elements-selectable="false" :selection-key-code="null" :multi-selection-key-code="null"
           @node-drag-stop="onDragStop" @edge-click="onEdgeClick" @node-click="onNodeClick" @pane-click="clearSel">
@@ -404,7 +427,7 @@ const staleDot = computed(() => !!cv.latest && cv.latest.sig !== cv.sig);
         </VueFlow>
       </div>
       <div v-if="spOpen" class="sresize" role="separator" aria-orientation="vertical" aria-label="자료 검색 폭 조정" title="끌어서 폭 조정" @pointerdown.prevent="resizeSp" />
-      <SourcePanel ref="sp" :open="spOpen" :style="spW ? { width: spW + 'px' } : undefined" @close="spOpen = false" @add="(items) => place(items, center(300, 200))" @example="loadExample()" />
+      <SourcePanel :open="spOpen" :style="spW ? { width: spW + 'px' } : undefined" @close="spOpen = false" @add="(items) => place(items, center(300, 200))" @example="loadExample()" />
     </div>
 
     <!-- 분석 화면: 캔버스가 바뀌면 key로 새로 만들어 다른 페이지 결과가 섞이지 않게 -->

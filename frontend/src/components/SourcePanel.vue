@@ -2,9 +2,10 @@
 // 캔버스 오른쪽 사이드바: 자료 검색 (하단 도구 "자료 추가", ⌘K)
 // - 위 탭 3개: 회사 재무(주요 지표 · 영업이익 증감 요인 + 손익 · 재무상태 · 현금흐름 · 설비투자 · 동종사 비교) / DART(3사 산점도 · 현금 증감 · CapEx 비율 · 히트맵 · 자산 계정) / 인사이트(3사 비교 + 관련 뉴스)
 // - 아래 고정 검색창: 입력하는 즉시 통합 검색(공시 재무 데이터 + IR·AR + 뉴스, 실제 서비스는 임베딩 검색 자리). Esc = 검색 지우고 탭 화면으로
+// - 검색창을 고르고 검색어가 없으면 검색창 위에 추천 검색어 3개 팝업(탭 · 탭 내용은 그대로). 입력하거나 선택이 풀리면 사라짐 (검색 결과는 Esc 전까지 유지)
 // - 항목은 끌어서 캔버스에 놓음 (두 번 누르면 캔버스 가운데에 올림). 선택 목록 · 추가하기 없음
 // - 검색창 왼쪽 +: 데이터 입력 창 (포맷 · 회사 검증 뒤 사내 자료 카드로)
-import { ref, watch, computed, nextTick } from "vue";
+import { ref, watch, computed } from "vue";
 import { api, docTitle, KIND_LABEL, type SearchResult, type Doc, type Insight } from "../api";
 import { useCanvas } from "../stores/canvas";
 import { LAYOUT, panelOf } from "../local/dashboard";
@@ -16,15 +17,14 @@ import DataInputDialog from "./DataInputDialog.vue";
 export interface Pick { key: string; label: string; tag: string; src: string; kind: "doc" | "table" | "compare" | "dash";
   id?: string; tableId?: string; rows?: number[]; cols?: number[]; tables?: string[]; panel?: string }
 
-defineProps<{ open: boolean }>();
+const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{ close: []; add: [items: Pick[]]; example: [] }>();
-defineExpose({ focusSearch: () => nextTick(() => input.value?.focus()) });
 const cv = useCanvas();
 const A = api.analysis;
 const TABS = [["fin", "회사 재무"], ["dash", "DART"], ["insight", "인사이트"]] as const;
 type Tab = typeof TABS[number][0];
 const tab = ref<Tab>("fin"), ftab = ref("pl"), period = ref<"y" | "q">("y");
-const q = ref(""), sq = ref(""), input = ref<HTMLInputElement>(), inputOpen = ref(false);
+const q = ref(""), sq = ref(""), input = ref<HTMLInputElement>(), inputOpen = ref(false), focused = ref(false);
 const dart = ref<SearchResult[]>([]), irar = ref<Doc[]>([]), found = ref<Doc[]>([]);
 const nf = ref("전체");
 
@@ -50,15 +50,30 @@ async function search() {
   dart.value = d; irar.value = ir.map((x) => x.doc); found.value = nw.map((x) => x.doc);
 }
 watch(q, () => { clearTimeout(timer); if (!q.value.trim()) { sq.value = ""; return; } timer = window.setTimeout(search, 150); });
-// Esc: 검색 중이면 지우고 탭 화면으로 (캔버스 Esc 처리로 넘기지 않음)
-function moveTab(e: KeyboardEvent, current: Tab, direction: number) {
-  e.preventDefault();
-  const i = TABS.findIndex(([k]) => k === current);
-  const next = (i + direction + TABS.length) % TABS.length;
-  tab.value = TABS[next][0];
-  (e.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+// Esc: 검색어를 지우고 입력창 선택을 풀어 탭 화면으로 (캔버스 Esc 처리로 넘기지 않음)
+function esc(e: KeyboardEvent) { e.stopPropagation(); q.value = ""; sq.value = ""; input.value?.blur(); }
+
+// 추천 검색어: 캔버스 회사 × 개념(캔버스가 비면 분석 대상 회사 × 전체 개념) 중 공시 · IR·AR · 뉴스에서 결과가 나오는 것을 하나씩, 겹치지 않게 3개
+const SUGG = [["dart", "공시"], ["irar", "IR·AR"], ["news", "뉴스"]] as const;
+const sugg = ref<{ t: string; kind: string }[]>([]);
+async function suggest() {
+  const names = (tags.value.length ? tags.value : Object.keys(A.tag_names)).map(api.tagName);
+  const cands = [...new Set(companies.value.flatMap((co) => names.map((n) => `${co} ${n}`)))].slice(0, 16);  // ponytail: 후보 16개만 검사, 개념이 많아져 추천이 빈약하면 늘리기
+  const hits = await Promise.all(cands.map(async (t) => {
+    const [d, ir, nw] = await Promise.all([api.searchQuestion(t), api.searchDocs(t, ["ir", "ar"]), api.searchDocs(t, ["news"])]);
+    return { t, dart: d.length, irar: ir.length, news: nw.length };
+  }));
+  const used = new Set<string>();
+  sugg.value = SUGG.flatMap(([k, kind]) => { const h = hits.find((x) => x[k] && !used.has(x.t)); if (!h) return []; used.add(h.t); return [{ t: h.t, kind }]; });
 }
-function esc(e: KeyboardEvent) { if (q.value) { e.stopPropagation(); q.value = ""; sq.value = ""; } else (e.target as HTMLElement).blur(); }
+function onFocus() { focused.value = true; hi.value = -1; suggest(); }
+// 추천 검색어는 입력창 포커스를 둔 채 ↑ · ↓로 고르고 Enter로 검색 (Tab은 기본 포커스 이동)
+const hi = ref(-1);
+const showSugg = computed(() => focused.value && !q.value && sugg.value.length > 0);
+function moveHi(d: number) { if (!showSugg.value) return; const n = sugg.value.length + 1; hi.value = (hi.value + 1 + d + n) % n - 1; }  // -1 = 고르지 않음
+function pickHi(e: KeyboardEvent) { if (showSugg.value && hi.value >= 0) { e.preventDefault(); q.value = sugg.value[hi.value].t; hi.value = -1; } }
+// 사이드바를 다시 열면 지난 검색을 지우고 탭 화면부터
+watch(() => props.open, (o) => { if (o) { q.value = ""; sq.value = ""; } });
 
 // 인사이트 탭: 관련 뉴스는 캔버스 회사 · 개념과 겹치는 순, 회사 필터
 const NF = ["전체", "SKT", "KT", "LGU+", "3사 공통"];
@@ -102,11 +117,10 @@ const PH = "공시 · IR · AR · 뉴스 통합 검색 (예: SKT 감가상각비
   <aside v-if="open" class="adder spanel" aria-label="자료 검색">
     <header class="sph">
       <button class="pclose" data-tip="사이드바 접기" aria-label="오른쪽 사이드바 접기" @click="emit('close')"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2" /><path d="M12.5 3.5v13" /></svg></button>
-      <div v-if="!sq" class="tabs3" role="tablist" aria-label="자료 검색 보기">
-        <button v-for="[k, l] in TABS" :key="k" role="tab" :aria-selected="tab === k" :tabindex="tab === k ? 0 : -1"
-          @click="tab = k" @keydown.left="moveTab($event, k, -1)" @keydown.right="moveTab($event, k, 1)">{{ l }}</button>
+      <b v-if="sq" class="sqt">검색 결과 <small>Esc로 지우기</small></b>
+      <div v-else class="tabs3" role="tablist" aria-label="자료 검색 보기">
+        <button v-for="[k, l] in TABS" :key="k" role="tab" :aria-selected="tab === k" @click="tab = k">{{ l }}</button>
       </div>
-      <b v-else class="sqt">검색 결과 <small>Esc로 지우기</small></b>
       <button v-if="api.meta.example && cv.canEdit" class="ex" @click="emit('example')">예시 불러오기</button>
     </header>
 
@@ -228,9 +242,17 @@ const PH = "공시 · IR · AR · 뉴스 통합 검색 (예: SKT 감가상각비
 
     <!-- 아래 고정: [+ | 통합 검색] -->
     <div class="dock">
+      <!-- 추천 검색어 3개: 검색창 위로 그라데이션 블러와 함께 아래부터 차례로 뜸. 누르면 그 검색어로 통합 검색 (mousedown.prevent로 입력창 선택 유지) -->
+      <ul v-if="showSugg" id="sugg" class="sugg" role="listbox" aria-label="추천 검색어">
+        <li v-for="(x, i) in sugg" :id="`sugg-${i}`" :key="x.t" role="option" :aria-selected="hi === i" :style="{ '--d': (sugg.length - 1 - i) * 60 + 'ms' }">
+          <button type="button" tabindex="-1" :class="{ on: hi === i }" @mousedown.prevent @click="q = x.t">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5" /><path d="M13 13l3.5 3.5" /></svg>{{ x.t }}<small>{{ x.kind }}</small></button></li>
+      </ul>
       <form class="cin" @submit.prevent="search">
         <button v-if="cv.canEdit" type="button" class="plus" title="데이터 입력 (사내 자료)" aria-label="데이터 입력" @click="inputOpen = true">+</button>
-        <input ref="input" v-model="q" type="search" :placeholder="PH" :aria-label="PH" autocomplete="off" @keydown.esc="esc" />
+        <input ref="input" v-model="q" type="search" :placeholder="PH" :aria-label="PH" autocomplete="off" @focus="onFocus" @blur="focused = false" @keydown.esc="esc"
+          :aria-controls="showSugg ? 'sugg' : undefined" :aria-activedescendant="showSugg && hi >= 0 ? `sugg-${hi}` : undefined"
+          @keydown.down.prevent="moveHi(1)" @keydown.up.prevent="moveHi(-1)" @keydown.enter="pickHi" />
       </form>
     </div>
     <SourceOverlay v-if="detail" :table-id="detail.table_id" :match="detail.hits.map((h) => h.r)" pick @close="detail = null" @add="picked" />

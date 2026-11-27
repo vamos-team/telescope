@@ -119,7 +119,7 @@ npm run electron       # 배포용 빌드(dist/) 후 그 결과를 Electron 창�
 
 | 지금 (`src/local/`) | backend 연결 후 |
 |---|---|
-| 페이지와 공유 설정을 localStorage에 저장 (같은 브라우저 안에서만 공유) | 서버 이벤트 저장소, 서버가 권한 검사. 캔버스 열기·조작 저장·실시간 반영은 `VITE_CANVAS_SYNC=server`로 켤 수 있다(`src/sync/`, 로그인 #34 전에는 서버가 거절) |
+| 페이지와 공유 설정을 localStorage에 저장 (같은 브라우저 안에서만 공유) | 서버 이벤트 저장소, 서버가 권한 검사. 서버 모드(`VITE_CANVAS_SYNC=server`)는 목록·공유·편집·실시간을 모두 서버로(`src/sync/`). 배포 이미지(`Dockerfile`)는 server로 빌드(#179) |
 | 분석 세션을 localStorage `telescope-analyses:v1`에 페이지 · 사번별로 저장 | 서버 분석 결과 저장소 (본인만 조회) |
 | 다음 분기 자료 도착은 `다음 분기 자료 반영 (데모)` 버튼 | 다음 분기 리포트 수집 뒤 평가 |
 | 업로드 검증(포맷 · 4사 회사)은 브라우저(`src/local/validate.ts`) | 업로드 API가 같은 규칙으로 검사 |

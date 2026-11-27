@@ -2,6 +2,16 @@
 
 형식: `- YYYY-MM-DD 무엇을 바꿨는지 (관련 파일)`. 최신이 위로 오게 쌓는다. 규칙은 [AGENTS.md](AGENTS.md).
 
+- 2026-11-27 #170 리뷰 반영: Safari gesture 이벤트는 캔버스 밖에서만 막아 캔버스 안 핀치(ctrl+wheel)가 살아 있게 함 (src/App.vue)
+- 2026-11-27 #170 리뷰 반영: 사이드바를 다시 열면 지난 검색을 지우고 탭 화면부터, 추천 검색어를 ↑ · ↓ · Enter로 고름, 검색창 Tab은 기본 포커스 이동, 빈 캔버스 안내 클래스를 `canvas-empty`로 바꿔 시각화 카드 상태 문구(`.cempty`)와 겹치지 않게 함 (src/App.vue, src/components/SourcePanel.vue, src/style.css)
+- 2026-11-27 #170 검색창을 골라도 위 탭을 숨기지 않음. 추천 검색어는 탭 화면 위 팝업으로만 뜨고 입력하면 사라짐 (src/components/SourcePanel.vue)
+- 2026-11-27 #170 추천 검색어를 검색창 위 3줄(공시 · IR·AR · 뉴스 하나씩)로 줄이고 그라데이션 블러 바탕에 아래부터 차례로 뜨게 함. 빈 캔버스 안내를 가운데 흰 안내창으로 (src/components/SourcePanel.vue, src/App.vue, src/style.css)
+- 2026-11-27 #170 자료 추가 · ⌘K로 오른쪽 사이드바를 열 때 검색창을 자동으로 고르지 않고 탭 화면부터 보여 줌 (src/App.vue, src/components/SourcePanel.vue)
+- 2026-11-27 #170 C11 검색창을 고르면 탭 대신 추천 검색어(공시 재무 데이터 · IR·AR · 뉴스, 결과가 나오는 검색어만), 선택이 풀리면 탭으로. Esc는 검색어를 지우고 선택 해제, 검색창 Tab과 탭 ← · → 전환 삭제 (src/components/SourcePanel.vue, src/style.css)
+- 2026-11-27 #170 캔버스를 열면 오른쪽 사이드바를 닫은 채 시작하고, 카드가 없으면 가운데 빈 캔버스 안내(사이드바 닫힘: 자료 추가 버튼, 열림: 끌어다 올리라는 문구) (src/App.vue, src/style.css)
+- 2026-11-27 #170 트랙패드 핀치(ctrl+wheel)로 화면 전체가 확대되지 않게 막고, 캔버스 빈 곳 · 카드 위 핀치는 캔버스만 확대 · 축소 (src/App.vue)
+- 2026-11-27 #179 배포 이미지를 서버 연결 모드로 빌드(`ARG VITE_CANVAS_SYNC=server`, 데모 이미지는 `--build-arg VITE_CANVAS_SYNC=local`). 로컬 개발 · 데모 · Electron은 그대로 local 기본 (Dockerfile)
+- 2026-11-27 #178 움직이는 스텔라 파비콘: 프레임 12장을 110ms마다 바꿈(움직임 줄이기 설정이면 첫 프레임 고정, 탭이 숨겨지면 멈춤), 정적 파비콘 교체 · 애플 터치 아이콘 추가 (src/favicon.ts, src/main.ts, src/assets/favicon/, public/favicon.ico, public/apple-touch-icon.png, index.html)
 - 2026-11-27 #150(범위 밖 수정) 다른 사람이 만든 빈 메모에 처음 쓴 글이 새로고침해야 보이던 문제 수정: 손대지 않은 입력 칸은 받은 글로 바꿈. 쓰는 중으로 열기 · 자동 포커스는 내가 만든 메모만(다른 사람이 메모를 만들 때 내 입력 포커스를 뺏지 않게) (src/components/MemoEditor.vue, src/components/memoDraft.ts, src/components/nodes/MemoNode.vue, src/stores/canvas.ts)
 - 2026-11-27 #150 서버 모드의 페이지 홈(목록 · 만들기 · 이름 바꾸기 · 지우기), 공유 명단(GET · PUT), 사람 찾기(GET /users?q=, 입력이 멈추면 부르고 빈 칸은 안내), 활동 로그를 backend에 연결. 메모 · 선 메모 · 다른 사람 변경 · 커서 · 접속자에 서버가 준 이름 표시, 홈 · 왼쪽 패널에 내 직무. 서버 모드는 브라우저에 캔버스를 저장하지 않음 (src/stores/canvas.ts, src/sync/http.ts, src/sync/protocol.ts, src/sync/realtime.ts, src/sync/snapshot.ts, src/components/usePeopleSearch.ts, src/components/HomeView.vue, src/components/PageInfo.vue, src/components/NewCanvasDialog.vue, src/components/LeftPanel.vue, src/App.vue)
 - 2026-11-27 #158 분석 세션 주석을 캔버스 권한 규칙에 맞게 수정 (src/stores/canvas.ts)
