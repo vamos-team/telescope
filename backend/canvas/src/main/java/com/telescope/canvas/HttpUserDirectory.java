@@ -6,6 +6,7 @@ import com.telescope.backend.canvas.service.UserDirectory;
 import com.telescope.backend.global.auth.InternalApiKeyFilter;
 import com.telescope.backend.global.web.RequestIdInterceptor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -29,18 +30,20 @@ import java.util.Set;
 @Component
 public class HttpUserDirectory implements UserDirectory {
 
-    private static final Duration TIMEOUT = Duration.ofSeconds(2);
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(1);
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(2);
 
     private final RestClient client;
 
+    @Autowired
     public HttpUserDirectory(@Value("${app.auth-service.base-url}") String baseUrl,
                              @Value("${app.internal-api-key:}") String apiKey) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(TIMEOUT)
+                .connectTimeout(CONNECT_TIMEOUT)
                 .build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
-        requestFactory.setReadTimeout(TIMEOUT);
+        requestFactory.setReadTimeout(READ_TIMEOUT);
         this.client = RestClient.builder()
                 .baseUrl(baseUrl)
                 .defaultHeader(InternalApiKeyFilter.HEADER, apiKey)
