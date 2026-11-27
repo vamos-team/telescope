@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: telescope-auth
+  # 마이그레이션은 work가 맡는다. auth는 같은 app 스키마의 테이블을 검증만 한다
+  flyway:
+    enabled: false
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      "[hibernate.default_schema]": app
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:}
+    access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:1h}
+  auth:
+    login:
+      max-failures: ${AUTH_LOGIN_MAX_FAILURES:5}
+      lock-duration: ${AUTH_LOGIN_LOCK_DURATION:PT10M}
+  admin:
+    employee-no: ${ADMIN_EMPLOYEE_NO:}
+    password: ${ADMIN_PASSWORD:}
+    name: ${ADMIN_NAME:}
