@@ -24,6 +24,8 @@ public enum ErrorCode {
     CANVAS_ACCESS_DENIED(HttpStatus.FORBIDDEN, "K001", "이 캔버스를 볼 권한이 없습니다."),
     CANVAS_EDIT_DENIED(HttpStatus.FORBIDDEN, "K002", "이 캔버스를 수정할 권한이 없습니다."),
     CANVAS_TEXT_CONFLICT(HttpStatus.CONFLICT, "K003", "다른 사람이 먼저 글을 고쳤습니다."),
+    // 메모(메모 카드·카드 메모·선 메모)는 단 사람만 고치고 지운다. 소유자도 예외 없음(#170)
+    CANVAS_MEMO_NOT_MINE(HttpStatus.FORBIDDEN, "K004", "다른 사람이 단 메모는 고치거나 지울 수 없습니다."),
     DOCUMENT_UPLOAD_REJECTED(HttpStatus.BAD_REQUEST, "D001", "올릴 수 없는 파일입니다."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "C999", "서버 내부 오류가 발생했습니다.");
 

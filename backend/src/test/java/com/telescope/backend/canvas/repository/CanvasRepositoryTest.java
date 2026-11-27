@@ -59,7 +59,7 @@ class CanvasRepositoryTest {
         UUID cardId = UUID.randomUUID();
         CanvasCard card = CanvasCard.create(cardId, canvas.getId(), CardKind.TABLE, 10, 20,
                 "{\"tableId\":\"SKT_2026Q1_is\",\"rows\":[3,5]}", owner);
-        card.changeMemo("감가상각비 추이 확인");
+        card.changeMemo("감가상각비 추이 확인", owner);
         cardRepository.save(card);
         em.flush();
         em.clear();
@@ -68,6 +68,7 @@ class CanvasRepositoryTest {
         // PostgreSQL은 JSONB를 정규화해서 돌려주므로(공백·키 순서) 값만 확인한다
         assertThat(found.getProps()).contains("\"tableId\": \"SKT_2026Q1_is\"").contains("\"rows\": [3, 5]");
         assertThat(found.getMemo()).isEqualTo("감가상각비 추이 확인");
+        assertThat(found.getMemoBy()).isEqualTo(owner);
         assertThat(found.getMemoVersion()).isEqualTo(1);
         assertThat(found.isNew()).isFalse();
     }

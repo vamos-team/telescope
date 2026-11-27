@@ -159,7 +159,10 @@ public class CanvasService {
         List<CanvasLink> linkRows = linkRepository.findByCanvasIdOrderByCreatedAtAsc(canvasId);
         // 카드 작성자·선 메모 작성자·소유자·마지막 수정자를 모아 한 번에 읽는다
         List<Long> personIds = new ArrayList<>(summaryPeople(canvas));
-        cards.forEach(c -> personIds.add(c.getCreatedBy()));
+        cards.forEach(c -> {
+            personIds.add(c.getCreatedBy());
+            personIds.add(c.getMemoBy());
+        });
         linkRows.forEach(l -> personIds.add(l.getMemoBy()));
         Map<Long, UserRef> refs = people.refs(personIds);
 
@@ -327,6 +330,7 @@ public class CanvasService {
         } else {
             view.put("memo", card.getMemo());
             view.put("memoVersion", card.getMemoVersion());
+            view.put("memoBy", CanvasPeople.of(refs, card.getMemoBy()));
         }
         view.put("createdBy", CanvasPeople.of(refs, card.getCreatedBy()));
         return view;
