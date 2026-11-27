@@ -118,9 +118,35 @@ class AdminSeederTest {
 
     @Test
     void 다른_서버가_먼저_만들어_고유_제약에_걸려도_기동은_계속한다() {
+        when(userRepository.findByEmployeeNo("A0001"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(existing(UserRole.ADMIN)));
         when(userRepository.saveAndFlush(any(User.class))).thenThrow(new DataIntegrityViolationException("dup"));
 
         assertThatCode(() -> seed("A0001", "admin-password", "관리자")).doesNotThrowAnyException();
+        assertThat(logs.list).singleElement().satisfies(e -> {
+            assertThat(e.getLevel()).isEqualTo(Level.INFO);
+            assertThat(e.getFormattedMessage()).contains("이미 있어 관리자 시드를 건너뜁니다");
+        });
+    }
+
+    @Test
+    void 제약에_걸렸는데_사번이_없으면_예외를_숨기지_않는다() {
+        DataIntegrityViolationException failure = new DataIntegrityViolationException("other constraint");
+        when(userRepository.findByEmployeeNo("A0001")).thenReturn(Optional.empty());
+        when(userRepository.saveAndFlush(any(User.class))).thenThrow(failure);
+
+        assertThatThrownBy(() -> seed("A0001", "admin-password", "관리자")).isSameAs(failure);
+    }
+
+    @Test
+    void 사번이나_이름이_100자를_넘으면_기동하지_않는다() {
+        assertThatThrownBy(() -> seed("A".repeat(101), "admin-password", null))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("ADMIN_EMPLOYEE_NO");
+        assertThatThrownBy(() -> seed("A0001", "admin-password", "가".repeat(101)))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("ADMIN_NAME");
+        assertThatCode(() -> seed("A".repeat(100), "admin-password", "가".repeat(100))).doesNotThrowAnyException();
+        verify(userRepository).saveAndFlush(any());
     }
 
     @Test
