@@ -99,6 +99,40 @@ it("서버에 닿지 않으면 토큰을 남겨 두고 로그인 화면에 남�
   expect(token).toBe("jwt-1");
 });
 
+it("복원 응답을 기다리는 동안 새로 로그인하면 늦게 온 복원 응답(200)은 버린다", async () => {
+  token = "old-token";
+  let answerMe!: (r: Response) => void;
+  vi.stubGlobal("fetch", vi.fn((url: string) => url === "/api/v1/users/me"
+    ? new Promise<Response>((r) => { answerMe = r; })
+    : Promise.resolve(ok({ ...authData, accessToken: "new-token", user: { ...user, id: 8, employeeNo: "E2002", name: "새사용자" } }))));
+  const cv = useCanvas();
+
+  const restoring = cv.restoreUser();
+  await cv.signIn("E2002", "password-1");
+  answerMe(ok(user));
+  await restoring;
+
+  expect(token).toBe("new-token");
+  expect(cv.user).toMatchObject({ id: 8, employeeNo: "E2002" });
+});
+
+it("복원 응답을 기다리는 동안 새로 로그인하면 늦게 온 401도 새 토큰을 지우지 않는다", async () => {
+  token = "old-token";
+  let answerMe!: (r: Response) => void;
+  vi.stubGlobal("fetch", vi.fn((url: string) => url === "/api/v1/users/me"
+    ? new Promise<Response>((r) => { answerMe = r; })
+    : Promise.resolve(ok(authData))));
+  const cv = useCanvas();
+
+  const restoring = cv.restoreUser();
+  await cv.signIn("E1001", "password-1");
+  answerMe(fail(401, "A003", "인증이 만료되었습니다."));
+  await restoring;
+
+  expect(token).toBe("jwt-1");
+  expect(cv.user?.id).toBe(7);
+});
+
 it("토큰이 없으면 서버를 부르지 않는다", async () => {
   const fetch = vi.fn();
   vi.stubGlobal("fetch", fetch);

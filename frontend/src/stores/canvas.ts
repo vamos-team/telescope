@@ -443,13 +443,19 @@ export const useCanvas = defineStore("canvas", {
     },
     async restoreUser() {  // 새로고침: server 모드는 저장된 토큰으로 본인 조회, local 모드는 저장된 사번
       if (SYNC_MODE === "server") {
-        if (!accessToken()) return;
+        const token = accessToken();
+        if (!token) return;
+        // 응답을 기다리는 동안 로그인 화면에서 새로 로그인할 수 있다. 그때는 토큰이 바뀌므로 늦게 온 응답을 버린다
+        let me: AuthUser;
         try {
-          this.setServerUser(await fetchMe());
+          me = await fetchMe();
         } catch (err) {
-          if (err instanceof SyncError && err.status === 401) setAccessToken(null);  // 만료·위조: 다시 로그인. 네트워크 오류면 토큰을 남김
+          // 만료·위조: 다시 로그인. 네트워크 오류면 토큰을 남김. 그 사이 새로 받은 토큰은 지우지 않는다
+          if (err instanceof SyncError && err.status === 401 && accessToken() === token) setAccessToken(null);
           return;
         }
+        if (accessToken() !== token) return;
+        this.setServerUser(me);
         return this.restoreCanvas();
       }
       // 예전 저장분은 { id: 사번 } 모양
