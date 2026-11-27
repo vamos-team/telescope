@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -21,7 +22,7 @@ import java.util.UUID;
  */
 @Getter
 @Entity
-@Table(name = "canvas_event")
+@Table(name = "canvas_event", uniqueConstraints = @UniqueConstraint(name = "uk_canvas_event_seq", columnNames = {"canvas_id", "seq"}))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CanvasEvent extends BaseTimeEntity {
 
