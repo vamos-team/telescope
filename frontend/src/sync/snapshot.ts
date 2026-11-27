@@ -3,9 +3,10 @@
 import type { CanvasEvent } from "../api";
 import type { Card, Link } from "../stores/canvas";
 import type { CanvasSnapshot, ServerCard } from "./http";
+import type { UserRef } from "./protocol";
 
 /** 서버 카드 → 화면 카드. 모르는 종류는 버린다. */
-export function toLocalCard(c: ServerCard, authorName: (id: number | undefined) => string): Card | null {
+export function toLocalCard(c: ServerCard, authorName: (u: UserRef | null | undefined) => string): Card | null {
   const base = { id: c.id, x: c.x, y: c.y, memo: c.memo ?? undefined };
   switch (c.kind) {
     case "table": {
@@ -17,16 +18,16 @@ export function toLocalCard(c: ServerCard, authorName: (id: number | undefined) 
     case "doc": return { ...base, kind: "doc", docId: String(c.docId) };
     case "dash": return { ...base, kind: "dash", panel: String(c.panel) };
     case "chart": return { ...base, kind: "chart", sources: (c.sources as string[]) ?? [], version: 0 };
-    case "memo": return { ...base, kind: "memo", author: authorName(c.createdBy?.id), text: c.text ?? "" };
+    case "memo": return { ...base, kind: "memo", author: authorName(c.createdBy), text: c.text ?? "" };
     default: return null;
   }
 }
 
 /** 서버에서 연 캔버스를 화면 카드·연결로 바꾼다. */
-export function fromSnapshot(s: CanvasSnapshot, authorName: (id: number | undefined) => string): { cards: Card[]; links: Link[] } {
+export function fromSnapshot(s: CanvasSnapshot, authorName: (u: UserRef | null | undefined) => string): { cards: Card[]; links: Link[] } {
   return {
     cards: s.cards.map((c) => toLocalCard(c, authorName)).filter((c): c is Card => c !== null),
-    links: s.links.map((l) => ({ id: l.id, source: l.source, target: l.target, memo: l.memo ?? undefined, memoBy: l.memo ? authorName(l.memoBy?.id) : undefined })),
+    links: s.links.map((l) => ({ id: l.id, source: l.source, target: l.target, memo: l.memo ?? undefined, memoBy: l.memo ? authorName(l.memoBy) : undefined })),
   };
 }
 

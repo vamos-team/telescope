@@ -60,7 +60,7 @@ const notes = computed(() => cv.notes.map((n) => ({ ...n, label: KIND[n.kind] + 
     </section>
 
     <div class="who"><span class="av" data-me="true">{{ cv.user!.name[0] }}</span>
-      <div><b>{{ cv.user!.name }}</b><small>{{ cv.user!.dept }} · {{ memberOf(cv.user!.name)?.job }}</small></div>
+      <div><b>{{ cv.user!.name }}</b><small>{{ [cv.user!.dept, cv.user!.job ?? memberOf(cv.user!.name)?.job].filter(Boolean).join(' · ') }}</small></div>
       <button class="lo" @click="cv.logout()">로그아웃</button></div>
   </aside>
 </template>
