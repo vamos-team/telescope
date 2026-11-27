@@ -4,6 +4,7 @@ import com.telescope.backend.global.auth.JwtProperties;
 import com.telescope.backend.global.auth.JwtTokenProvider;
 import com.telescope.backend.global.exception.BusinessException;
 import com.telescope.backend.global.exception.ErrorCode;
+import com.telescope.backend.global.exception.RetryAfterException;
 import com.telescope.backend.user.dto.LoginRequest;
 import com.telescope.backend.user.dto.LoginResponse;
 import com.telescope.backend.user.dto.SignupRequest;
@@ -28,11 +29,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 로그인(A001, 타이밍 방어)과 회원가입(역할 고정, 중복 A005)을 확인한다. */
+/** 로그인(A001, 타이밍 방어, 실패 잠금 연결)과 회원가입(역할 고정, 중복 A005)을 확인한다. */
 class AuthServiceTest {
 
     UserRepository userRepository = Mockito.mock(UserRepository.class);
@@ -40,13 +42,14 @@ class AuthServiceTest {
     PasswordEncoder passwordEncoder = Mockito.spy(new BCryptPasswordEncoder(4));
     JwtTokenProvider tokenProvider = new JwtTokenProvider(
             new JwtProperties("unit-test-jwt-secret-key-0123456789abcdef", Duration.ofHours(1)), Clock.systemUTC());
+    LoginAttemptService loginAttemptService = Mockito.mock(LoginAttemptService.class);
     AuthService authService;
     User kim;
 
     @BeforeEach
     void setUp() {
         authService = new AuthService(userRepository, passwordEncoder, tokenProvider,
-                new AdminProperties(" A0001 ", "admin-password", null));
+                new AdminProperties(" A0001 ", "admin-password", null), loginAttemptService);
         kim = User.create("E1001", passwordEncoder.encode("pw-1234"), "김예산", "재무팀", "재무기획", UserRole.ADMIN);
         ReflectionTestUtils.setField(kim, "id", 7L);
         when(userRepository.findByEmployeeNo("E1001")).thenReturn(Optional.of(kim));
@@ -133,6 +136,42 @@ class AuthServiceTest {
 
         assertError(() -> authService.signup(new SignupRequest("E3001", "password-1", "동시", null, null)),
                 ErrorCode.EMPLOYEE_NO_DUPLICATED);
+    }
+
+    @Test
+    void 로그인에_성공하면_연속_실패_횟수를_되돌리고_실패로_세지_않는다() {
+        authService.login(new LoginRequest(" E1001 ", "pw-1234"));
+
+        verify(loginAttemptService).checkNotLocked("E1001");
+        verify(loginAttemptService).reset("E1001");
+        verify(loginAttemptService, never()).recordFailure(anyString());
+    }
+
+    @Test
+    void 비밀번호가_틀리면_공백을_뺀_사번으로_실패를_센다() {
+        assertLoginFailed(new LoginRequest(" E1001 ", "wrong"));
+
+        verify(loginAttemptService).recordFailure("E1001");
+        verify(loginAttemptService, never()).reset(anyString());
+    }
+
+    @Test
+    void 없는_사번과_72바이트를_넘는_비밀번호도_실패로_센다() {
+        assertLoginFailed(new LoginRequest("NONE", "pw-1234"));
+        assertLoginFailed(new LoginRequest("E1001", "가".repeat(25)));
+
+        verify(loginAttemptService).recordFailure("NONE");
+        verify(loginAttemptService).recordFailure("E1001");
+    }
+
+    @Test
+    void 잠겨_있으면_비밀번호를_비교하지_않고_A006을_그대로_던진다() {
+        doThrow(new RetryAfterException(ErrorCode.LOGIN_LOCKED, 600)).when(loginAttemptService).checkNotLocked("E1001");
+
+        assertError(() -> authService.login(new LoginRequest("E1001", "pw-1234")), ErrorCode.LOGIN_LOCKED);
+        verify(passwordEncoder, never()).matches(anyString(), anyString());
+        verify(loginAttemptService, never()).recordFailure(anyString());
+        verify(loginAttemptService, never()).reset(anyString());
     }
 
     private void assertLoginFailed(LoginRequest request) {
