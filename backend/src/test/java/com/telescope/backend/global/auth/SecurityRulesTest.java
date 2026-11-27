@@ -20,6 +20,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -129,6 +130,36 @@ class SecurityRulesTest {
                 .andExpect(status().isOk());
     }
 
+    // ---- 4. 관리자 전용 경로 ----
+
+    /** 재무 데이터 적재 이력은 관리자 전용이다. 인증은 됐지만 역할이 USER면 401이 아니라 403 A004다. */
+    @Test
+    void 관리자_전용_경로를_USER_토큰으로_부르면_403_A004() throws Exception {
+        mvc.perform(get("/api/v1/data-sync-runs").header(HttpHeaders.AUTHORIZATION, bearer(tokens.issue(1L, "USER").accessToken())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("A004"));
+    }
+
+    /** 같은 경로를 ADMIN 토큰으로 부르면 통과한다. */
+    @Test
+    void 관리자_전용_경로를_ADMIN_토큰으로_부르면_200() throws Exception {
+        mvc.perform(get("/api/v1/data-sync-runs").header(HttpHeaders.AUTHORIZATION, bearer(tokens.issue(1L, "ADMIN").accessToken())))
+                .andExpect(status().isOk());
+    }
+
+    // ---- 5. 실패 응답 모양 ----
+
+    /**
+     * 보안 필터가 직접 쓰는 실패 응답(401·403)도 컨트롤러 응답과 같은 {@code ApiResponse} 모양이다.
+     * {@code data}는 키가 있고 값이 null, {@code error}에 {@code code}와 {@code message}가 있다.
+     */
+    @Test
+    void 인증_인가_실패_응답은_ApiResponse_모양이다() throws Exception {
+        assertFailureShape(mvc.perform(get(PROTECTED)).andReturn(), "A002");
+        assertFailureShape(mvc.perform(get("/api/v1/data-sync-runs")
+                .header(HttpHeaders.AUTHORIZATION, bearer(tokens.issue(1L, "USER").accessToken()))).andReturn(), "A004");
+    }
+
     // ---- 도움 함수 ----
 
     /** 공개 경로 응답: 401(A001)·400·201 중 하나이고, 인증 오류(A002)가 아니다. */
@@ -143,6 +174,15 @@ class SecurityRulesTest {
         mvc.perform(get(PROTECTED).header(HttpHeaders.AUTHORIZATION, authorization))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error.code").value(code));
+    }
+
+    private static void assertFailureShape(MvcResult result, String code) throws Exception {
+        assertThat(result.getResponse().getContentType()).startsWith(MediaType.APPLICATION_JSON_VALUE);
+        Map<String, Object> body = JsonPath.read(result.getResponse().getContentAsString(), "$");
+        assertThat(body).containsOnlyKeys("data", "error").containsEntry("data", null);
+        Map<String, Object> error = JsonPath.read(result.getResponse().getContentAsString(), "$.error");
+        assertThat(error).containsEntry("code", code);
+        assertThat(error.get("message")).asString().isNotBlank();
     }
 
     private static String bearer(String token) {
