@@ -42,6 +42,11 @@ app:
   jwt:
     secret: ${JWT_SECRET:}
     access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:1h}
+  # 첫 관리자 시드(#133). 사번·비밀번호가 비면 건너뛰고, 사번이 이미 있으면 바꾸지 않는다
+  admin:
+    employee-no: ${ADMIN_EMPLOYEE_NO:}
+    password: ${ADMIN_PASSWORD:}
+    name: ${ADMIN_NAME:}
   document:
     upload:
       # 업로드 정책이 정해지기 전까지 ai 파서가 읽는 형식으로 임시 제한한다(루트 CLAUDE.md 7장 미정, #111)
