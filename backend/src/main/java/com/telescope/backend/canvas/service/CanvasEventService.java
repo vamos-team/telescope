@@ -413,7 +413,7 @@ public class CanvasEventService {
     /**
      * 카드를 지우고, 그 카드에 닿는 연결과 비교·시각화 카드의 원본 목록에서도 뺀다.
      * 비교 카드를 지워도 그 비교로 만든 시각화 카드는 남는다(시각화는 원본 표를 직접 가리킨다).
-     * 남이 만든 메모 카드는 지우지 못한다(403).
+     * 남이 만든 메모 카드, 남이 단 카드 메모나 닿는 선 메모가 있는 카드는 지우지 못한다(같이 사라지므로 403).
      */
     private boolean removeCard(Batch b, EventFields f) {
         UUID id = f.uuid("cardId");
@@ -421,11 +421,20 @@ public class CanvasEventService {
         if (found.isEmpty()) {
             return false;
         }
-        if (found.get().getKind() == CardKind.MEMO) {
-            requireMemoAuthor(b, found.get().getCreatedBy());
+        CanvasCard card = found.get();
+        if (card.getKind() == CardKind.MEMO) {
+            requireMemoAuthor(b, card.getCreatedBy());
+        }
+        if (card.getMemo() != null) {
+            requireMemoAuthor(b, card.getMemoBy());
         }
         List<CanvasLink> touching = linkRepository.findByCanvasIdOrderByCreatedAtAsc(b.canvasId()).stream()
                 .filter(l -> l.touches(id)).toList();
+        for (CanvasLink link : touching) {
+            if (link.getMemo() != null) {
+                requireMemoAuthor(b, link.getMemoBy());
+            }
+        }
         linkRepository.deleteAll(touching);
         for (CardKind kind : List.of(CardKind.COMPARE, CardKind.CHART)) {
             for (CanvasCard derived : cardRepository.findByCanvasIdAndKind(b.canvasId(), kind)) {
@@ -436,7 +445,7 @@ public class CanvasEventService {
                 }
             }
         }
-        cardRepository.delete(found.get());
+        cardRepository.delete(card);
         return true;
     }
 

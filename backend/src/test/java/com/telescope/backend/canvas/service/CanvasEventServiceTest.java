@@ -339,7 +339,8 @@ class CanvasEventServiceTest {
                 event("set_link_memo", "linkId", link, "text", "소유자가 고침", "baseVersion", 1),
                 event("set_card_memo", "cardId", table, "text", "소유자가 고침", "baseVersion", 1),
                 event("remove_link", "linkId", link),
-                event("remove_card", "cardId", memo))) {
+                event("remove_card", "cardId", memo),
+                event("remove_card", "cardId", table))) {  // 남의 카드 메모·선 메모가 같이 사라지므로
             assertThatThrownBy(() -> eventService.apply(canvasId, owner, batch(e)))
                     .extracting(x -> ((BusinessException) x).getErrorCode()).isEqualTo(ErrorCode.CANVAS_MEMO_NOT_MINE);
         }
