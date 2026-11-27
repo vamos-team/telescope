@@ -30,7 +30,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ApiResponse<?> body = e.getData() == null
                 ? ApiResponse.fail(errorCode, e.getMessage())
                 : ApiResponse.fail(errorCode, e.getMessage(), e.getData());
-        return ResponseEntity.status(errorCode.getStatus()).body(body);
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(errorCode.getStatus());
+        if (e instanceof RetryAfterException retry) {
+            response.header(HttpHeaders.RETRY_AFTER, String.valueOf(retry.getRetryAfterSeconds()));
+        }
+        return response.body(body);
     }
 
     /**

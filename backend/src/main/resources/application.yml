@@ -43,6 +43,11 @@ app:
     secret: ${JWT_SECRET:}
     access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:1h}
   # 첫 관리자 시드(#133). 사번·비밀번호가 비면 건너뛰고, 사번이 이미 있으면 바꾸지 않는다
+  # 로그인 실패 잠금(#164). 같은 사번으로 연속 max-failures번 틀리면 lock-duration 동안 막는다(docs/backend/auth.md)
+  auth:
+    login:
+      max-failures: ${AUTH_LOGIN_MAX_FAILURES:5}
+      lock-duration: ${AUTH_LOGIN_LOCK_DURATION:PT10M}
   admin:
     employee-no: ${ADMIN_EMPLOYEE_NO:}
     password: ${ADMIN_PASSWORD:}
