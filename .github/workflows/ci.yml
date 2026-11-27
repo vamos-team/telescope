@@ -28,7 +28,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          files=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+          files=$(git -c core.quotePath=false diff --no-renames --name-only "$BASE_SHA...$HEAD_SHA")
           printf '%s\n' "$files"
           changed() {
             if printf '%s\n' "$files" | grep -qE '^\.github/workflows/'; then echo true; return; fi
