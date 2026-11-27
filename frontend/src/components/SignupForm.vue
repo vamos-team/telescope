@@ -48,8 +48,11 @@ async function reveal() {
   await nextTick();
   form.value?.querySelector(".su-steps > :last-child")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
+/** 부서 · 직무 목록이 펼쳐져 있는지. 고르면 접고 고른 값만 칸으로 보여 줌. 그 칸을 누르면 다시 펼침 */
+const open = reactive({ dept: true, job: true });
 function pick(kind: "dept" | "job", v: string) {
   f[kind] = f[kind] === v ? "" : v;  // 다시 누르면 선택 해제
+  open[kind] = !f[kind];
   if (kind === "dept" && shown.value < 6) { shown.value = 6; void reveal(); }
 }
 
@@ -90,20 +93,30 @@ async function submit() {
       <div v-if="shown >= 5" key="org" class="su-row">
         <div class="su-step">
           <span class="su-label">부서</span>
-          <div class="su-pick" role="listbox" aria-label="부서">
-            <button v-for="d in DEPTS" :key="d" type="button" role="option" :aria-selected="f.dept === d" :class="{ on: f.dept === d }" @click="pick('dept', d)">
-              {{ d }}<svg class="su-tick" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10.5l3.2 3.2L15 7" /></svg>
+          <Transition name="su" mode="out-in">
+            <button v-if="!open.dept" key="chosen" type="button" class="su-chosen" :aria-label="'부서 바꾸기: ' + f.dept" @click="open.dept = true">
+              <span>{{ f.dept }}</span><svg class="su-tick" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10.5l3.2 3.2L15 7" /></svg>
             </button>
-          </div>
+            <div v-else key="list" class="su-pick" role="listbox" aria-label="부서">
+              <button v-for="d in DEPTS" :key="d" type="button" role="option" :aria-selected="f.dept === d" :class="{ on: f.dept === d }" @click="pick('dept', d)">
+                {{ d }}<svg class="su-tick" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10.5l3.2 3.2L15 7" /></svg>
+              </button>
+            </div>
+          </Transition>
         </div>
         <Transition name="su">
           <div v-if="shown >= 6" class="su-step">
             <span class="su-label">직무</span>
-            <div class="su-pick" role="listbox" aria-label="직무">
+            <Transition name="su" mode="out-in">
+              <button v-if="!open.job" key="chosen" type="button" class="su-chosen" :aria-label="'직무 바꾸기: ' + f.job" @click="open.job = true">
+              <span>{{ f.job }}</span><svg class="su-tick" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10.5l3.2 3.2L15 7" /></svg>
+            </button>
+            <div v-else key="list" class="su-pick" role="listbox" aria-label="직무">
               <button v-for="j in JOBS" :key="j" type="button" role="option" :aria-selected="f.job === j" :class="{ on: f.job === j }" @click="pick('job', j)">
                 {{ j }}<svg class="su-tick" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10.5l3.2 3.2L15 7" /></svg>
               </button>
             </div>
+            </Transition>
           </div>
         </Transition>
       </div>

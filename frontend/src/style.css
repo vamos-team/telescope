@@ -384,6 +384,12 @@ table.g.facts tr.b td{font-weight:700;color:var(--t-strong);background:var(--pri
 .su-pick button.on{background:var(--primary-weak);color:var(--primary-text);font-weight:700}
 .su-pick button .su-tick{color:var(--primary-text)}
 .su-pick button.on .su-tick{opacity:1;transform:scale(1)}
+.su-chosen{display:flex;align-items:center;justify-content:space-between;width:100%;height:52px;padding:0 14px 0 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-size:15px;font-weight:500;color:var(--t-strong);text-align:left;transition:border-color .2s}
+.su-chosen:hover{border-color:var(--line-2)}
+.su-chosen span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.su-chosen .su-tick{opacity:1;transform:none;color:var(--green)}
+.su-leave-active{transition:opacity .15s ease}
+.su-leave-to{opacity:0}
 .su-enter-active{transition:opacity .35s ease,transform .35s ease}
 .su-enter-from{opacity:0;transform:translateY(-8px)}
 @media (max-width:860px){
