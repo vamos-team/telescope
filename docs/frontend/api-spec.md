@@ -87,7 +87,7 @@ v02-canvas 데모(코드 `frontend/`, 빌드 `docs/frontend/demo.html`)가 화�
 
 ### 2.2 `GET /api/v1/users/me`
 
-새로고침 뒤 토큰으로 사용자를 복원한다(서버 모드 `restoreUser`). 응답은 2.1의 `user`. 토큰이 없으면 부르지 않는다. `401`(`A002`·`A003`)이면 토큰을 지우고 로그인 화면에 남는다. 서버에 닿지 않으면 토큰은 남기고 로그인 화면을 보여 준다. 데모(local)는 `sessionStorage` `telescope-canvas:v1:user`에 저장한 사용자로 다시 로그인한다.
+새로고침 뒤 토큰으로 사용자를 복원한다(서버 모드 `restoreUser`). 응답은 2.1의 `user`. 토큰이 없으면 부르지 않는다. 토큰이 있으면 응답이 올 때까지 로그인 화면 대신 빈 화면을 보여 준다(`restoring`, 로그인 화면 깜빡임 방지). 응답을 기다리는 동안 새로 로그인해 토큰이 바뀌면 늦게 온 응답은 버린다. `401`(`A002`·`A003`)이면 토큰을 지우고 로그인 화면에 남는다. 서버에 닿지 않으면 토큰은 남기고 로그인 화면을 보여 준다. 데모(local)는 `sessionStorage` `telescope-canvas:v1:user`에 저장한 사용자로 다시 로그인한다.
 
 ### 2.3 `GET /api/v1/users?q={검색어}`
 

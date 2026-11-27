@@ -21,7 +21,7 @@ let connection: RealtimeConnection | null = null;
 const serverDocIds = new Set<string>();
 let serverReload = 0;
 let authAttempt = 0;  // 로그인·회원가입 요청 번호. 응답이 늦게 와도 가장 최근 요청만 반영
-/** 서버 사용자 ID로 이름을 찾는다. 사용자 API(#34) 전이라 ID만 보인다. */
+/** 서버 사용자 ID로 이름을 찾는다. 캔버스 응답에 이름이 생기면(#149) 그 값을 쓴다. 지금은 ID만 보인다. */
 const nameOfUser = (id: number | undefined) => (id == null ? "다른 사용자" : `사용자 ${id}`);
 
 // memo: 카드 메모 (카드에 직접 적은 메모). 메모는 한 종류이고, 지시 · 근거 · 의견은 분석(검토)에서 에이전트가 가린다
@@ -156,6 +156,8 @@ export const useCanvas = defineStore("canvas", {
     selected: [] as string[],  // Shift로 여러 장 고른 카드 (표 생성 · 시각화 생성)
     analyses: [] as Session[],  // 이 페이지에서 내가 돌린 분석 세션 (최신이 앞)
     user: null as CanvasUser | null,
+    // 서버 모드 새로고침: 저장된 토큰으로 본인을 조회하는 동안 로그인 화면이 깜빡이지 않게 비워 둔다
+    restoring: SYNC_MODE === "server" && !!accessToken(),
     canvasId: "", canvasName: "",
     creating: false,  // 새 캔버스 창
     log: [] as CanvasEvent[],  // 이 캔버스에서 서버로 보낸 이벤트 전체 (저장·재생용)
@@ -457,7 +459,8 @@ export const useCanvas = defineStore("canvas", {
     async restoreUser() {  // 새로고침: server 모드는 저장된 토큰으로 본인 조회, local 모드는 저장된 사번
       if (SYNC_MODE === "server") {
         const token = accessToken();
-        if (!token) return;
+        if (!token) { this.restoring = false; return; }
+        this.restoring = true;
         // 응답을 기다리는 동안 로그인 화면에서 새로 로그인할 수 있다. 그때는 토큰이 바뀌므로 늦게 온 응답을 버린다
         let me: AuthUser;
         try {
@@ -465,8 +468,10 @@ export const useCanvas = defineStore("canvas", {
         } catch (err) {
           // 만료·위조: 다시 로그인. 네트워크 오류면 토큰을 남김. 그 사이 새로 받은 토큰은 지우지 않는다
           if (err instanceof SyncError && err.status === 401 && accessToken() === token) setAccessToken(null);
+          this.restoring = false;
           return;
         }
+        this.restoring = false;
         if (accessToken() !== token) return;
         this.setServerUser(me);
         return this.restoreCanvas();

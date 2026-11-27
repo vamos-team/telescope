@@ -179,11 +179,39 @@ it("로그인 응답 전에 로그아웃하면 늦게 온 로그인 응답으로
   expect(cv.user).toBeNull();
 });
 
+it("저장된 토큰이 있으면 본인 조회가 끝날 때까지 복원 중 상태로 둔다(로그인 화면 깜빡임 방지)", async () => {
+  token = "jwt-1";
+  let answerMe!: (r: Response) => void;
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((r) => { answerMe = r; })));
+  const cv = useCanvas();
+
+  expect(cv.restoring).toBe(true);  // 첫 화면부터 로그인 화면 대신 빈 화면
+  const restoring = cv.restoreUser();
+  answerMe(ok(user));
+  await restoring;
+
+  expect(cv.restoring).toBe(false);
+  expect(cv.user?.id).toBe(7);
+});
+
+it("복원이 실패해도(만료) 복원 중 상태를 풀어 로그인 화면을 보여 준다", async () => {
+  token = "jwt-1";
+  vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(fail(401, "A003", "인증이 만료되었습니다."))));
+  const cv = useCanvas();
+
+  await cv.restoreUser();
+
+  expect(cv.restoring).toBe(false);
+  expect(cv.user).toBeNull();
+});
+
 it("토큰이 없으면 서버를 부르지 않는다", async () => {
   const fetch = vi.fn();
   vi.stubGlobal("fetch", fetch);
 
-  await useCanvas().restoreUser();
+  const cv = useCanvas();
+  expect(cv.restoring).toBe(false);  // 토큰이 없으면 바로 로그인 화면
+  await cv.restoreUser();
 
   expect(fetch).not.toHaveBeenCalled();
 });
