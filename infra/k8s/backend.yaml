@@ -25,6 +25,8 @@ spec:
             - { name: AI_SERVICE_BASE_URL, value: "http://ai-server:8000" }
             - name: AI_SERVICE_API_KEY
               valueFrom: { secretKeyRef: { name: ai-server-secrets, key: INTERNAL_API_KEY } }
+            - name: INTERNAL_API_KEY
+              valueFrom: { secretKeyRef: { name: ai-server-secrets, key: INTERNAL_API_KEY } }
           envFrom:
             - secretRef: { name: rds-credentials }   
             - configMapRef: { name: s3-config }
