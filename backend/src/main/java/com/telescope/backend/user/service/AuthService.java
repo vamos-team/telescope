@@ -25,14 +25,17 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
+    private final AdminProperties adminProperties;
 
     /** 없는 사번일 때도 비교할 해시. 사번이 있을 때와 응답 시간이 같아야 사번 존재 여부를 추측할 수 없다. */
     private final String dummyHash;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtTokenProvider tokenProvider) {
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtTokenProvider tokenProvider,
+                       AdminProperties adminProperties) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
+        this.adminProperties = adminProperties;
         this.dummyHash = passwordEncoder.encode("dummy-password-for-timing");
     }
 
@@ -59,12 +62,13 @@ public class AuthService {
     /**
      * 회원가입하고 바로 로그인한 것처럼 토큰을 발급한다. 역할은 항상 {@code USER}다. 권한: 누구나(인증 전).
      *
-     * @throws BusinessException 이미 있는 사번이면 {@code A005}
+     * @throws BusinessException 이미 있는 사번이거나 관리자 사번({@code ADMIN_EMPLOYEE_NO})이면 {@code A005}.
+     *                           관리자 사번인지 드러내지 않으려고 같은 코드를 쓴다
      */
     @Transactional
     public LoginResponse signup(SignupRequest request) {
         String employeeNo = request.employeeNo().trim();
-        if (userRepository.existsByEmployeeNo(employeeNo)) {
+        if (adminProperties.isAdminEmployeeNo(employeeNo) || userRepository.existsByEmployeeNo(employeeNo)) {
             throw new BusinessException(ErrorCode.EMPLOYEE_NO_DUPLICATED);
         }
         User user = User.create(employeeNo, passwordEncoder.encode(request.password()), request.name().trim(),

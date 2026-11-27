@@ -45,7 +45,8 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, passwordEncoder, tokenProvider);
+        authService = new AuthService(userRepository, passwordEncoder, tokenProvider,
+                new AdminProperties(" A0001 ", "admin-password", null));
         kim = User.create("E1001", passwordEncoder.encode("pw-1234"), "김예산", "재무팀", "재무기획", UserRole.ADMIN);
         ReflectionTestUtils.setField(kim, "id", 7L);
         when(userRepository.findByEmployeeNo("E1001")).thenReturn(Optional.of(kim));
@@ -114,6 +115,14 @@ class AuthServiceTest {
         when(userRepository.existsByEmployeeNo("E1001")).thenReturn(true);
 
         assertError(() -> authService.signup(new SignupRequest("E1001", "password-1", "중복", null, null)),
+                ErrorCode.EMPLOYEE_NO_DUPLICATED);
+        verify(userRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void 관리자_사번으로는_가입할_수_없고_A005() {
+        // 시드 전에 일반 사용자가 관리자 사번을 먼저 차지하면 관리자가 생기지 않는다
+        assertError(() -> authService.signup(new SignupRequest(" A0001 ", "password-1", "선점", null, null)),
                 ErrorCode.EMPLOYEE_NO_DUPLICATED);
         verify(userRepository, never()).saveAndFlush(any());
     }

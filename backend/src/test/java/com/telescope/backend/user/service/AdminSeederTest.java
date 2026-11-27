@@ -4,11 +4,16 @@ import com.telescope.backend.user.entity.User;
 import com.telescope.backend.user.entity.UserRole;
 import com.telescope.backend.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -18,7 +23,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 첫 관리자 시드: 설정 없음, 새로 만듦, 이미 있음, 설정 실수. */
+/** 첫 관리자 시드: 설정 없음, 새로 만듦, 이미 있음(관리자·일반 사용자), 설정 실수. */
+@ExtendWith(OutputCaptureExtension.class)
 class AdminSeederTest {
 
     UserRepository userRepository = Mockito.mock(UserRepository.class);
@@ -35,13 +41,11 @@ class AdminSeederTest {
         seed(" ", "", "관리자");
 
         verify(userRepository, never()).saveAndFlush(any());
-        verify(userRepository, never()).existsByEmployeeNo(any());
+        verify(userRepository, never()).findByEmployeeNo(any());
     }
 
     @Test
     void 사번이_없으면_ADMIN을_만든다() {
-        when(userRepository.existsByEmployeeNo("A0001")).thenReturn(false);
-
         seed(" A0001 ", "admin-password", "운영 관리자");
 
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
@@ -63,12 +67,29 @@ class AdminSeederTest {
     }
 
     @Test
-    void 사번이_이미_있으면_건너뛰고_바꾸지_않는다() {
-        when(userRepository.existsByEmployeeNo("A0001")).thenReturn(true);
+    void 관리자가_이미_있으면_건너뛰고_바꾸지_않는다(CapturedOutput output) {
+        when(userRepository.findByEmployeeNo("A0001")).thenReturn(Optional.of(existing(UserRole.ADMIN)));
 
         seed("A0001", "admin-password", "관리자");
 
         verify(userRepository, never()).saveAndFlush(any());
+        assertThat(output).contains("이미 있어 관리자 시드를 건너뜁니다").doesNotContain("관리자를 만들지 않았습니다");
+    }
+
+    @Test
+    void 관리자_사번을_일반_사용자가_쓰고_있으면_역할을_바꾸지_않고_경고한다(CapturedOutput output) {
+        User squatter = existing(UserRole.USER);
+        when(userRepository.findByEmployeeNo("A0001")).thenReturn(Optional.of(squatter));
+
+        seed("A0001", "admin-password", "관리자");
+
+        verify(userRepository, never()).saveAndFlush(any());
+        assertThat(squatter.getRole()).isEqualTo(UserRole.USER);
+        assertThat(output).containsPattern("WARN .*AdminSeeder -- 관리자 사번 A0001을 USER 계정");
+    }
+
+    private User existing(UserRole role) {
+        return User.create("A0001", passwordEncoder.encode("someone-else"), "기존", null, null, role);
     }
 
     @Test

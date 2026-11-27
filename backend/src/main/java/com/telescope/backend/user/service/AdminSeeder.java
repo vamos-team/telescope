@@ -13,13 +13,16 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
+
 /**
  * 서버가 뜰 때 환경변수로 받은 첫 관리자를 만든다. 회원가입으로는 {@code ADMIN}이 생기지 않으므로 관리자는 이 경로로만 생긴다.
  *
  * <ul>
  *   <li>사번·비밀번호가 둘 다 비면 아무것도 하지 않는다.</li>
  *   <li>둘 중 하나만 있거나 비밀번호가 규칙({@link PasswordPolicy})에 맞지 않으면 설정 실수로 보고 기동을 멈춘다.</li>
- *   <li>그 사번이 이미 있으면 건너뛴다. 역할·비밀번호를 바꾸지 않는다.</li>
+ *   <li>그 사번이 이미 있으면 건너뛴다. 역할·비밀번호를 바꾸지 않는다. 그 계정이 {@code ADMIN}이 아니면 경고를 남긴다
+ *       (관리자 사번을 다른 사람이 먼저 쓰고 있어 관리자가 없는 상태).</li>
  * </ul>
  */
 @Slf4j
@@ -34,7 +37,7 @@ public class AdminSeeder implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        String employeeNo = trimToNull(properties.employeeNo());
+        String employeeNo = properties.employeeNo();
         String password = properties.password();
         boolean hasPassword = password != null && !password.isEmpty();
         if (employeeNo == null && !hasPassword) {
@@ -48,11 +51,12 @@ public class AdminSeeder implements ApplicationRunner {
             throw new IllegalStateException("ADMIN_PASSWORD는 " + PasswordPolicy.MIN_LENGTH + "자 이상, UTF-8 "
                     + PasswordPolicy.MAX_BYTES + "바이트 이하여야 합니다.");
         }
-        if (userRepository.existsByEmployeeNo(employeeNo)) {
-            log.info("사번 {}이 이미 있어 관리자 시드를 건너뜁니다.", employeeNo);
+        Optional<User> existing = userRepository.findByEmployeeNo(employeeNo);
+        if (existing.isPresent()) {
+            skipExisting(existing.get());
             return;
         }
-        String name = trimToNull(properties.name());
+        String name = properties.name();
         User admin = User.create(employeeNo, passwordEncoder.encode(password),
                 name == null ? AdminProperties.DEFAULT_NAME : name, null, null, UserRole.ADMIN);
         try {
@@ -65,7 +69,12 @@ public class AdminSeeder implements ApplicationRunner {
         log.info("첫 관리자를 만들었습니다. 사번 {}, id {}", employeeNo, admin.getId());
     }
 
-    private static String trimToNull(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
+    private static void skipExisting(User user) {
+        if (user.getRole() == UserRole.ADMIN) {
+            log.info("사번 {}이 이미 있어 관리자 시드를 건너뜁니다.", user.getEmployeeNo());
+        } else {
+            log.warn("관리자 사번 {}을 {} 계정(id {})이 쓰고 있어 관리자를 만들지 않았습니다. 사번을 바꾸거나 그 계정을 정리해야 합니다.",
+                    user.getEmployeeNo(), user.getRole(), user.getId());
+        }
     }
 }
