@@ -39,7 +39,7 @@ jobs:
           }
           # backend 모듈 이미지: 공통(common·루트 빌드 파일)이 바뀌면 셋 다, 아니면 바뀐 모듈만 빌드한다
           be_module() {
-            if printf '%s\n' "$files" | grep -qE '^\.github/workflows/|^backend/(common/|build\.gradle|settings\.gradle|Dockerfile|gradlew|gradle/)'; then echo true; return; fi
+            if printf '%s\n' "$files" | grep -qE '^\.github/workflows/|^backend/(common/|build\.gradle|settings\.gradle|Dockerfile|\.dockerignore|gradlew|gradle/)'; then echo true; return; fi
             if printf '%s\n' "$files" | grep -qE "$1"; then echo true; else echo false; fi
           }
           {

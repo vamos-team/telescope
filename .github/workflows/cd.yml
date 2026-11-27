@@ -41,9 +41,8 @@ jobs:
           tree() { git rev-parse "HEAD:$1" | cut -c1-12; }
           combined() { for d in "$@"; do git rev-parse "HEAD:$d"; done | sha256sum | cut -c1-12; }
           need_build() { aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$1" >/dev/null 2>&1 && echo false || echo true; }
-          # backend 서비스별 태그 = 그 모듈 + 공통(common·루트 빌드 파일)의 내용 해시.
-          # 공통이 바뀌면 셋 다, 한 모듈만 바뀌면 그 서비스만 태그가 바뀐다(안 바뀐 서비스는 재배포 안 됨).
-          BE_SHARED="backend/common backend/build.gradle backend/settings.gradle backend/Dockerfile backend/gradlew backend/gradle"
+          # backend 서비스별 태그 = 그 모듈 + 공통(common·루트 빌드 파일)의 내용 해시. 공통이 바뀌면 셋 다, 한 모듈만 바뀌면 그 서비스만 재빌드된다
+          BE_SHARED="backend/common backend/build.gradle backend/settings.gradle backend/Dockerfile backend/.dockerignore backend/gradlew backend/gradle"
           BACKEND="backend-$(combined backend/analysis $BE_SHARED)"
           AUTH="auth-$(combined backend/auth $BE_SHARED)"
           CANVAS="canvas-$(combined backend/canvas $BE_SHARED)"

@@ -49,16 +49,29 @@ docker run --rm -e PGHOST=host.docker.internal -e PGPORT=25432 \
 > 백업은 **마이그레이션을 올리는 배포 직전**에 받는다. 미뤄둔 마이그레이션이 그 배포에서 함께
 > 적용될 수 있어, 오래된 백업은 운영과 다를 수 있다.
 
-## 되돌리기 (단계별, 위에서부터)
+## 되돌리기
 
-문제의 크기에 맞춰 필요한 단계까지만 되돌린다.
+**V17(스키마 분리)이 적용됐는지에 따라 절차가 다르다.** 적용 여부는
+`select 1 from app.flyway_schema_history where version='17' and success` 로 확인한다.
 
-1. **경로 원복**: Ingress를 되돌려 모든 `/api`를 analysis(backend)로 보낸다. (가장 빠르고, 코드·DB는 그대로)
-   - `infra/k8s/ingress.yaml`의 `api`에서 `/api/v1/auth`·`/users`·`/canvases`·`/ws`를 다시 `backend`로 바꿔 배포한다.
-   - 단, analysis가 그 기능을 다시 맡으려면 2번(이전 이미지)이 함께 필요하다.
+### V17 적용 전 (배포가 아직 스키마를 옮기지 않음)
+
+DB는 그대로이므로 경로·이미지만 되돌리면 된다.
+
+1. **경로 원복**: `infra/k8s/ingress.yaml`의 `api`에서 `/api/v1/auth`·`/users`·`/canvases`·`/ws`를 다시 `backend`로 바꿔 배포한다.
 2. **이전 이미지**: 직전 정상 이미지 태그로 롤백한다(`kubectl rollout undo` 또는 이전 태그로 재배포).
-3. **역방향 마이그레이션**: 스키마를 app으로 되돌리고 FK를 복원한다(아래 SQL). 데이터 복사가 아니라 소속 변경이라 빠르다.
-4. **백업 복원**: 위 단계로도 안 되면 백업에서 복원한다.
+
+### V17 적용 후 (분리 전 모놀리식으로 복귀)
+
+옛 analysis 이미지는 기본 스키마가 `app`이고 `ddl-auto: validate`로 뜬다. 테이블이 `auth`·`canvas` 스키마에 있으면
+그 이미지는 기동하지 못한다. **그래서 경로·이미지만 되돌려서는 복구되지 않는다. 아래 순서를 모두 밟아야 한다.**
+
+1. **쓰기 중지**: 유지보수로 돌리거나 Ingress에서 `/api`를 막아 그 사이 쓰기를 멈춘다.
+2. **역방향 SQL 실행**(아래): 스키마를 `app`으로 되돌리고 FK를 복원한다. 소속 변경이라 빠르다.
+3. **Flyway 기록 정리**: `DELETE FROM app.flyway_schema_history WHERE version='17';`
+   옛 이미지의 Flyway에는 V17 파일이 없어, 이 행이 남아 있으면 검증에 걸린다. (이 행을 지우면 다음 배포 때 V17이 다시 적용되므로, 분리 상태로 되돌아갈 게 아니라 분리 이전으로 갈 때만 지운다.)
+4. **호환 이미지·설정·Ingress 복원**: 분리 이전의 analysis(모든 기능) 이미지로 배포하고, Ingress의 모든 `/api`를 `backend`로 되돌린다.
+5. 위 단계로도 안 되면 **백업에서 복원**한다.
 
 ### 역방향 SQL (스키마 되돌리기 + FK 복원)
 

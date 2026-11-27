@@ -70,7 +70,6 @@ public class HttpCanvasAccessClient implements CanvasAccessClient {
         }
     }
 
-    /** 이 사람의 캔버스 권한(owner·edit·view). 권한이 없으면 null. 캔버스가 없으면 {@code C002}. */
     private String roleOf(Long canvasId, Long userId) {
         Access access = fetch(canvasId, userId);
         return access == null || !access.active() ? null : access.role();
@@ -94,7 +93,6 @@ public class HttpCanvasAccessClient implements CanvasAccessClient {
         }
     }
 
-    /** 권한을 확인하지 못하면 허용하지 않고 막는다. */
     private BusinessException failClosed(Long canvasId, RuntimeException cause) {
         log.warn("canvas 권한 확인 실패(canvasId={}): {}", canvasId, cause.toString());
         return new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
