@@ -17,13 +17,14 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 실제 보안 설정·DB로 로그인 → 보호 경로 호출 흐름을 확인한다(이슈 #34 완료 기준).
+ * 실제 보안 설정·DB로 회원가입·로그인 → 보호 경로 호출 흐름을 확인한다(이슈 #34, #133 완료 기준).
  * 각 테스트는 트랜잭션 안에서 돌고 끝나면 되돌린다.
  */
 // K8s 밖에서도 프로브 경로(/actuator/health/liveness·readiness)를 켜서 공개 경로인지 확인한다
@@ -110,11 +111,69 @@ class UserApiIntegrationTest {
         mvc.perform(get("/actuator/health/readiness")).andExpect(status().isOk());
     }
 
+    @Test
+    void 회원가입하면_201과_토큰을_받고_그_토큰과_새_비밀번호로_쓸_수_있다() throws Exception {
+        String body = mvc.perform(signupRequest("""
+                        {"employeeNo":"S5001","password":"signup-pw-1","name":"신규가입","dept":"재무팀"}"""))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.data.user.employeeNo").value("S5001"))
+                .andExpect(jsonPath("$.data.user.role").value("USER"))
+                .andExpect(jsonPath("$.data.user.job").doesNotExist())
+                .andExpect(jsonPath("$.data.user.passwordHash").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+        String token = JsonPath.read(body, "$.data.accessToken");
+
+        mvc.perform(get("/api/v1/users/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.name").value("신규가입"));
+        login("S5001", "signup-pw-1");
+    }
+
+    @Test
+    void 회원가입_요청에_역할을_넣어도_USER로_만든다() throws Exception {
+        mvc.perform(signupRequest("""
+                        {"employeeNo":"S5002","password":"signup-pw-1","name":"권한시도","role":"ADMIN"}"""))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.user.role").value("USER"));
+
+        assertThat(userRepository.findByEmployeeNo("S5002")).get()
+                .extracting(User::getRole).isEqualTo(UserRole.USER);
+    }
+
+    @Test
+    void 이미_가입된_사번이면_409_A005() throws Exception {
+        mvc.perform(signupRequest("""
+                        {"employeeNo":"T9001","password":"signup-pw-1","name":"중복"}"""))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("A005"));
+    }
+
+    @Test
+    void 필수값이_없거나_비밀번호가_규칙에_맞지_않으면_400_C001() throws Exception {
+        String[] invalid = {
+                "{\"employeeNo\":\"S5003\",\"password\":\"signup-pw-1\"}",                 // 이름 없음
+                "{\"employeeNo\":\" \",\"password\":\"signup-pw-1\",\"name\":\"빈사번\"}",  // 사번 공백
+                "{\"employeeNo\":\"S5003\",\"password\":\"short12\",\"name\":\"짧음\"}",    // 7자
+                "{\"employeeNo\":\"S5003\",\"password\":\"" + "가".repeat(25) + "\",\"name\":\"김\"}", // 75바이트
+        };
+        for (String body : invalid) {
+            mvc.perform(signupRequest(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error.code").value("C001"));
+        }
+        assertThat(userRepository.existsByEmployeeNo("S5003")).isFalse();
+    }
+
     private String login(String employeeNo, String password) throws Exception {
         String body = mvc.perform(loginRequest(employeeNo, password))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         return JsonPath.read(body, "$.data.accessToken");
+    }
+
+    private static org.springframework.test.web.servlet.RequestBuilder signupRequest(String json) {
+        return post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON).content(json);
     }
 
     private static org.springframework.test.web.servlet.RequestBuilder loginRequest(String employeeNo, String password) {

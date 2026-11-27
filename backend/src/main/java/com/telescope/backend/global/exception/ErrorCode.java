@@ -18,6 +18,7 @@ public enum ErrorCode {
     UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "A002", "인증이 필요합니다."),
     TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "A003", "인증이 만료되었습니다."),
     ACCESS_DENIED(HttpStatus.FORBIDDEN, "A004", "권한이 없습니다."),
+    EMPLOYEE_NO_DUPLICATED(HttpStatus.CONFLICT, "A005", "이미 가입된 사번입니다."),
     CANVAS_ACCESS_DENIED(HttpStatus.FORBIDDEN, "K001", "이 캔버스를 볼 권한이 없습니다."),
     CANVAS_EDIT_DENIED(HttpStatus.FORBIDDEN, "K002", "이 캔버스를 수정할 권한이 없습니다."),
     CANVAS_TEXT_CONFLICT(HttpStatus.CONFLICT, "K003", "다른 사람이 먼저 글을 고쳤습니다."),

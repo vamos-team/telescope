@@ -6,12 +6,15 @@ import com.telescope.backend.global.exception.BusinessException;
 import com.telescope.backend.global.exception.ErrorCode;
 import com.telescope.backend.user.dto.LoginRequest;
 import com.telescope.backend.user.dto.LoginResponse;
+import com.telescope.backend.user.dto.SignupRequest;
 import com.telescope.backend.user.entity.User;
 import com.telescope.backend.user.entity.UserRole;
 import com.telescope.backend.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -22,11 +25,14 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/** 로그인(A001, 타이밍 방어)과 회원가입(역할 고정, 중복 A005)을 확인한다. */
 class AuthServiceTest {
 
     UserRepository userRepository = Mockito.mock(UserRepository.class);
@@ -76,8 +82,56 @@ class AuthServiceTest {
         assertLoginFailed(new LoginRequest("E1001", "가".repeat(25)));
     }
 
+    @Test
+    void 회원가입하면_USER로_저장하고_바로_쓸_수_있는_토큰을_준다() {
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(invocation -> {
+            User saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 11L);
+            return saved;
+        });
+
+        LoginResponse response = authService.signup(
+                new SignupRequest(" E2001 ", "password-1", " 박신규 ", " ", "재무기획"));
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).saveAndFlush(captor.capture());
+        User saved = captor.getValue();
+        assertThat(saved.getEmployeeNo()).isEqualTo("E2001");
+        assertThat(saved.getName()).isEqualTo("박신규");
+        assertThat(saved.getDept()).isNull();
+        assertThat(saved.getJob()).isEqualTo("재무기획");
+        assertThat(saved.getRole()).isEqualTo(UserRole.USER);
+        assertThat(saved.getPasswordHash()).isNotEqualTo("password-1");
+        assertThat(passwordEncoder.matches("password-1", saved.getPasswordHash())).isTrue();
+
+        assertThat(response.user().id()).isEqualTo(11L);
+        assertThat(response.user().role()).isEqualTo("USER");
+        assertThat(tokenProvider.authenticate(response.accessToken()).role()).isEqualTo("USER");
+    }
+
+    @Test
+    void 이미_있는_사번으로_가입하면_A005이고_저장하지_않는다() {
+        when(userRepository.existsByEmployeeNo("E1001")).thenReturn(true);
+
+        assertError(() -> authService.signup(new SignupRequest("E1001", "password-1", "중복", null, null)),
+                ErrorCode.EMPLOYEE_NO_DUPLICATED);
+        verify(userRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void 동시에_같은_사번으로_가입해_고유_제약에_걸려도_A005() {
+        when(userRepository.saveAndFlush(any(User.class))).thenThrow(new DataIntegrityViolationException("dup"));
+
+        assertError(() -> authService.signup(new SignupRequest("E3001", "password-1", "동시", null, null)),
+                ErrorCode.EMPLOYEE_NO_DUPLICATED);
+    }
+
     private void assertLoginFailed(LoginRequest request) {
-        assertThatThrownBy(() -> authService.login(request)).isInstanceOfSatisfying(BusinessException.class,
-                e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.LOGIN_FAILED));
+        assertError(() -> authService.login(request), ErrorCode.LOGIN_FAILED);
+    }
+
+    private static void assertError(org.assertj.core.api.ThrowableAssert.ThrowingCallable call, ErrorCode code) {
+        assertThatThrownBy(call).isInstanceOfSatisfying(BusinessException.class,
+                e -> assertThat(e.getErrorCode()).isEqualTo(code));
     }
 }
