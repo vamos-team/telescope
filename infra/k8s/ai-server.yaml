@@ -25,6 +25,8 @@ spec:
               valueFrom: { secretKeyRef: { name: ai-server-secrets, key: OPENAI_API_KEY, optional: true } }
             - name: HF_TOKEN
               valueFrom: { secretKeyRef: { name: ai-server-secrets, key: HF_TOKEN, optional: true } }
+            - name: OPENDART_API_KEY
+              valueFrom: { secretKeyRef: { name: ai-server-secrets, key: OPENDART_API_KEY, optional: true } }
           envFrom:
             - configMapRef: { name: s3-config }
           # TODO : 임시 값

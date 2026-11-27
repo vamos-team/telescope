@@ -17,6 +17,7 @@ spec:
             - { name: JAVA_TOOL_OPTIONS, value: "-XX:MaxRAMPercentage=75" }
             - { name: TZ, value: Asia/Seoul }
             - { name: AI_SERVICE_MODE, value: http }
+            - { name: DATASYNC_CRON, value: "0 0 3 * * *" } # 매일 03:00(서울). 대상 회사(DATASYNC_CORP_CODES)가 없으면 시작하지 않는다
             - { name: AI_SERVICE_BASE_URL, value: "http://ai-server:8000" }
             - name: AI_SERVICE_API_KEY
               valueFrom: { secretKeyRef: { name: ai-server-secrets, key: INTERNAL_API_KEY } }
