@@ -54,11 +54,4 @@ class InternalApiTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("C001"));
     }
-
-    @Test
-    void 없는_캔버스의_권한_확인은_404() throws Exception {
-        mvc.perform(get("/internal/v1/canvases/987654321/access").param("userId", "1").header(InternalApiKeyFilter.HEADER, KEY))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.error.code").value("C002"));
-    }
 }

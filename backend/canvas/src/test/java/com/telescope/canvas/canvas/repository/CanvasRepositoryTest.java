@@ -129,10 +129,11 @@ class CanvasRepositoryTest {
         // 같은 세션으로 다시 flush하면 세션이 깨지므로 중복 삽입은 JDBC로 확인한다.
         // PostgreSQL은 오류 뒤 같은 트랜잭션의 쿼리를 거부하므로 이 확인을 마지막에 둔다
         assertThatThrownBy(() -> jdbc.update(
-                "insert into canvas_event (canvas_id, seq, request_id, author_id, type, payload) "
-                        + "values (?, 1, ?, ?, 'move_card', '{}'::jsonb)",
+                "insert into canvas_event (canvas_id, seq, request_id, author_id, type, payload, created_at, updated_at) "
+                        + "values (?, 1, ?, ?, 'move_card', '{}'::jsonb, now(), now())",
                 canvas.getId(), UUID.randomUUID(), owner))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("uk_canvas_event_seq");
     }
 
     private static final java.util.concurrent.atomic.AtomicLong USER_IDS = new java.util.concurrent.atomic.AtomicLong(1000);
