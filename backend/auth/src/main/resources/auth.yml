@@ -7,7 +7,7 @@ spring:
     hibernate:
       ddl-auto: validate
     properties:
-      "[hibernate.default_schema]": app
+      "[hibernate.default_schema]": auth
 
 app:
   internal-api-key: ${INTERNAL_API_KEY:}

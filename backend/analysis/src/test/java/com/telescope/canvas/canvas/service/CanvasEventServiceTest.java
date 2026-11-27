@@ -1,6 +1,6 @@
 package com.telescope.canvas.canvas.service;
 
-import com.telescope.analysis.AnalysisApplication;
+import com.telescope.integration.IntegrationTestApplication;
 import org.springframework.test.context.ContextConfiguration;
 import com.telescope.analysis.TestcontainersConfig;
 import com.telescope.canvas.canvas.dto.CanvasCreateRequest;
@@ -17,7 +17,7 @@ import com.telescope.canvas.canvas.repository.CanvasMappingRepository;
 import com.telescope.common.config.JpaAuditingConfig;
 import com.telescope.common.exception.BusinessException;
 import com.telescope.common.exception.ErrorCode;
-import com.telescope.analysis.bridge.LocalUserDirectory;
+import com.telescope.integration.bridge.LocalUserDirectory;
 import com.telescope.auth.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,7 +57,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 규칙: {@code docs/backend/api-spec.md} 5장, 결정 이유: {@code docs/backend/canvas.md}.
  */
 @DataJpaTest
-@ContextConfiguration(classes = AnalysisApplication.class)
+@ContextConfiguration(classes = IntegrationTestApplication.class)
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfig.class, JpaAuditingConfig.class, CanvasService.class, CanvasEventService.class,
         CanvasAccessService.class, CanvasPeople.class, UserService.class, LocalUserDirectory.class, CanvasEventServiceTest.TestBeans.class})

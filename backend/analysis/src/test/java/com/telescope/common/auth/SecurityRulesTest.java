@@ -1,6 +1,6 @@
 package com.telescope.common.auth;
 
-import com.telescope.analysis.AnalysisApplication;
+import com.telescope.integration.IntegrationTestApplication;
 import com.telescope.analysis.TestcontainersConfig;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
@@ -36,7 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>컨트롤러별 테스트에 흩어진 401·403 확인은 그대로 두고, 이 테스트는 규칙 전체를 다시 확인하는 용도다.
  * 동작을 바꾸지 않는다. 규칙과 다른 동작을 찾으면 고치지 않고 이슈에 남긴다.
  */
-@SpringBootTest(classes = AnalysisApplication.class)
+@SpringBootTest(classes = IntegrationTestApplication.class)
 @AutoConfigureMockMvc
 @Import(TestcontainersConfig.class)
 class SecurityRulesTest {

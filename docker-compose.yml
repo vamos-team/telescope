@@ -12,6 +12,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-telescope}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-telescope}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-telescope}
+      # 문서의 캔버스 권한 확인(분리 후 canvas 서비스 호출). 전체 스택은 --profile msa
+      CANVAS_SERVICE_BASE_URL: http://canvas:8080
     depends_on:
       postgres:
         condition: service_healthy

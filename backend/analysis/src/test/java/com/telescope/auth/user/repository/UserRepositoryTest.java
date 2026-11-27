@@ -1,6 +1,6 @@
 package com.telescope.auth.user.repository;
 
-import com.telescope.analysis.AnalysisApplication;
+import com.telescope.integration.IntegrationTestApplication;
 import org.springframework.test.context.ContextConfiguration;
 import com.telescope.analysis.TestcontainersConfig;
 import com.telescope.common.config.JpaAuditingConfig;
@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 사번 조회·중복 확인·부분 검색이 맞게 동작하는지 확인한다.
  */
 @DataJpaTest
-@ContextConfiguration(classes = AnalysisApplication.class)
+@ContextConfiguration(classes = IntegrationTestApplication.class)
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfig.class, JpaAuditingConfig.class})
 class UserRepositoryTest {

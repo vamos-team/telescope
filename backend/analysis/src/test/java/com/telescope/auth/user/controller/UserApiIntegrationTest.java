@@ -1,6 +1,6 @@
 package com.telescope.auth.user.controller;
 
-import com.telescope.analysis.AnalysisApplication;
+import com.telescope.integration.IntegrationTestApplication;
 import com.telescope.analysis.TestcontainersConfig;
 import com.telescope.auth.user.entity.User;
 import com.telescope.auth.user.entity.UserRole;
@@ -29,7 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 각 테스트는 트랜잭션 안에서 돌고 끝나면 되돌린다.
  */
 // K8s 밖에서도 프로브 경로(/actuator/health/liveness·readiness)를 켜서 공개 경로인지 확인한다
-@SpringBootTest(classes = AnalysisApplication.class, properties = "management.endpoint.health.probes.enabled=true")
+@SpringBootTest(classes = IntegrationTestApplication.class, properties = "management.endpoint.health.probes.enabled=true")
 @AutoConfigureMockMvc
 @Import(TestcontainersConfig.class)
 @Transactional

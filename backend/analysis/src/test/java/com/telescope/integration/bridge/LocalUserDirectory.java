@@ -1,4 +1,4 @@
-package com.telescope.analysis.bridge;
+package com.telescope.integration.bridge;
 
 import com.telescope.canvas.canvas.dto.UserRef;
 import com.telescope.canvas.canvas.service.UserDirectory;
@@ -10,6 +10,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
+/** 통합 테스트에서 canvas를 같은 프로세스로 띄울 때 쓰는 사용자 조회. 운영은 각 서비스가 HTTP로 한다. */
 @Component
 @RequiredArgsConstructor
 public class LocalUserDirectory implements UserDirectory {

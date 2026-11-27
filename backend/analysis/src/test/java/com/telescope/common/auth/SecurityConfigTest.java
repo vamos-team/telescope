@@ -1,6 +1,6 @@
 package com.telescope.common.auth;
 
-import com.telescope.analysis.AnalysisApplication;
+import com.telescope.integration.IntegrationTestApplication;
 import org.springframework.test.context.ContextConfiguration;
 import com.telescope.common.config.ClockConfig;
 import com.telescope.common.response.ApiResponse;
@@ -31,7 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 공개 경로는 토큰이 만료돼 있어도 통과. 실제 경로 대신 테스트용 컨트롤러로 규칙만 본다.
  */
 @WebMvcTest(controllers = SecurityConfigTest.TestController.class)
-@ContextConfiguration(classes = AnalysisApplication.class)
+@ContextConfiguration(classes = IntegrationTestApplication.class)
 @Import({SecurityConfig.class, JwtTokenProvider.class, SecurityContextCurrentUserProvider.class, ClockConfig.class,
         SecurityConfigTest.TestController.class})
 class SecurityConfigTest {

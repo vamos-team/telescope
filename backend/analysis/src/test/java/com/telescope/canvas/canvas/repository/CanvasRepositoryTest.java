@@ -1,6 +1,6 @@
 package com.telescope.canvas.canvas.repository;
 
-import com.telescope.analysis.AnalysisApplication;
+import com.telescope.integration.IntegrationTestApplication;
 import org.springframework.test.context.ContextConfiguration;
 import com.telescope.analysis.TestcontainersConfig;
 import com.telescope.canvas.canvas.entity.Canvas;
@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * JSONB 컬럼(문자열 매핑)이 그대로 저장·조회되는지, 목록 조회가 소유·초대를 구분하는지 확인한다.
  */
 @DataJpaTest
-@ContextConfiguration(classes = AnalysisApplication.class)
+@ContextConfiguration(classes = IntegrationTestApplication.class)
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfig.class, JpaAuditingConfig.class})
 class CanvasRepositoryTest {
