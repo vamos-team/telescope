@@ -1,0 +1,112 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: ap-northeast-2
+  ROLE_ARN: arn:aws:iam::881490135253:role/gha-p3-1
+  CLUSTER: skala-pg
+  NAMESPACE: p3-1
+  ECR_REPOSITORY: teams/p3-1/app
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: cd-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, skala-runner]
+    if: github.repository == 'vamos-team/telescope'
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - name: Backend Test
+        working-directory: backend
+        run: chmod +x gradlew && ./gradlew test --no-daemon
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - name: Build & push (backend, frontend, ai-server)
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          for svc in backend frontend; do
+            TAG="${svc}-${GITHUB_SHA}"
+            if aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$TAG" >/dev/null 2>&1; then
+              echo "$TAG 는 이미 ECR 에 있음, 빌드/푸시 건너뜀"
+            else
+              docker buildx build --platform linux/amd64 -t "$REGISTRY/$ECR_REPOSITORY:$TAG" --push "./$svc"
+            fi
+          done
+          TAG="ai-server-${GITHUB_SHA}"
+          if aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$TAG" >/dev/null 2>&1; then
+            echo "$TAG 는 이미 ECR 에 있음, 빌드/푸시 건너뜀"
+          else
+            docker buildx build --platform linux/amd64 -t "$REGISTRY/$ECR_REPOSITORY:$TAG" -f ai/server/Dockerfile --push .
+          fi
+          echo "REGISTRY=$REGISTRY" >> "$GITHUB_ENV"
+
+      - name: kustomize 설치
+        run: |
+          OS=$(uname -s | tr '[:upper:]' '[:lower:]'); ARCH=$(uname -m); [ "$ARCH" = x86_64 ] && ARCH=amd64; [ "$ARCH" = aarch64 ] && ARCH=arm64
+          curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.3/kustomize_v5.4.3_${OS}_${ARCH}.tar.gz" | tar xz -C "$RUNNER_TEMP" kustomize
+
+      - name: 클러스터 연결
+        run: aws eks update-kubeconfig --name "$CLUSTER" --region "$AWS_REGION"
+
+      - name: 이미지 태그 지정
+        working-directory: infra/k8s
+        run: |
+          "$RUNNER_TEMP/kustomize" edit set image \
+            "skala-registry.skala-ai.com/p3-1/backend=$REGISTRY/$ECR_REPOSITORY:backend-${GITHUB_SHA}" \
+            "skala-registry.skala-ai.com/p3-1/frontend=$REGISTRY/$ECR_REPOSITORY:frontend-${GITHUB_SHA}" \
+            "skala-registry.skala-ai.com/p3-1/ai-server=$REGISTRY/$ECR_REPOSITORY:ai-server-${GITHUB_SHA}"
+
+      # Ingress 의 허용 IP 는 저장소에 두지 않고 시크릿 ALLOWED_IPS에서 받아 배포 때만 넣는다.
+      - name: 허용 IP 주입
+        working-directory: infra/k8s
+        env:
+          ALLOWED_IPS: ${{ secrets.ALLOWED_IPS }}
+        run: |
+          ALLOWED_IPS=$(printf '%s' "$ALLOWED_IPS" | tr -d '\r\n')   # 끝의 줄바꿈만 제거
+          test -n "$ALLOWED_IPS" || { echo "시크릿 ALLOWED_IPS 가 비어 있음"; exit 1; }
+          # 값은 로그에 찍지 않고 형식만 확인한다: x.x.x.x/32 를 쉼표로만 이은 한 줄 (공백, 줄바꿈 없음, 각 옥텟 0-255)
+          OCTET='(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])'
+          IP="${OCTET}\.${OCTET}\.${OCTET}\.${OCTET}/32"
+          printf '%s' "$ALLOWED_IPS" | grep -Eq "^${IP}(,${IP})*$" \
+            || { echo "시크릿 ALLOWED_IPS 형식이 올바르지 않음 (예: 1.2.3.4/32,5.6.7.8/32)"; exit 1; }
+          cat > ingress-allowed-ips.yaml <<EOF
+          apiVersion: networking.k8s.io/v1
+          kind: Ingress
+          metadata:
+            name: web
+            annotations:
+              nginx.ingress.kubernetes.io/whitelist-source-range: "$ALLOWED_IPS"
+          EOF
+          printf 'patches:\n  - path: ingress-allowed-ips.yaml\n' >> kustomization.yaml
+          kubectl kustomize . | grep -q 'whitelist-source-range' || { echo "허용 IP 가 렌더링 결과에 없음"; exit 1; }
+
+      - name: 배포
+        working-directory: infra/k8s
+        run: |
+          kubectl -n "$NAMESPACE" apply -k .
+          kubectl -n "$NAMESPACE" rollout status deployment/backend --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deployment/frontend --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status statefulset/chroma --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deployment/pg-proxy --timeout=120s
+          kubectl -n "$NAMESPACE" rollout status statefulset/ai-server --timeout=300s

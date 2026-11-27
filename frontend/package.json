@@ -8,9 +8,17 @@
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "build-only": "vite build",
-    "type-check": "vue-tsc --build"
+    "type-check": "vue-tsc --build",
+    "test": "vitest run",
+    "electron": "npm run build && electron electron/main.cjs",
+    "electron:dev": "run-p dev \"electron:open -- --dev\"",
+    "electron:open": "electron electron/main.cjs",
+    "build:html": "vue-tsc --build && vite build --mode html && node scripts/inline.mjs"
   },
   "dependencies": {
+    "@stomp/stompjs": "7.5.0",
+    "@vue-flow/core": "1.41.2",
+    "pinia": "2.2.6",
     "vue": "^3.5.42"
   },
   "devDependencies": {
@@ -18,13 +26,19 @@
     "@types/node": "^24.13.4",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/tsconfig": "^0.9.1",
+    "electron": "44.11.6",
     "npm-run-all2": "^9.0.3",
     "typescript": "~6.0.0",
     "vite": "^8.2.2",
     "vite-plugin-vue-devtools": "^8.2.1",
+    "vitest": "5.1.0",
     "vue-tsc": "^3.3.11"
   },
   "engines": {
     "node": "^22.18.0 || >=24.12.0"
-  }
+  },
+  "allowScripts": {
+    "electron@44.11.6": true
+  },
+  "main": "electron/main.cjs"
 }

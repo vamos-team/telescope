@@ -1,0 +1,69 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# 저장소 루트에 배치하세요.
+# 공식 문서: https://docs.coderabbit.ai/reference/configuration
+
+language: ko-KR
+early_access: false
+tone_instructions: >-
+  팀 동료에게 설명하듯 정중하고 간결하게 작성하세요.
+  문제의 근거와 영향, 실행 가능한 수정 방향을 함께 제시하고,
+  필수 수정과 선택적인 개선 제안을 명확히 구분하세요.
+
+reviews:
+  # 팀 리뷰의 피로도를 줄이는 균형 잡힌 피드백
+  profile: chill
+  high_level_summary: true
+  changed_files_summary: true
+  review_status: true
+  collapse_walkthrough: true
+  poem: false
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+    # 기본 브랜치는 자동 포함됩니다. 아래는 추가 대상 브랜치의 정규식입니다.
+    base_branches:
+      - "^main$"
+      - "^master$"
+      - "^develop$"
+      - "^release/.*$"
+
+  # 빌드 산출물과 외부 의존성만 제외합니다.
+  # lock 파일, DB 마이그레이션, CI 설정은 리뷰 대상에 유지합니다.
+  path_filters:
+    - "!**/node_modules/**"
+    - "!**/dist/**"
+    - "!**/build/**"
+    - "!**/target/**"
+    - "!**/coverage/**"
+    - "!**/.next/**"
+    - "!**/.gradle/**"
+    - "!**/*.min.js"
+    - "!**/*.min.css"
+
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        저장소에 명시된 팀 컨벤션과 기존 설계, 린터 및 포매터 설정을 우선하세요.
+        변경으로 발생하는 버그, 보안 취약점, 데이터 손실, 호환성 문제를 우선 검토하세요.
+        인증과 인가, 입력 검증, 민감정보 노출, 예외 처리, 자원 해제,
+        동시성, 트랜잭션 경계 및 불필요한 외부 호출을 관련 코드에서 확인하세요.
+        API나 데이터 구조 변경 시 호출부와의 호환성 및 마이그레이션 영향을 확인하세요.
+        실패 및 경계 조건에서 중요한 동작을 검증할 테스트가 필요한지 확인하세요.
+        추측은 확인이 필요한 사항으로 표현하고, 구체적인 발생 조건과 근거를 제시하세요.
+        포매터가 처리하는 스타일, 개인적인 명명 취향, 변경과 무관한 리팩터링은 지양하세요.
+        같은 원인의 문제를 반복해서 지적하지 말고 대표 위치에 모아서 설명하세요.
+    - path: "**/*.{sql,prisma}"
+      instructions: |
+        스키마 변경의 기존 데이터 호환성, 데이터 손실 가능성, 제약조건을 확인하세요.
+        쿼리의 인덱스 활용, 대량 데이터 처리 비용, 잠금 및 배포 순서 영향을 검토하세요.
+        이미 적용된 마이그레이션을 수정하는 경우 팀의 마이그레이션 정책을 확인하세요.
+    - path: ".github/workflows/*.{yml,yaml}"
+      instructions: |
+        토큰 권한의 최소화, 비밀값의 로그 노출, 외부 입력의 셸 삽입을 확인하세요.
+        신뢰할 수 없는 PR 코드가 비밀값이나 쓰기 권한에 접근하는지 확인하세요.
+
+chat:
+  # 멘션했을 때 답변하여 팀 대화 중 불필요한 개입을 줄입니다.
+  auto_reply: false

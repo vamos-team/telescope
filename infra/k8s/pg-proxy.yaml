@@ -1,0 +1,24 @@
+# RDS(PostgreSQL) 중계 파드. RDS는 VPC 안에서만 접속되므로, 
+# 노트북에서 테이블을 만들거나 조회할 때 이 파드로 port-forward 한다:
+#   kubectl port-forward deploy/pg-proxy 5432:5432
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: pg-proxy, labels: { app: pg-proxy } }
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector: { matchLabels: { app: pg-proxy } }
+  template:
+    metadata: { labels: { app: pg-proxy } }
+    spec:
+      containers:
+        - name: socat
+          image: alpine/socat:1.8.1.1
+          env:
+            - name: PGHOST
+              valueFrom: { secretKeyRef: { name: rds-credentials, key: PGHOST } }
+          args: ["TCP-LISTEN:5432,fork,reuseaddr", "TCP:$(PGHOST):5432"]
+          ports: [{ containerPort: 5432 }]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 100m, memory: 64Mi }
