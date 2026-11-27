@@ -22,7 +22,8 @@ spec:
               valueFrom: { secretKeyRef: { name: ai-server-secrets, key: INTERNAL_API_KEY } }
           envFrom:
             - secretRef: { name: rds-credentials }   
-            - configMapRef: { name: s3-config }      
+            - configMapRef: { name: s3-config }
+            - secretRef: { name: backend-secrets }
           resources:
             requests: { cpu: 300m, memory: 768Mi }
             limits:   { cpu: 700m, memory: 1Gi }
