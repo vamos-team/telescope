@@ -4,6 +4,7 @@ import com.telescope.backend.global.exception.ErrorCode;
 import com.telescope.backend.global.response.ApiResponse;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -38,7 +39,8 @@ public class SecurityConfig {
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtTokenProvider tokenProvider) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtTokenProvider tokenProvider,
+            @Value("${app.internal-api-key:}") String internalApiKey) throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
@@ -53,6 +55,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/signup").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/ws").permitAll()
+                        // 서비스 간 내부 API는 토큰 대신 InternalApiKeyFilter가 내부 키로 확인한다
+                        .requestMatchers(InternalApiKeyFilter.PATH_PREFIX + "**").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(handling -> handling
                         .authenticationEntryPoint((request, response, e) -> {
@@ -61,6 +65,7 @@ public class SecurityConfig {
                         })
                         .accessDeniedHandler((request, response, e) -> write(response, ErrorCode.ACCESS_DENIED)))
                 .addFilterBefore(new JwtAuthenticationFilter(tokenProvider), UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(new InternalApiKeyFilter(internalApiKey, SecurityConfig::write), JwtAuthenticationFilter.class)
                 .build();
     }
 
