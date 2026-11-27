@@ -6,7 +6,7 @@ import com.telescope.canvas.canvas.entity.CanvasRole;
 import com.telescope.canvas.canvas.entity.CanvasShare;
 import com.telescope.canvas.canvas.repository.CanvasRepository;
 import com.telescope.canvas.canvas.repository.CanvasShareRepository;
-import com.telescope.analysis.bridge.LocalCanvasAccessClient;
+import com.telescope.integration.bridge.LocalCanvasAccessClient;
 import com.telescope.canvas.canvas.service.CanvasAccessService;
 import com.telescope.analysis.document.dto.DocumentResponse;
 import com.telescope.analysis.document.dto.DocumentUploadCommand;
@@ -69,6 +69,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 실제 PostgreSQL에 커밋되는 상태로 확인한다. 파일 저장소와 ai 서비스는 가짜로 대신한다.
  */
 @DataJpaTest
+@org.springframework.test.context.ContextConfiguration(classes = com.telescope.integration.IntegrationTestApplication.class)
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfig.class, JpaAuditingConfig.class, DocumentService.class,
         DocumentPreparationResultHandler.class, CanvasAccessService.class, LocalCanvasAccessClient.class, JobService.class,

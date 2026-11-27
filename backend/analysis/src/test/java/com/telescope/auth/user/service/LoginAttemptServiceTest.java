@@ -1,6 +1,6 @@
 package com.telescope.auth.user.service;
 
-import com.telescope.analysis.AnalysisApplication;
+import com.telescope.integration.IntegrationTestApplication;
 import com.telescope.analysis.MutableClock;
 import com.telescope.analysis.TestcontainersConfig;
 import com.telescope.common.exception.ErrorCode;
@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 실제 PostgreSQL에서 실패 횟수 세기·잠금·만료·초기화·동시 실패와 트랜잭션 분리를 확인한다(#164).
  * 실패 기록이 따로 커밋되는지 보려고 테스트 자체에는 트랜잭션을 걸지 않고, 매번 테이블을 비운다.
  */
-@SpringBootTest(classes = AnalysisApplication.class)
+@SpringBootTest(classes = IntegrationTestApplication.class)
 @Import({TestcontainersConfig.class, LoginAttemptServiceTest.ClockOverride.class})
 class LoginAttemptServiceTest {
 

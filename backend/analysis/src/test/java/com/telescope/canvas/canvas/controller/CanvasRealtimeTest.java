@@ -1,6 +1,6 @@
 package com.telescope.canvas.canvas.controller;
 
-import com.telescope.analysis.AnalysisApplication;
+import com.telescope.integration.IntegrationTestApplication;
 import com.telescope.analysis.TestcontainersConfig;
 import com.telescope.canvas.canvas.dto.CanvasCreateRequest;
 import com.telescope.canvas.canvas.dto.CanvasEventsRequest;
@@ -55,7 +55,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * <p>인증(#34) 전이므로 테스트용 토큰 검증기("user-{id}" → id)를 쓴다. 구독이 브로커에 실제로 등록됐는지는
  * 시간이 아니라 브로커의 구독 목록을 조회해 확인한다.
  */
-@SpringBootTest(classes = AnalysisApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = IntegrationTestApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import({TestcontainersConfig.class, CanvasRealtimeTest.TestAuth.class})
 class CanvasRealtimeTest {
 

@@ -1,6 +1,6 @@
 package com.telescope.canvas.canvas.repository;
 
-import com.telescope.analysis.AnalysisApplication;
+import com.telescope.integration.IntegrationTestApplication;
 import org.springframework.test.context.ContextConfiguration;
 import com.telescope.analysis.TestcontainersConfig;
 import org.flywaydb.core.Flyway;
@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * V12를 적용해 결과를 본다. 끝나면 임시 스키마를 지운다.
  */
 @DataJpaTest
-@ContextConfiguration(classes = AnalysisApplication.class)
+@ContextConfiguration(classes = IntegrationTestApplication.class)
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(TestcontainersConfig.class)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)

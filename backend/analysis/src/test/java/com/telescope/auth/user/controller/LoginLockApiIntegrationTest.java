@@ -1,6 +1,6 @@
 package com.telescope.auth.user.controller;
 
-import com.telescope.analysis.AnalysisApplication;
+import com.telescope.integration.IntegrationTestApplication;
 import com.telescope.analysis.MutableClock;
 import com.telescope.analysis.TestcontainersConfig;
 import com.telescope.auth.user.entity.User;
@@ -35,7 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 실제 보안 설정·DB로 로그인 실패 잠금 응답을 확인한다(#164 완료 기준).
  * 실패 기록은 로그인 실패와 별도로 커밋되어야 하므로 테스트에 트랜잭션을 걸지 않고, 만든 데이터는 끝나면 지운다.
  */
-@SpringBootTest(classes = AnalysisApplication.class)
+@SpringBootTest(classes = IntegrationTestApplication.class)
 @AutoConfigureMockMvc
 @Import({TestcontainersConfig.class, LoginLockApiIntegrationTest.ClockOverride.class})
 class LoginLockApiIntegrationTest {
