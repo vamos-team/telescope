@@ -33,14 +33,14 @@ com.telescope.analysis
 ├── analysis                문서 분석 결과 관리
 ├── prediction              예상 질문/답변 관리
 ├── chat                    채팅
-├── bridge                  같은 앱 안에서 기능 사이를 잇는 구현 (auth·canvas 전환 전까지)
 └── infra                   외부 시스템 접근 인터페이스
     ├── python              Python(AI) 서버 연동 (docs/backend/ai-contract.md)
     ├── storage             파일 저장소 연동 (docs/backend/file-storage.md)
-    └── ai                  LLM 등 AI 연동
+    ├── ai                  LLM 등 AI 연동
+    └── canvas              canvas 서비스 호출(문서의 캔버스 권한 확인)
 ```
 
-`global`, `infra`, `bridge`를 제외한 각 기능 패키지는 아래 계층 구조를 동일하게 갖는다.
+`global`, `infra`를 제외한 각 기능 패키지는 아래 계층 구조를 동일하게 갖는다.
 
 ```
 <기능>

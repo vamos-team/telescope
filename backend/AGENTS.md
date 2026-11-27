@@ -33,12 +33,11 @@
 | `prediction` | analysis | 예상 질문 실행과 결과, 예측 평가 |
 | `canvas` | canvas | 캔버스, 공유 권한(소유자·편집·보기), 카드·연결 상태, 편집 이벤트, 실시간 전달(WebSocket) |
 | `chat` | analysis | 대화와 메시지, Spring AI 오케스트레이션 |
-| `bridge` | analysis | 같은 앱 안에서 기능 사이를 잇는 구현 (auth·canvas로 트래픽을 넘기기 전까지) |
-| `infra` | analysis, canvas | 외부 연동: `python`(ai 서비스 호출), `storage`(파일), `ai`(ChatClient, MCP Client 설정), `auth`(canvas가 auth 서비스 호출) |
+| `infra` | analysis, canvas | 외부 연동: `python`(ai 서비스 호출), `storage`(파일), `ai`(ChatClient, MCP Client 설정), `auth`(canvas가 auth 서비스 호출), `canvas`(analysis가 canvas 서비스 호출) |
 
 > 예측 평가는 별도 패키지 없이 `prediction`에 포함한다. 패키지가 추가되면 이 표도 갱신한다.
 
-- `global`, `infra`, `bridge`를 제외한 기능 패키지 안은 `controller / service / repository / entity / dto`로 나눈다.
+- `global`, `infra`를 제외한 기능 패키지 안은 `controller / service / repository / entity / dto`로 나눈다.
 - 클래스 이름: `XxxController`, `XxxService`, `XxxRepository`, `Xxx`(Entity), `XxxRequest`, `XxxResponse`
 
 ## 3. 계층 규칙
