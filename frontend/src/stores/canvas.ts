@@ -4,12 +4,13 @@ import { defineStore } from "pinia";
 import { api, docTitle, type CanvasEvent, type Doc } from "../api";
 import { panelOf } from "../local/dashboard";
 import type { Session } from "../local/ai";
-import { setAccessToken, SYNC_MODE } from "../sync/config";
-import { Outbox } from "../sync/outbox";
+import { accessToken, setAccessToken, SYNC_MODE } from "../sync/config";
+import { Outbox, SyncError } from "../sync/outbox";
 import { SeqTracker } from "../sync/seq";
 import { applyRemote } from "../sync/apply";
 import { fromServerEvent, type CanvasNotice, type CursorMessage, type EventsMessage, type PresenceMessage } from "../sync/protocol";
-import { getDocument, openCanvas, postEvents as postServerEvents, versionsOf } from "../sync/http";
+import { fetchMe, getDocument, login as serverLogin, openCanvas, postEvents as postServerEvents, signup as serverSignup, versionsOf,
+  type AuthResult, type AuthUser, type SignupInput } from "../sync/http";
 import { connectCanvas, type RealtimeConnection } from "../sync/realtime";
 import { fromSnapshot, replayEvents } from "../sync/snapshot";
 
@@ -146,7 +147,7 @@ export const useCanvas = defineStore("canvas", {
     // ---- 서버 모드(SYNC_MODE=server)에서만 쓰는 상태 ----
     serverRole: null as Role | null,  // 캔버스 열기 응답·권한 변경 알림의 내 권한
     serverQuarter: null as string | null,
-    myUserId: null as number | null,  // 내 서버 사용자 ID(로그인 #34 후 채움). 내 커서를 걸러낼 때 쓴다
+    myUserId: null as number | null,  // 내 서버 사용자 ID(서버 로그인 때 채움). 내 커서를 걸러낼 때 쓴다
     cursors: {} as Record<string, { x: number; y: number }>,  // 다른 사람 커서(캔버스 좌표), 키는 사용자 ID
     present: [] as number[],  // 지금 이 캔버스에 들어와 있는 사람(사용자 ID)
   }),
@@ -380,7 +381,30 @@ export const useCanvas = defineStore("canvas", {
     },
     /** 서버 모드: 내 커서 위치(캔버스 좌표)를 다른 사람에게 보낸다. */
     sendCursor(x: number, y: number) { connection?.sendCursor(x, y); },
-    login(id: string) {  // 사번으로 들어감. 없는 사번이면 false
+    /**
+     * 로그인 화면에서 들어감. server 모드는 backend 로그인(비밀번호 검사), local 모드는 목업 구성원(비밀번호 검사 없음).
+     * 실패하면 오류를 던짐(문구는 authErrorMessage)
+     */
+    async signIn(employeeNo: string, password: string) {
+      if (SYNC_MODE !== "server") { if (this.login(employeeNo) === false) throw new Error("사번을 확인하세요"); return; }
+      return this.enter(await serverLogin(employeeNo.trim(), password));
+    },
+    /** 회원가입하고 바로 들어감. backend가 필요해 server 모드에서만 됨 */
+    async signUp(input: SignupInput) {
+      if (SYNC_MODE !== "server") throw new Error("회원가입은 서버 연결 모드(VITE_CANVAS_SYNC=server)에서만 할 수 있습니다.");
+      return this.enter(await serverSignup(input));
+    },
+    /** 서버 로그인·회원가입 응답으로 들어감. 토큰은 탭을 닫으면 사라지는 sessionStorage에 둠 */
+    enter(result: AuthResult) {
+      setAccessToken(result.accessToken);
+      this.setServerUser(result.user);
+      return this.restoreCanvas();
+    },
+    // 화면의 사용자 id는 사번 문자열(local 모드와 같은 모양), 서버 숫자 ID는 myUserId
+    setServerUser(u: AuthUser) {
+      this.user = { id: u.employeeNo, name: u.name, dept: u.dept ?? "" }; this.author = u.name; this.myUserId = u.id;
+    },
+    login(id: string) {  // local 모드: 목업 구성원 사번으로 들어감. 없는 사번이면 false
       const m = memberById(id); if (!m) return false;
       this.user = { id: m.id, name: m.name, dept: m.dept }; this.author = m.name;
       try { sessionStorage.setItem(KEY + ":user", JSON.stringify(this.user)); } catch { /* 무시 */ }
@@ -398,11 +422,23 @@ export const useCanvas = defineStore("canvas", {
     },
     async logout() {  // 대기 중인 조작을 지금 사용자 이름으로 저장한 뒤 캔버스 상태를 비움 (다음 사용자가 이전 캔버스를 덮어쓰지 않게)
       await this.flush(); this.save();
-      this.reset(); this.canvasId = ""; this.canvasName = ""; this.user = null;
+      this.reset(); this.canvasId = ""; this.canvasName = ""; this.user = null; this.myUserId = null;
       if (SYNC_MODE === "server") setAccessToken(null);
       try { sessionStorage.removeItem(KEY + ":user"); sessionStorage.removeItem(KEY + ":canvas"); } catch { /* 무시 */ }
     },
-    restoreUser() { try { const u = JSON.parse(sessionStorage.getItem(KEY + ":user") ?? "null"); if (u?.id) return this.login(u.id); } catch { /* 무시 */ } },
+    async restoreUser() {  // 새로고침: server 모드는 저장된 토큰으로 본인 조회, local 모드는 저장된 사번
+      if (SYNC_MODE === "server") {
+        if (!accessToken()) return;
+        try {
+          this.setServerUser(await fetchMe());
+        } catch (err) {
+          if (err instanceof SyncError && err.status === 401) setAccessToken(null);  // 만료·위조: 다시 로그인. 네트워크 오류면 토큰을 남김
+          return;
+        }
+        return this.restoreCanvas();
+      }
+      try { const u = JSON.parse(sessionStorage.getItem(KEY + ":user") ?? "null"); if (u?.id) return this.login(u.id); } catch { /* 무시 */ }
+    },
     save() {
       if (!this.canvasId || !this.user) return;
       const all = readAll(), prev = all[this.canvasId]?.meta;
