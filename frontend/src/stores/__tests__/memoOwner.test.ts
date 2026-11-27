@@ -27,8 +27,11 @@ it("메모는 단 사람만 고치고 지운다", () => {
   cv.setCardMemo("t", "고침");
   cv.removeLink("l");
   cv.remove("other");
+  cv.remove("t");     // 남의 카드 메모가 함께 사라지므로 막힘
+  cv.remove("mine");  // 내 메모 카드지만 닿는 선에 남의 선 메모가 있어 막힘
 
   expect(memo("mine")?.text).toBe("고친 내 메모");
+  expect(cv.cards.map((c) => c.id)).toEqual(["mine", "other", "t"]);
   expect(memo("other")?.text).toBe("남의 메모");
   expect(cv.links[0].memo).toBe("남의 선 메모");
   expect(cv.cards.find((c) => c.id === "t")?.memo).toBe("남의 카드 메모");

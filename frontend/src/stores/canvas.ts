@@ -542,11 +542,14 @@ export const useCanvas = defineStore("canvas", {
         } catch (err) { this.error = `페이지를 만들지 못했습니다. ${canvasErrorMessage(err)}`; return; }
         this.upsertServerCanvas(made);
         // 만들기 요청은 편집할 사람만 받으므로, 보기 권한이 있으면 공유 명단을 한 번 더 저장한다
+        let shareError = "";
         if (members.some((m) => m.role === "view")) {
           try { await putShares(String(made.id), members.map((m) => ({ userId: m.id, role: m.role }))); }
-          catch (err) { this.error = `공유 설정을 바꾸지 못했습니다. ${canvasErrorMessage(err)}`; }
+          catch (err) { shareError = `공유 설정을 바꾸지 못했습니다. 페이지 정보에서 다시 설정해 주세요. ${canvasErrorMessage(err)}`; }
         }
-        return this.open(String(made.id));
+        await this.open(String(made.id));
+        if (shareError) this.error = shareError;  // open()이 오류를 비우므로 연 뒤에 알린다
+        return;
       }
       await this.flush(); this.save(); this.reset();
       this.canvasId = "cv" + Date.now().toString(36); this.canvasName = opt.name?.trim() || this.defaultName();
@@ -803,6 +806,10 @@ export const useCanvas = defineStore("canvas", {
       if (this.blocked()) return;
       const c = this.cards.find((x) => x.id === id);
       if (c?.kind === "memo" && this.notMyMemo(c.authorId, c.author)) return;
+      // 카드를 지우면 그 카드의 카드 메모와 닿는 선 메모도 사라지므로, 남의 메모가 있으면 지우지 않는다
+      if (c?.memo && this.notMyMemo(c.memoById, c.memoBy)) return;
+      const other = this.links.find((l) => (l.source === id || l.target === id) && l.memo && !this.ownsMemo(l.memoById, l.memoBy));
+      if (other && this.notMyMemo(other.memoById, other.memoBy)) return;
       this.links = this.links.filter((l) => l.source !== id && l.target !== id);
       this.cards = this.cards.filter((c) => c.id !== id);
       this.selected = this.selected.filter((s) => s !== id);
