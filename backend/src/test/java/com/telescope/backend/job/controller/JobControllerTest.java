@@ -22,7 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 보안 필터 없이 컨트롤러 응답만 본다. 로그인 필요({@code 401})는 보안 설정이 모든 경로에 같이 적용하고,
+ * 보안 필터 없이 컨트롤러 응답만 본다. 이 경로는 공개 경로가 아니라 로그인이 필요하고({@code 401}, 보안 설정),
  * 경로별 {@code 401}은 캔버스·문서·적재 컨트롤러 테스트에서 확인한다.
  */
 class JobControllerTest {
