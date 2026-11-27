@@ -191,8 +191,9 @@ def register(registry: PipelineRegistry) -> None:
   - 없으면 `FILE_STORAGE_DIR`(backend 로컬 저장소와 같은 폴더)에서 그 경로를 그대로 쓴다.
   - 키가 폴더를 벗어나거나(`../`, 절대 경로, 하위 폴더) 원본이 없으면 "원본 파일을 찾을 수 없습니다.",
     그 밖의 S3 오류는 "원본 파일을 읽지 못했습니다."로 실패한다. 키·버킷은 문구에 넣지 않는다.
-- 잘못된 설정은 기동 시점에 막는다: real인데 등록 함수가 없음, real인데 원본 위치(S3·로컬)가 없음,
-  버킷은 있는데 리전이 없음.
+- 잘못된 설정은 기동 시점에 막는다: 자료 준비가 등록됐는데 원본 위치(S3·로컬)가 없음, 버킷은 있는데 리전이 없음.
+  (#135에서 바뀜: real 모드에서 등록 함수는 선택이다. 없으면 자료 준비·분석·예측은 `501`이고, 데이터 적재는
+  `DATASYNC_DATA_DIR`이 있으면 ai/server가 직접 붙인다. 이유는 `docs/backend/datasync.md` S9)
 - 이미지에는 `pipelines/`, `ai/` 코드만 넣고 **pipelines 의존성(docling, torch 등)과 모델 파일은 아직
   설치하지 않는다.** 실제 자료 준비 파이프라인(ai 담당, 별도 이슈)이 생길 때 ai 담당과 함께 정한다
   (모델을 이미지에 넣을지 기동 시 받을지, 그에 맞춘 `MAX_CONCURRENT_JOBS` 기본값). 그 전까지 이미지는 가짜 모드로만 쓴다.
@@ -255,7 +256,7 @@ def register(registry: PipelineRegistry) -> None:
 
 #### A6. 이미지는 저장소 루트에서 빌드하고, 무시 목록은 이 Dockerfile 전용으로 둔다
 
-- `pipelines/`와 `ai/`를 함께 넣어야 하므로 빌드 위치를 저장소 루트로 바꿨다: `docker build -f ai/server/Dockerfile .`, `PYTHONPATH=/app`.
+- `pipelines/`와 `ai/`를 함께 넣어야 하므로 빌드 위치를 저장소 루트로 바꿨다: `docker build -f ai/server/Dockerfile .`, `PYTHONPATH=/app`(#135에서 `/app:/app/pipelines`로. 수집기·적재기가 pipelines 폴더 기준으로 서로를 불러서, `datasync.md` S11).
 - 무시 목록은 루트 `.dockerignore` 대신 `ai/server/Dockerfile.dockerignore`에 뒀다(BuildKit은 Dockerfile 이름 옆의 무시 목록을 먼저 쓴다). 루트 파일은 지시가 있을 때만 고치고(루트 `CLAUDE.md` 2번), 루트 무시 목록은 다른 빌드에도 영향을 줄 수 있다.
 - 무시 목록은 "전부 제외 후 `ai/`, `pipelines/`만 포함"으로 썼다. 이미지에 `tests/`, `.env`, `__pycache__`, `Icon` 파일이 들어가지 않는 것을 확인했다.
 
@@ -322,8 +323,10 @@ PipelineFn = Callable[[JobContext, dict], dict]          # (ctx, payload) -> res
 | `INTERNAL_API_KEY` | ○ | — | backend와 공유하는 비밀키 |
 | `DB_PATH` | ○ | — | SQLite 파일 경로 (`data/` 아래 권장) |
 | `MAX_CONCURRENT_JOBS` | | 2 | 동시 실행 상한 (1 이상) |
-| `PIPELINE_MODE` | | `fake` | `fake`(모든 작업 가짜) / `real`(등록 함수가 붙인 작업만) |
-| `PIPELINE_ENTRYPOINT` | real이면 ○ | — | ai 담당 등록 함수 `모듈경로:함수명` |
+| `PIPELINE_MODE` | | `fake` | `fake`(모든 작업 가짜, 데이터 적재는 늘 실패) / `real`(등록된 작업만, 나머지 `501`) |
+| `PIPELINE_ENTRYPOINT` | | — | ai 담당 등록 함수 `모듈경로:함수명`. 없으면 ai 파이프라인을 붙이지 않는다 |
+| `DATASYNC_DATA_DIR` | | — | 재무 데이터 적재 작업 폴더(#135). real 모드에서 값이 있으면 적재를 받는다 |
+| `OPENDART_API_KEY` | 적재 시 ○ | — | 수집기가 프로세스 환경변수(또는 저장소 루트 `.env`)에서 직접 읽는다. `ai/server/.env`로는 전달되지 않는다. 배포는 Secret(`datasync.md` 3장) |
 | `S3_BUCKET` | | — | 있으면 자료 준비 원본을 S3에서 받는다 |
 | `AWS_REGION` | `S3_BUCKET`이면 ○ | — | S3 리전 |
 | `FILE_STORAGE_DIR` | real이고 S3가 없으면 ○ | — | 로컬 원본 폴더. backend의 `FILE_STORAGE_DIR`과 같은 곳 |

@@ -75,17 +75,33 @@ def test_real_mode_rejects_unregistered_job_types_without_creating_a_job(real_cl
     assert res.json() == {"detail": "아직 지원하지 않는 작업입니다."}
 
 
-@pytest.mark.parametrize(
-    "overrides, message",
-    [
-        ({"pipeline_mode": "real"}, "PIPELINE_ENTRYPOINT"),
-        ({"pipeline_mode": "real", "pipeline_entrypoint": ENTRY}, "FILE_STORAGE_DIR"),
-        ({"s3_bucket": "bucket"}, "AWS_REGION"),
-    ],
-)
-def test_invalid_combinations_stop_at_startup(db_path, overrides, message):
-    with pytest.raises(ValidationError, match=message):
-        make_settings(db_path, **overrides)
+def test_bucket_without_region_stops_at_startup(db_path):
+    with pytest.raises(ValidationError, match="AWS_REGION"):
+        make_settings(db_path, s3_bucket="bucket")
+
+
+def test_document_preparation_without_file_source_stops_at_startup(db_path):
+    settings = make_settings(db_path, pipeline_mode="real", pipeline_entrypoint=ENTRY)
+    with pytest.raises(ValueError, match="FILE_STORAGE_DIR"):
+        build_registry(settings)
+
+
+def test_real_mode_without_entrypoint_rejects_everything_except_data_sync(db_path, tmp_path):
+    nothing = build_registry(make_settings(db_path, pipeline_mode="real"))
+    assert not any(nothing.supports(t) for t in JobType)
+
+    with_sync = build_registry(make_settings(db_path, pipeline_mode="real", datasync_data_dir=str(tmp_path)))
+    assert with_sync.supports(JobType.DATA_SYNC)
+    assert not with_sync.supports(JobType.DOCUMENT_PREPARATION)
+
+
+def test_fake_mode_never_fakes_a_data_sync(db_path):
+    from jobs.pipeline import JobContext, PipelineError
+
+    registry = build_registry(make_settings(db_path))
+    ctx = JobContext(job_id="j", as_of_date=None, allowed_document_version_ids=None)
+    with pytest.raises(PipelineError, match="적재하지 않습니다"):
+        registry.get(JobType.DATA_SYNC)(ctx, {})
 
 
 @pytest.mark.parametrize("spec", ["no_colon", ":register", "sample_entrypoint:", "sample_entrypoint:missing"])

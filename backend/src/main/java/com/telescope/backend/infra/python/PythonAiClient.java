@@ -28,6 +28,11 @@ public interface PythonAiClient {
     JobStartResponse startPrediction(PredictionRequest request);
 
     /**
+     * 재무 데이터 적재 작업(DART 수집 → 새 DuckDB 파일)을 시작한다(#135).
+     */
+    JobStartResponse startDataSync(DataSyncRequest request);
+
+    /**
      * 작업 상태를 조회한다. 상태 폴링 용도로 반복 호출된다.
      *
      * @param jobId {@link JobStartResponse#jobId()}로 발급받은 식별자

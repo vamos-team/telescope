@@ -97,7 +97,7 @@ class PythonAiClientHttpTest {
 
         assertThatThrownBy(() -> client.startAnalysis(
                 new AnalysisRequest("run-1", List.of("v1"), LocalDate.of(2026, 6, 30), null)))
-                .isInstanceOf(AiCallFailedException.class)
+                .isInstanceOf(AiCallRejectedException.class)
                 .hasMessage("ai 서비스가 아직 지원하지 않는 작업입니다.");
     }
 
@@ -108,7 +108,7 @@ class PythonAiClientHttpTest {
                         .body("{\"detail\":[{\"loc\":[\"body\",\"asOfDate\"]}]}"));
 
         assertThatThrownBy(() -> client.startPrediction(new PredictionRequest("run-1", LocalDate.of(2026, 6, 30))))
-                .isInstanceOf(AiCallFailedException.class)
+                .isInstanceOf(AiCallRejectedException.class)
                 .hasMessage("ai 서비스가 작업 시작을 거절했습니다.");
     }
 
@@ -118,7 +118,8 @@ class PythonAiClientHttpTest {
                 .andRespond(withStatus(HttpStatus.ACCEPTED).contentType(MediaType.APPLICATION_JSON).body("{}"));
 
         assertThatThrownBy(() -> client.startPrediction(new PredictionRequest("run-1", LocalDate.of(2026, 6, 30))))
-                .isInstanceOf(AiCallFailedException.class);
+                .isInstanceOf(AiCallFailedException.class)
+                .isNotInstanceOf(AiCallRejectedException.class);  // 접수됐는지 알 수 없는 실패
     }
 
     @Test

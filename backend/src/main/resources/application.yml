@@ -31,6 +31,13 @@ infra:
     status-read-timeout: 3s
 
 app:
+  # 재무 데이터 적재 배치(#135). 시작은 cron(서울 시간), "-"이면 꺼짐(로컬·테스트 기본). 배포는 DATASYNC_CRON="0 0 3 * * *"
+  datasync:
+    cron: ${DATASYNC_CRON:-}
+    poll-interval: ${DATASYNC_POLL_INTERVAL:PT1M}
+    # 대상 회사 DART 고유번호(쉼표로 구분). 비어 있으면 적재를 시작하지 않는다
+    corp-codes: ${DATASYNC_CORP_CODES:}
+    years: ${DATASYNC_YEARS:5}
   # 액세스 토큰(#34). 서명 키는 환경변수로만 넣는다(32바이트 이상, 없으면 기동 실패). 기본 1시간, refresh 토큰 없음(api-spec 10장)
   jwt:
     secret: ${JWT_SECRET:}
