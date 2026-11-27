@@ -20,6 +20,48 @@ services:
     ports:
       - "8080:8080"
 
+  # backend를 서비스로 나눈 auth·canvas. 같은 PostgreSQL을 쓰고, 마이그레이션은 backend(work)가 한다.
+  # 실행: docker compose --profile msa up
+  auth:
+    build:
+      context: ./backend
+      args: { MODULE: auth }
+    image: ${AUTH_IMAGE:-telescope-auth}
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-telescope}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-telescope}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-telescope}
+    depends_on:
+      - backend
+    restart: on-failure
+    ports:
+      - "8081:8080"
+    profiles: ["msa"]
+
+  canvas:
+    build:
+      context: ./backend
+      args: { MODULE: canvas }
+    image: ${CANVAS_IMAGE:-telescope-canvas}
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-telescope}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-telescope}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-telescope}
+      AUTH_SERVICE_BASE_URL: http://auth:8080
+    depends_on:
+      - backend
+      - auth
+    restart: on-failure
+    ports:
+      - "8082:8080"
+    profiles: ["msa"]
+
   frontend:
     build: ./frontend
     image: ${FRONTEND_IMAGE:-telescope-frontend}
