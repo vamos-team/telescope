@@ -9,6 +9,19 @@
 > backend ↔ ai 호출 규약 자체는 `docs/backend/ai-contract.md`를 따른다. 이 문서는 그 규약을
 > `ai/server` 코드로 어떻게 구현했는지를 다룬다.
 
+## 0. MSA 분리 (#194)
+
+ai-server 하나가 맡던 일을 세 서비스로 나눴다. 작업 껍데기(`ai/server`)는 공유하고, 성격이 다른 일을 분리한다.
+
+| 서비스 | 코드 | 맡는 일 | 주소 |
+|---|---|---|---|
+| 에이전트 `ai-server` | `ai/server` + `ai/` | 분석·예측·질문 생성 | `http://ai-server:8000` |
+| 데이터 파이프라인 `ingest-worker` | `ai/server` 껍데기 + `pipelines/` | 문서 파싱·재무 적재(docling·torch·duckdb) | `http://ingest-worker:8000` |
+| MCP `mcp-server` | `mcp-server/` | DuckDB·Chroma 읽기 전용 조회 | `http://mcp-server:8000` |
+
+- 작업 종류 분배: `analysis`·`prediction` → 에이전트, `document-preparation`·`data-sync` → ingest-worker. backend가 `AI_SERVICE_BASE_URL`·`INGEST_SERVICE_BASE_URL`로 나눠 보낸다(상태 조회도 같은 기준).
+- 서비스마다 `PIPELINE_ENTRYPOINT`로 등록할 파이프라인을 다르게 한다. 지금은 모두 `PIPELINE_MODE=fake`.
+
 ## 1. 디렉토리 구조
 
 ```
