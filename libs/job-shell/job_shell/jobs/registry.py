@@ -3,13 +3,13 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-from jobs.datasync import make_data_sync_pipeline
-from jobs.files import FileSource, LocalFileSource, S3FileSource, with_staged_file
-from jobs.models import JobType
-from jobs.pipeline import JobContext, PipelineError, PipelineFn
+from job_shell.jobs.datasync import make_data_sync_pipeline
+from job_shell.jobs.files import FileSource, LocalFileSource, S3FileSource, with_staged_file
+from job_shell.jobs.models import JobType
+from job_shell.jobs.pipeline import JobContext, PipelineError, PipelineFn
 
 if TYPE_CHECKING:
-    from config import Settings
+    from job_shell.config import Settings
 
 logger = logging.getLogger(__name__)
 

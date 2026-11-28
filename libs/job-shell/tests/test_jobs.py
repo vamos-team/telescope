@@ -6,10 +6,10 @@ from datetime import date
 import pytest
 
 from conftest import ANALYSIS_BODY, HEADERS, wait_for, wait_until
-from jobs.models import JobType
-from jobs.pipeline import PipelineError
-from jobs.repository import JobRepository
-from db import init_db
+from job_shell.jobs.models import JobType
+from job_shell.jobs.pipeline import PipelineError
+from job_shell.jobs.repository import JobRepository
+from job_shell.db import init_db
 
 JOBS = "/internal/v1/jobs"
 

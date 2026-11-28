@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from pydantic.alias_generators import to_camel
 
-from auth import verify_internal_api_key
-from jobs.models import JobStatus, JobType
-from jobs.service import JobService
+from job_shell.auth import verify_internal_api_key
+from job_shell.jobs.models import JobStatus, JobType
+from job_shell.jobs.service import JobService
 
 NonEmptyStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 

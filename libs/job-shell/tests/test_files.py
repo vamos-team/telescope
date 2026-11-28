@@ -8,8 +8,8 @@ import pytest
 from botocore.response import StreamingBody
 from botocore.stub import Stubber
 
-from jobs.files import LocalFileSource, S3FileSource, with_staged_file
-from jobs.pipeline import JobContext, PipelineError
+from job_shell.jobs.files import LocalFileSource, S3FileSource, with_staged_file
+from job_shell.jobs.pipeline import JobContext, PipelineError
 
 BUCKET = "test-bucket"
 CTX = JobContext(job_id="j1", as_of_date=None, allowed_document_version_ids=None)

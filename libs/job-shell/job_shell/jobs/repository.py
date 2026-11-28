@@ -1,8 +1,8 @@
 from contextlib import closing
 from datetime import datetime, timezone
 
-from db import connect
-from jobs.models import Job, JobStatus, JobType
+from job_shell.db import connect
+from job_shell.jobs.models import Job, JobStatus, JobType
 
 
 def _now() -> str:

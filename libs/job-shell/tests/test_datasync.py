@@ -5,14 +5,14 @@ from pathlib import Path
 import pytest
 
 from conftest import HEADERS, wait_for
-from jobs.datasync import (
+from job_shell.jobs.datasync import (
     API_KEY_MISSING_MESSAGE,
     COLLECT_FAILED_MESSAGE,
     LOAD_FAILED_MESSAGE,
     NOTHING_TO_LOAD_MESSAGE,
     make_data_sync_pipeline,
 )
-from jobs.pipeline import JobContext, PipelineError
+from job_shell.jobs.pipeline import JobContext, PipelineError
 
 CTX = JobContext(job_id="j1", as_of_date=None, allowed_document_version_ids=None)
 PAYLOAD = {"data_sync_run_id": "7", "corp_codes": ["00159023", "00190321"], "start": "2021-01-01", "end": "2026-11-27"}

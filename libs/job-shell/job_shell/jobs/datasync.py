@@ -18,7 +18,7 @@ import threading
 from pathlib import Path
 from typing import Any, Callable
 
-from jobs.pipeline import JobContext, PipelineError, PipelineFn
+from job_shell.jobs.pipeline import JobContext, PipelineError, PipelineFn
 
 logger = logging.getLogger(__name__)
 

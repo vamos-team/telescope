@@ -5,10 +5,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
-from jobs.models import JobType
-from jobs.pipeline import JobContext, PipelineError
-from jobs.registry import PipelineRegistry
-from jobs.repository import JobRepository
+from job_shell.jobs.models import JobType
+from job_shell.jobs.pipeline import JobContext, PipelineError
+from job_shell.jobs.registry import PipelineRegistry
+from job_shell.jobs.repository import JobRepository
 
 logger = logging.getLogger(__name__)
 

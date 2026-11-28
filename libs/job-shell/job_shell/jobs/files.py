@@ -15,7 +15,7 @@ from contextlib import AbstractContextManager, closing, contextmanager
 from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
-from jobs.pipeline import JobContext, PipelineError, PipelineFn
+from job_shell.jobs.pipeline import JobContext, PipelineError, PipelineFn
 
 logger = logging.getLogger(__name__)
 

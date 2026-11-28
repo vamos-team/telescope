@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from jobs.models import JobType
+from job_shell.jobs.models import JobType
 
 # 파이프라인이 받은 payload를 테스트가 확인할 수 있게 남긴다
 CALLS: list[dict] = []

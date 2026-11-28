@@ -7,13 +7,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from conftest import ANALYSIS_BODY, HEADERS, make_settings, registry_with, wait_for, wait_until
-from db import init_db
-from jobs.models import JobStatus, JobType
-from jobs.pipeline import JobContext
-from jobs.repository import JobRepository
-from jobs.service import JobService
-from jobs.worker import JobWorker, QueuedJob, WorkerUnavailableError
-from main import create_app
+from job_shell.db import init_db
+from job_shell.jobs.models import JobStatus, JobType
+from job_shell.jobs.pipeline import JobContext
+from job_shell.jobs.repository import JobRepository
+from job_shell.jobs.service import JobService
+from job_shell.jobs.worker import JobWorker, QueuedJob, WorkerUnavailableError
+from job_shell.main import create_app
 
 JOBS = "/internal/v1/jobs"
 

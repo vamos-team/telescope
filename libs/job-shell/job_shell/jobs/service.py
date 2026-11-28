@@ -4,10 +4,10 @@ from collections.abc import Iterable
 from datetime import date
 from typing import Any
 
-from jobs.models import Job, JobType
-from jobs.pipeline import JobContext
-from jobs.repository import JobRepository
-from jobs.worker import SHUTDOWN_ERROR_MESSAGE, JobWorker, QueuedJob, WorkerUnavailableError
+from job_shell.jobs.models import Job, JobType
+from job_shell.jobs.pipeline import JobContext
+from job_shell.jobs.repository import JobRepository
+from job_shell.jobs.worker import SHUTDOWN_ERROR_MESSAGE, JobWorker, QueuedJob, WorkerUnavailableError
 
 logger = logging.getLogger(__name__)
 

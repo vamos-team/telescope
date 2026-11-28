@@ -4,11 +4,11 @@ from collections.abc import Callable, Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from config import Settings
-from jobs.models import JobType
-from jobs.pipeline import PipelineFn
-from jobs.registry import PipelineRegistry
-from main import create_app
+from job_shell.config import Settings
+from job_shell.jobs.models import JobType
+from job_shell.jobs.pipeline import PipelineFn
+from job_shell.jobs.registry import PipelineRegistry
+from job_shell.main import create_app
 
 API_KEY = "test-key"
 HEADERS = {"X-Internal-Api-Key": API_KEY}

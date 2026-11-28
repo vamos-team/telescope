@@ -7,13 +7,13 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from config import Settings
-from db import init_db
-from jobs.registry import PipelineRegistry, build_registry
-from jobs.repository import JobRepository
-from jobs.router import router as jobs_router
-from jobs.service import JobService, UnsupportedJobTypeError
-from jobs.worker import JobWorker, WorkerUnavailableError
+from job_shell.config import Settings
+from job_shell.db import init_db
+from job_shell.jobs.registry import PipelineRegistry, build_registry
+from job_shell.jobs.repository import JobRepository
+from job_shell.jobs.router import router as jobs_router
+from job_shell.jobs.service import JobService, UnsupportedJobTypeError
+from job_shell.jobs.worker import JobWorker, WorkerUnavailableError
 
 logger = logging.getLogger(__name__)
 

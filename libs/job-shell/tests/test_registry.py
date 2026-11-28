@@ -8,9 +8,9 @@ from pydantic import ValidationError
 
 import sample_entrypoint
 from conftest import ANALYSIS_BODY, HEADERS, make_settings, wait_for
-from jobs.models import JobType
-from jobs.registry import build_registry, load_entrypoint
-from main import create_app
+from job_shell.jobs.models import JobType
+from job_shell.jobs.registry import build_registry, load_entrypoint
+from job_shell.main import create_app
 
 JOBS = "/internal/v1/jobs"
 ENTRY = "sample_entrypoint:register"
@@ -96,7 +96,7 @@ def test_real_mode_without_entrypoint_rejects_everything_except_data_sync(db_pat
 
 
 def test_fake_mode_never_fakes_a_data_sync(db_path):
-    from jobs.pipeline import JobContext, PipelineError
+    from job_shell.jobs.pipeline import JobContext, PipelineError
 
     registry = build_registry(make_settings(db_path))
     ctx = JobContext(job_id="j", as_of_date=None, allowed_document_version_ids=None)
@@ -111,7 +111,7 @@ def test_bad_entrypoint_spec_is_rejected(spec):
 
 
 def test_pipeline_keys_in_the_shared_dotenv_do_not_stop_startup(tmp_path):
-    from config import Settings
+    from job_shell.config import Settings
 
     env = tmp_path / ".env"
     env.write_text(
@@ -124,7 +124,7 @@ def test_pipeline_keys_in_the_shared_dotenv_do_not_stop_startup(tmp_path):
 
 
 def test_declared_server_keys_are_still_validated_from_dotenv(tmp_path):
-    from config import Settings
+    from job_shell.config import Settings
 
     env = tmp_path / ".env"
     env.write_text("INTERNAL_API_KEY=x\nDB_PATH=/tmp/j.db\nMAX_CONCURRENT_JOBS=0\n", encoding="utf-8")
