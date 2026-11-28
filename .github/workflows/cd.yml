@@ -50,6 +50,7 @@ jobs:
           AGENT="agent-$(combined services/agent libs/job-shell)"
           INGESTION="ingestion-worker-$(combined services/ingestion-worker libs/job-shell)"
           RETRIEVAL="retrieval-$(tree services/retrieval)"
+          BASE="ingestion-worker-base-$(tree services/ingestion-worker/requirements.txt)"
           {
             echo "research=$RESEARCH"; echo "build_research=$(need_build "$RESEARCH")"
             echo "auth=$AUTH"; echo "build_auth=$(need_build "$AUTH")"
@@ -58,6 +59,7 @@ jobs:
             echo "agent=$AGENT"; echo "build_agent=$(need_build "$AGENT")"
             echo "ingestion=$INGESTION"; echo "build_ingestion=$(need_build "$INGESTION")"
             echo "retrieval=$RETRIEVAL"; echo "build_retrieval=$(need_build "$RETRIEVAL")"
+            echo "ingest_base=$BASE"; echo "build_base=$(need_build "$BASE")"
           } | tee -a "$GITHUB_OUTPUT"
 
       - uses: actions/setup-java@v4
@@ -84,6 +86,8 @@ jobs:
           BUILD_AGENT: ${{ steps.tags.outputs.build_agent }}
           BUILD_INGESTION: ${{ steps.tags.outputs.build_ingestion }}
           BUILD_RETRIEVAL: ${{ steps.tags.outputs.build_retrieval }}
+          BASE: ${{ steps.tags.outputs.ingest_base }}
+          BUILD_BASE: ${{ steps.tags.outputs.build_base }}
         run: |
           build() {
             if [ "$1" != true ]; then echo "$2 는 이미 ECR 에 있음, 빌드/푸시 건너뜀"; return; fi
@@ -94,7 +98,8 @@ jobs:
           build "$BUILD_CANVAS" "$CANVAS" Dockerfile.jvm . --build-arg MODULE=canvas
           build "$BUILD_FRONTEND" "$FRONTEND" services/frontend/Dockerfile services/frontend
           build "$BUILD_AGENT" "$AGENT" services/agent/Dockerfile .
-          build "$BUILD_INGESTION" "$INGESTION" services/ingestion-worker/Dockerfile .
+          build "$BUILD_BASE" "$BASE" services/ingestion-worker/base.Dockerfile .
+          build "$BUILD_INGESTION" "$INGESTION" services/ingestion-worker/Dockerfile . --build-arg INGEST_BASE="$REGISTRY/$ECR_REPOSITORY:$BASE"
           build "$BUILD_RETRIEVAL" "$RETRIEVAL" services/retrieval/Dockerfile services/retrieval
           echo "REGISTRY=$REGISTRY" >> "$GITHUB_ENV"
 
