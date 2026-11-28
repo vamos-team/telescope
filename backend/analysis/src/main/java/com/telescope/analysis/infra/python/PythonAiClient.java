@@ -10,6 +10,8 @@ package com.telescope.analysis.infra.python;
  * <p>TODO(가칭): 메서드 시그니처와 DTO 필드는 ai 담당자와 아직 조율하지 않은 초안이다.
  * 실제 ai/ FastAPI 엔드포인트 계약이 나오면 다시 맞춘다.
  */
+import com.telescope.analysis.job.entity.JobType;
+
 public interface PythonAiClient {
 
     /**
@@ -35,9 +37,10 @@ public interface PythonAiClient {
     /**
      * 작업 상태를 조회한다. 상태 폴링 용도로 반복 호출된다.
      *
+     * @param jobType 작업 종류. 상태 조회를 작업을 시작한 서비스(에이전트/ingest)로 보내는 데 쓴다
      * @param jobId {@link JobStartResponse#jobId()}로 발급받은 식별자
      * @throws AiJobNotFoundException jobId에 해당하는 작업이 없으면 던진다. 그 외 호출 실패(네트워크 등)는 다른 RuntimeException으로 구분된다
      *         (실제 구현은 {@link AiCallFailedException})
      */
-    JobStatusResponse getJobStatus(String jobId);
+    JobStatusResponse getJobStatus(JobType jobType, String jobId);
 }

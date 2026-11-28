@@ -24,6 +24,7 @@ class PythonAiClientConfigTest {
         runner.withPropertyValues(
                         "infra.python-ai-client.mode=http",
                         "infra.python-ai-client.base-url=http://ai-server:8000",
+                        "infra.python-ai-client.ingest-base-url=http://ingest-worker:8000",
                         "infra.python-ai-client.api-key=test-key")
                 .run(context -> {
                     assertThat(context).hasSingleBean(PythonAiClient.class);
@@ -41,14 +42,24 @@ class PythonAiClientConfigTest {
     @Test
     void http_모드인데_비밀키가_없으면_기동에_실패한다() {
         runner.withPropertyValues("infra.python-ai-client.mode=http",
-                        "infra.python-ai-client.base-url=http://ai-server:8000")
+                        "infra.python-ai-client.base-url=http://ai-server:8000",
+                        "infra.python-ai-client.ingest-base-url=http://ingest-worker:8000")
                 .run(context -> assertThat(context).hasFailed()
                         .getFailure().rootCause().hasMessageContaining("AI_SERVICE_API_KEY"));
     }
 
     @Test
+    void http_모드인데_ingest_주소가_없으면_기동에_실패한다() {
+        runner.withPropertyValues("infra.python-ai-client.mode=http",
+                        "infra.python-ai-client.base-url=http://ai-server:8000",
+                        "infra.python-ai-client.api-key=test-key")
+                .run(context -> assertThat(context).hasFailed()
+                        .getFailure().rootCause().hasMessageContaining("INGEST_SERVICE_BASE_URL"));
+    }
+
+    @Test
     void 설정_출력에_비밀키가_보이지_않는다() {
-        PythonAiClientProperties props = new PythonAiClientProperties("http", "http://ai", "secret-value",
+        PythonAiClientProperties props = new PythonAiClientProperties("http", "http://ai", "http://ingest", "secret-value",
                 java.time.Duration.ofSeconds(2), java.time.Duration.ofSeconds(5), java.time.Duration.ofSeconds(3));
         assertThat(props.toString()).doesNotContain("secret-value");
     }

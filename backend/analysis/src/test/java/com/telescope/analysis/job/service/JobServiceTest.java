@@ -411,7 +411,7 @@ class JobServiceTest {
         }
 
         @Override
-        public JobStatusResponse getJobStatus(String jobId) {
+        public JobStatusResponse getJobStatus(com.telescope.analysis.job.entity.JobType jobType, String jobId) {
             int order = calls.incrementAndGet();
             if (barrier != null) {
                 try {

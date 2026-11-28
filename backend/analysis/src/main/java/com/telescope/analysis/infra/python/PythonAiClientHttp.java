@@ -1,5 +1,6 @@
 package com.telescope.analysis.infra.python;
 
+import com.telescope.analysis.job.entity.JobType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.client.HttpClientErrorException;
@@ -27,40 +28,51 @@ public class PythonAiClientHttp implements PythonAiClient {
 
     static final String JOBS_PATH = "/internal/v1/jobs";
 
-    private final RestClient startClient;
-    private final RestClient statusClient;
+    private final RestClient agentStartClient;
+    private final RestClient agentStatusClient;
+    private final RestClient ingestStartClient;
+    private final RestClient ingestStatusClient;
 
     /**
-     * 시작 호출용과 상태 조회용 클라이언트를 받는다. 둘은 읽기 타임아웃만 다르고,
-     * 주소와 {@code X-Internal-Api-Key} 헤더는 이미 설정돼 있어야 한다.
+     * 에이전트(분석·예측)와 ingest(자료 준비·적재)별로 시작·상태 클라이언트를 받는다.
+     * 작업 종류에 따라 시작과 상태 조회를 각 서비스로 보낸다(각 서비스가 자기 작업 상태를 가진다).
+     * 각 클라이언트는 주소·{@code X-Internal-Api-Key} 헤더·타임아웃이 설정돼 있어야 한다.
      */
-    public PythonAiClientHttp(RestClient startClient, RestClient statusClient) {
-        this.startClient = startClient;
-        this.statusClient = statusClient;
+    public PythonAiClientHttp(RestClient agentStartClient, RestClient agentStatusClient,
+                              RestClient ingestStartClient, RestClient ingestStatusClient) {
+        this.agentStartClient = agentStartClient;
+        this.agentStatusClient = agentStatusClient;
+        this.ingestStartClient = ingestStartClient;
+        this.ingestStatusClient = ingestStatusClient;
+    }
+
+    /** 분석·예측은 에이전트, 자료 준비·적재는 ingest가 맡는다. */
+    private static boolean isAgent(JobType jobType) {
+        return jobType == JobType.ANALYSIS || jobType == JobType.PREDICTION;
     }
 
     /** 자료 준비 작업을 시작한다. */
     @Override
     public JobStartResponse startDocumentPreparation(DocumentPreparationRequest request) {
-        return start("document-preparation", request);
+        return start(ingestStartClient, "document-preparation", request);
     }
 
     /** 분석 작업을 시작한다. */
     @Override
     public JobStartResponse startAnalysis(AnalysisRequest request) {
-        return start("analysis", request);
+        return start(agentStartClient, "analysis", request);
     }
 
     /** 예상 질문 작업을 시작한다. */
     @Override
     public JobStartResponse startPrediction(PredictionRequest request) {
-        return start("prediction", request);
+        return start(agentStartClient, "prediction", request);
     }
 
     /** 재무 데이터 적재 작업을 시작한다(#135). */
     @Override
     public JobStartResponse startDataSync(DataSyncRequest request) {
-        return start("data-sync", request);
+        return start(ingestStartClient, "data-sync", request);
     }
 
     /**
@@ -70,7 +82,8 @@ public class PythonAiClientHttp implements PythonAiClient {
      * @throws AiCallFailedException  그 밖의 실패. 일시 오류로 본다
      */
     @Override
-    public JobStatusResponse getJobStatus(String jobId) {
+    public JobStatusResponse getJobStatus(JobType jobType, String jobId) {
+        RestClient statusClient = isAgent(jobType) ? agentStatusClient : ingestStatusClient;
         JobStatusResponse response;
         try {
             response = statusClient.get()
@@ -90,7 +103,7 @@ public class PythonAiClientHttp implements PythonAiClient {
     }
 
     /** 작업 종류별 시작 경로로 요청을 보내고 발급받은 jobId를 돌려준다. */
-    private JobStartResponse start(String jobKind, Object request) {
+    private JobStartResponse start(RestClient startClient, String jobKind, Object request) {
         JobStartResponse response;
         try {
             response = startClient.post()

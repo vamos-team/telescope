@@ -48,7 +48,7 @@ jobs:
             echo "be_auth=$(be_module '^backend/auth/')"
             echo "be_canvas=$(be_module '^backend/canvas/')"
             echo "frontend=$(changed '^frontend/')"
-            echo "ai-server=$(changed '^(ai|pipelines)/')"
+            echo "ai-server=$(changed '^(ai|pipelines|mcp-server)/')"
           } | tee -a "$GITHUB_OUTPUT"
 
   backend:
@@ -115,7 +115,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.ai-server == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
@@ -138,6 +138,23 @@ jobs:
           push: false
           cache-from: type=gha,scope=ai-server
           cache-to: type=gha,mode=max,scope=ai-server
+      - name: ingest-worker Image Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: pipelines/Dockerfile.worker
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha,scope=ingest-worker
+          cache-to: type=gha,mode=max,scope=ingest-worker
+      - name: mcp-server Image Build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./mcp-server
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha,scope=mcp-server
+          cache-to: type=gha,mode=max,scope=mcp-server
 
   # 필수 체크(ruleset require-ci)가 요구하는 이름. 서비스별 결과를 모아 하나로 판정한다
   build:

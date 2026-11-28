@@ -32,16 +32,21 @@ public class PythonAiClientConfig {
         if (!StringUtils.hasText(properties.baseUrl())) {
             throw new IllegalStateException("infra.python-ai-client.mode=http이면 AI_SERVICE_BASE_URL이 필요합니다.");
         }
+        if (!StringUtils.hasText(properties.ingestBaseUrl())) {
+            throw new IllegalStateException("infra.python-ai-client.mode=http이면 INGEST_SERVICE_BASE_URL이 필요합니다.");
+        }
         if (!StringUtils.hasText(properties.apiKey())) {
             throw new IllegalStateException("infra.python-ai-client.mode=http이면 AI_SERVICE_API_KEY가 필요합니다.");
         }
         return new PythonAiClientHttp(
-                builder(properties, properties.startReadTimeout()).build(),
-                builder(properties, properties.statusReadTimeout()).build());
+                builder(properties.baseUrl(), properties, properties.startReadTimeout()).build(),
+                builder(properties.baseUrl(), properties, properties.statusReadTimeout()).build(),
+                builder(properties.ingestBaseUrl(), properties, properties.startReadTimeout()).build(),
+                builder(properties.ingestBaseUrl(), properties, properties.statusReadTimeout()).build());
     }
 
     /** 주소·비밀키 헤더·타임아웃을 갖춘 클라이언트 빌더. 테스트도 같은 설정으로 만든다. */
-    static RestClient.Builder builder(PythonAiClientProperties properties, Duration readTimeout) {
+    static RestClient.Builder builder(String baseUrl, PythonAiClientProperties properties, Duration readTimeout) {
         // HTTP/1.1로 고정한다. JDK 기본값(HTTP/2)은 http:// 주소에 h2c 업그레이드를 시도하는데,
         // ai/server(uvicorn)는 업그레이드 요청의 본문을 받지 못해 POST가 422(body 누락)로 거절됐다(로컬 확인).
         HttpClient httpClient = HttpClient.newBuilder()
@@ -51,7 +56,7 @@ public class PythonAiClientConfig {
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
         requestFactory.setReadTimeout(readTimeout);
         return RestClient.builder()
-                .baseUrl(properties.baseUrl())
+                .baseUrl(baseUrl)
                 .defaultHeader(API_KEY_HEADER, properties.apiKey())
                 .requestFactory(requestFactory);
     }

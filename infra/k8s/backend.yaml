@@ -23,6 +23,7 @@ spec:
             - { name: DATASYNC_CRON, value: "0 0 3 * * *" } # 매일 03:00(서울)
             - { name: DATASYNC_CORP_CODES, value: "00159023,00243988,00190321,00231363" } # DART 고유번호: SKT, SKB, KT, LGU+
             - { name: AI_SERVICE_BASE_URL, value: "http://ai-server:8000" }
+            - { name: INGEST_SERVICE_BASE_URL, value: "http://ingest-worker:8000" }
             - { name: CANVAS_SERVICE_BASE_URL, value: "http://canvas:8080" }
             - name: AI_SERVICE_API_KEY
               valueFrom: { secretKeyRef: { name: ai-server-secrets, key: INTERNAL_API_KEY } }

@@ -40,11 +40,12 @@ class PythonAiClientHttpTest {
     @BeforeEach
     void setUp() {
         PythonAiClientProperties props = new PythonAiClientProperties(
-                "http", BASE, KEY, Duration.ofSeconds(2), Duration.ofSeconds(5), Duration.ofSeconds(3));
-        RestClient.Builder builder = PythonAiClientConfig.builder(props, props.startReadTimeout());
+                "http", BASE, BASE, KEY, Duration.ofSeconds(2), Duration.ofSeconds(5), Duration.ofSeconds(3));
+        RestClient.Builder builder = PythonAiClientConfig.builder(props.baseUrl(), props, props.startReadTimeout());
         server = MockRestServiceServer.bindTo(builder).build();
         RestClient restClient = builder.build();
-        client = new PythonAiClientHttp(restClient, restClient);
+        // 에이전트·ingest 모두 같은 mock으로 둔다(이 테스트는 호출 형식만 본다). 종류별 주소 분기는 getJobStatus에 JobType으로 전달한다
+        client = new PythonAiClientHttp(restClient, restClient, restClient, restClient);
     }
 
     @Test
@@ -131,7 +132,7 @@ class PythonAiClientHttpTest {
                         {"jobId":"job-1","status":"SUCCEEDED","result":{"summary":"요약"},"errorMessage":null}""",
                         MediaType.APPLICATION_JSON));
 
-        JobStatusResponse status = client.getJobStatus("job-1");
+        JobStatusResponse status = client.getJobStatus(com.telescope.analysis.job.entity.JobType.ANALYSIS, "job-1");
 
         assertThat(status.status()).isEqualTo(AiJobStatus.SUCCEEDED);
         assertThat(status.result()).isEqualTo(Map.of("summary", "요약"));
@@ -145,7 +146,7 @@ class PythonAiClientHttpTest {
                         {"jobId":"job-1","status":"FAILED","result":null,"errorMessage":"원본 파일을 찾을 수 없습니다."}""",
                         MediaType.APPLICATION_JSON));
 
-        JobStatusResponse status = client.getJobStatus("job-1");
+        JobStatusResponse status = client.getJobStatus(com.telescope.analysis.job.entity.JobType.ANALYSIS, "job-1");
 
         assertThat(status.status()).isEqualTo(AiJobStatus.FAILED);
         assertThat(status.errorMessage()).isEqualTo("원본 파일을 찾을 수 없습니다.");
@@ -155,14 +156,14 @@ class PythonAiClientHttpTest {
     void 상태_조회의_404만_없는_작업으로_본다() {
         server.expect(requestTo(BASE + "/internal/v1/jobs/missing")).andRespond(withResourceNotFound());
 
-        assertThatThrownBy(() -> client.getJobStatus("missing")).isInstanceOf(AiJobNotFoundException.class);
+        assertThatThrownBy(() -> client.getJobStatus(com.telescope.analysis.job.entity.JobType.ANALYSIS, "missing")).isInstanceOf(AiJobNotFoundException.class);
     }
 
     @Test
     void 상태_조회의_5xx는_없는_작업이_아니라_일시_오류로_본다() {
         server.expect(requestTo(BASE + "/internal/v1/jobs/job-1")).andRespond(withServerError());
 
-        assertThatThrownBy(() -> client.getJobStatus("job-1"))
+        assertThatThrownBy(() -> client.getJobStatus(com.telescope.analysis.job.entity.JobType.ANALYSIS, "job-1"))
                 .isInstanceOf(AiCallFailedException.class)
                 .isNotInstanceOf(AiJobNotFoundException.class);
     }

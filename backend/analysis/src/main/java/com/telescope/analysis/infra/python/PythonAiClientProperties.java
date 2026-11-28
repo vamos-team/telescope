@@ -9,7 +9,8 @@ import java.time.Duration;
  * ai 서비스 호출 설정({@code infra.python-ai-client}).
  *
  * @param mode               {@code stub}(기본, 가짜 구현) 또는 {@code http}(ai/server 실제 호출)
- * @param baseUrl            ai/server 주소. {@code http} 모드에서 필수 (환경변수 {@code AI_SERVICE_BASE_URL})
+ * @param baseUrl            에이전트(ai-server) 주소. {@code http} 모드에서 필수 (환경변수 {@code AI_SERVICE_BASE_URL})
+ * @param ingestBaseUrl      데이터 파이프라인(ingest-worker) 주소. {@code http} 모드에서 필수 (환경변수 {@code INGEST_SERVICE_BASE_URL})
  * @param apiKey             {@code X-Internal-Api-Key}로 보낼 공유 비밀키. ai/server의 {@code INTERNAL_API_KEY}와 같은 값.
  *                           {@code http} 모드에서 필수 (환경변수 {@code AI_SERVICE_API_KEY})
  * @param connectTimeout     연결 타임아웃 (ai-contract 2.10 제안 2초)
@@ -20,6 +21,7 @@ import java.time.Duration;
 public record PythonAiClientProperties(
         @DefaultValue("stub") String mode,
         String baseUrl,
+        String ingestBaseUrl,
         String apiKey,
         @DefaultValue("2s") Duration connectTimeout,
         @DefaultValue("5s") Duration startReadTimeout,
@@ -29,7 +31,7 @@ public record PythonAiClientProperties(
     /** 비밀키가 로그나 오류 메시지에 찍히지 않도록 가린다. */
     @Override
     public String toString() {
-        return "PythonAiClientProperties[mode=" + mode + ", baseUrl=" + baseUrl + ", apiKey=****"
+        return "PythonAiClientProperties[mode=" + mode + ", baseUrl=" + baseUrl + ", ingestBaseUrl=" + ingestBaseUrl + ", apiKey=****"
                 + ", connectTimeout=" + connectTimeout + ", startReadTimeout=" + startReadTimeout
                 + ", statusReadTimeout=" + statusReadTimeout + "]";
     }
