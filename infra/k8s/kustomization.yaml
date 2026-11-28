@@ -8,6 +8,7 @@ resources:
   - frontend.yaml
   - ingress.yaml
   - chroma.yaml
+  - kafka.yaml
   - pg-proxy.yaml
   - ai-server.yaml
   - ingest-worker.yaml

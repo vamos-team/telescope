@@ -159,6 +159,7 @@ jobs:
           kubectl -n "$NAMESPACE" rollout status deployment/canvas --timeout=300s
           kubectl -n "$NAMESPACE" rollout status deployment/frontend --timeout=300s
           kubectl -n "$NAMESPACE" rollout status statefulset/chroma --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status statefulset/kafka --timeout=300s
           kubectl -n "$NAMESPACE" rollout status deployment/pg-proxy --timeout=120s
           kubectl -n "$NAMESPACE" rollout status statefulset/ai-server --timeout=300s
           kubectl -n "$NAMESPACE" rollout status statefulset/ingest-worker --timeout=300s
