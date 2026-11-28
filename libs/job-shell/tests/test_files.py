@@ -97,7 +97,7 @@ def test_s3_source_closes_the_response_stream_even_when_writing_fails(s3, monkey
     def broken_copy(src, dst):
         raise OSError("디스크 가득 참")
 
-    monkeypatch.setattr("jobs.files.shutil.copyfileobj", broken_copy)
+    monkeypatch.setattr("job_shell.jobs.files.shutil.copyfileobj", broken_copy)
 
     with pytest.raises(OSError):
         with S3FileSource(client, BUCKET).local_file("abc.pdf"):
