@@ -1,22 +1,22 @@
-# 데이터 파이프라인(ingest-worker). 클러스터 내부 전용: http://ingest-worker:8000
-# 작업 껍데기는 ai-server와 같고, 문서 파싱·재무 적재(무거운 의존성)를 맡는다. 지금은 PIPELINE_MODE=fake.
+# 데이터 파이프라인(ingestion-worker). 클러스터 내부 전용: http://ingestion-worker:8000
+# 작업 껍데기(job-shell)를 공유하고, 문서 파싱·재무 적재(무거운 의존성)를 맡는다. 지금은 PIPELINE_MODE=fake.
 apiVersion: apps/v1
 kind: StatefulSet
-metadata: { name: ingest-worker, labels: { app: ingest-worker } }
+metadata: { name: ingestion-worker, labels: { app: ingestion-worker } }
 spec:
-  serviceName: ingest-worker
+  serviceName: ingestion-worker
   replicas: 1
-  selector: { matchLabels: { app: ingest-worker } }
+  selector: { matchLabels: { app: ingestion-worker } }
   template:
-    metadata: { labels: { app: ingest-worker } }
+    metadata: { labels: { app: ingestion-worker } }
     spec:
       serviceAccountName: s3-access
       enableServiceLinks: false
       terminationGracePeriodSeconds: 40
       securityContext: { fsGroup: 1000 }
       containers:
-        - name: ingest-worker
-          image: skala-registry.skala-ai.com/p3-1/ingest-worker
+        - name: ingestion-worker
+          image: skala-registry.skala-ai.com/p3-1/ingestion-worker
           ports: [{ containerPort: 8000 }]
           env:
             - { name: TZ, value: Asia/Seoul }
@@ -61,7 +61,7 @@ spec:
 ---
 apiVersion: v1
 kind: Service
-metadata: { name: ingest-worker }
+metadata: { name: ingestion-worker }
 spec:
-  selector: { app: ingest-worker }
+  selector: { app: ingestion-worker }
   ports: [{ port: 8000, targetPort: 8000 }]

@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
-metadata: { name: backend, labels: { app: backend } }
+metadata: { name: research, labels: { app: research } }
 spec:
   replicas: 1
   revisionHistoryLimit: 3
-  selector: { matchLabels: { app: backend } }
+  selector: { matchLabels: { app: research } }
   template:
-    metadata: { labels: { app: backend } }
+    metadata: { labels: { app: research } }
     spec:
       serviceAccountName: s3-access # IRSA: 키 없이 S3 버킷 접근
       terminationGracePeriodSeconds: 45
       containers:
-        - name: backend
-          image: skala-registry.skala-ai.com/p3-1/backend
+        - name: research
+          image: skala-registry.skala-ai.com/p3-1/research
           ports: [{ containerPort: 8080 }]
           lifecycle:
             preStop: { exec: { command: ["sh", "-c", "sleep 10"] } }
@@ -22,8 +22,8 @@ spec:
             - { name: AI_SERVICE_MODE, value: http }
             - { name: DATASYNC_CRON, value: "0 0 3 * * *" } # 매일 03:00(서울)
             - { name: DATASYNC_CORP_CODES, value: "00159023,00243988,00190321,00231363" } # DART 고유번호: SKT, SKB, KT, LGU+
-            - { name: AI_SERVICE_BASE_URL, value: "http://ai-server:8000" }
-            - { name: INGEST_SERVICE_BASE_URL, value: "http://ingest-worker:8000" }
+            - { name: AI_SERVICE_BASE_URL, value: "http://agent:8000" }
+            - { name: INGEST_SERVICE_BASE_URL, value: "http://ingestion-worker:8000" }
             - { name: CANVAS_SERVICE_BASE_URL, value: "http://canvas:8080" }
             - name: AI_SERVICE_API_KEY
               valueFrom: { secretKeyRef: { name: ai-server-secrets, key: INTERNAL_API_KEY } }
@@ -49,7 +49,7 @@ spec:
 ---
 apiVersion: v1
 kind: Service
-metadata: { name: backend }
+metadata: { name: research }
 spec:
-  selector: { app: backend }
+  selector: { app: research }
   ports: [{ port: 8080, targetPort: 8080 }]
