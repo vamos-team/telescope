@@ -110,7 +110,8 @@ volumes:
   kafka:
     image: apache/kafka:3.9.0
     ports:
-      - "29092:29092"
+      # 루프백에만 바인딩(인증 없는 PLAINTEXT 리스너를 다른 장비에 노출하지 않음). 호스트 localhost:29092 접속은 그대로
+      - "127.0.0.1:29092:29092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller

@@ -17,7 +17,7 @@
 | 로컬 — 컨테이너 안에서(docker-compose) | `kafka:9092` | 같은 compose 네트워크 |
 | 로컬 — 호스트에서(IDE·bootRun) | `localhost:29092` | compose가 29092를 호스트로 매핑 |
 
-백엔드는 `KAFKA_BOOTSTRAP_SERVERS` 환경변수만 읽는다. 주소를 코드에 박지 않는다.
+백엔드는 프로듀서·컨슈머를 구현할 때 `KAFKA_BOOTSTRAP_SERVERS` 환경변수만 읽게 한다(주소를 코드에 박지 않는다). 운영 주입 값은 인프라가 배포 설정에서 넣는다. 현재 PR 범위에는 백엔드 연동 코드가 없다.
 
 ## 토픽 명명 규약
 
@@ -69,6 +69,7 @@ docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
 
 ## 되돌리기
 
-- 매니페스트: `infra/k8s/kustomization.yaml`에서 `kafka.yaml`을 빼면 배포에서 제외된다.
+- 매니페스트: `infra/k8s/kustomization.yaml`에서 `kafka.yaml`을 뺀다. `kubectl apply -k`는 prune을 하지 않으므로, 제외만으로는 이미 떠 있는 리소스가 지워지지 않는다.
+- 리소스 삭제: `kubectl -n <네임스페이스> delete statefulset kafka`, `kubectl -n <네임스페이스> delete service kafka`를 직접 실행한다. 이때 `.github/workflows/cd.yml`의 `rollout status statefulset/kafka` 줄도 같은 변경에서 지운다(없는 StatefulSet을 기다리다 배포가 실패한다).
 - 데이터: StatefulSet을 지워도 PVC(`data-kafka-0`)는 남는다. 완전히 지우려면 PVC도 따로 삭제한다.
 - 로컬: `docker compose down kafka`(볼륨까지 지우려면 `-v`).
