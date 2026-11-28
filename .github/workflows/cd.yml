@@ -49,6 +49,7 @@ jobs:
           FRONTEND="frontend-$(tree frontend)"
           AI_SERVER="ai-server-$(tree ai)"
           INGEST="ingest-worker-$(combined ai/server pipelines)"
+          MCP="mcp-server-$(tree mcp-server)"
           {
             echo "backend=$BACKEND"; echo "build_backend=$(need_build "$BACKEND")"
             echo "auth=$AUTH"; echo "build_auth=$(need_build "$AUTH")"
@@ -56,6 +57,7 @@ jobs:
             echo "frontend=$FRONTEND"; echo "build_frontend=$(need_build "$FRONTEND")"
             echo "ai_server=$AI_SERVER"; echo "build_ai_server=$(need_build "$AI_SERVER")"
             echo "ingest=$INGEST"; echo "build_ingest=$(need_build "$INGEST")"
+            echo "mcp=$MCP"; echo "build_mcp=$(need_build "$MCP")"
           } | tee -a "$GITHUB_OUTPUT"
 
       - uses: actions/setup-java@v4
@@ -73,6 +75,7 @@ jobs:
           FRONTEND: ${{ steps.tags.outputs.frontend }}
           AI_SERVER: ${{ steps.tags.outputs.ai_server }}
           INGEST: ${{ steps.tags.outputs.ingest }}
+          MCP: ${{ steps.tags.outputs.mcp }}
           AUTH: ${{ steps.tags.outputs.auth }}
           CANVAS: ${{ steps.tags.outputs.canvas }}
           BUILD_BACKEND: ${{ steps.tags.outputs.build_backend }}
@@ -81,6 +84,7 @@ jobs:
           BUILD_FRONTEND: ${{ steps.tags.outputs.build_frontend }}
           BUILD_AI_SERVER: ${{ steps.tags.outputs.build_ai_server }}
           BUILD_INGEST: ${{ steps.tags.outputs.build_ingest }}
+          BUILD_MCP: ${{ steps.tags.outputs.build_mcp }}
         run: |
           build() {
             if [ "$1" != true ]; then echo "$2 는 이미 ECR 에 있음, 빌드/푸시 건너뜀"; return; fi
@@ -92,6 +96,7 @@ jobs:
           build "$BUILD_FRONTEND" "$FRONTEND" frontend/Dockerfile frontend
           build "$BUILD_AI_SERVER" "$AI_SERVER" ai/server/Dockerfile .
           build "$BUILD_INGEST" "$INGEST" pipelines/Dockerfile.worker .
+          build "$BUILD_MCP" "$MCP" mcp-server/Dockerfile mcp-server
           echo "REGISTRY=$REGISTRY" >> "$GITHUB_ENV"
 
       - name: kustomize 설치
@@ -111,7 +116,8 @@ jobs:
             "skala-registry.skala-ai.com/p3-1/canvas=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.canvas }}" \
             "skala-registry.skala-ai.com/p3-1/frontend=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.frontend }}" \
             "skala-registry.skala-ai.com/p3-1/ai-server=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.ai_server }}" \
-            "skala-registry.skala-ai.com/p3-1/ingest-worker=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.ingest }}"
+            "skala-registry.skala-ai.com/p3-1/ingest-worker=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.ingest }}" \
+            "skala-registry.skala-ai.com/p3-1/mcp-server=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.mcp }}"
 
       # Ingress 의 허용 IP 는 저장소에 두지 않고 시크릿 ALLOWED_IPS에서 받아 배포 때만 넣는다.
       - name: 허용 IP 주입
@@ -156,3 +162,4 @@ jobs:
           kubectl -n "$NAMESPACE" rollout status deployment/pg-proxy --timeout=120s
           kubectl -n "$NAMESPACE" rollout status statefulset/ai-server --timeout=300s
           kubectl -n "$NAMESPACE" rollout status statefulset/ingest-worker --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deployment/mcp-server --timeout=300s

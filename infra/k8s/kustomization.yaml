@@ -11,6 +11,7 @@ resources:
   - pg-proxy.yaml
   - ai-server.yaml
   - ingest-worker.yaml
+  - mcp-server.yaml
 images:
   - name: skala-registry.skala-ai.com/p3-1/backend
     newName: 881490135253.dkr.ecr.ap-northeast-2.amazonaws.com/teams/p3-1/app
@@ -30,3 +31,6 @@ images:
   - name: skala-registry.skala-ai.com/p3-1/ingest-worker
     newName: 881490135253.dkr.ecr.ap-northeast-2.amazonaws.com/teams/p3-1/app
     newTag: ingest-worker-placeholder
+  - name: skala-registry.skala-ai.com/p3-1/mcp-server
+    newName: 881490135253.dkr.ecr.ap-northeast-2.amazonaws.com/teams/p3-1/app
+    newTag: mcp-server-placeholder

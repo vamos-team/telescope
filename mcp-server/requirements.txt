@@ -1,0 +1,6 @@
+fastapi==0.165.0
+uvicorn==0.34.0
+pydantic-settings==2.7.0
+duckdb==2.0.0           # 재무 수치 판을 읽기 전용으로 연다
+chromadb==1.5.9         # 문서 검색(읽기)
+boto3==1.44.0           # DuckDB 판을 S3에서 받을 때. 자격증명은 기본 체인(IRSA)
