@@ -128,11 +128,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      id-token: write
       contents: read
+      packages: write
     env:
-      ROLE_ARN: arn:aws:iam::881490135253:role/gha-p3-1
-      ECR_REPOSITORY: teams/p3-1/app
+      BASE_IMAGE: ghcr.io/${{ github.repository }}/ingestion-worker-base
+      CACHE_IMAGE: ghcr.io/${{ github.repository }}/buildcache
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
@@ -145,25 +145,22 @@ jobs:
         run: |
           pip install -e .
           python -m pytest -q
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: docker/login-action@v3
         with:
-          role-to-assume: ${{ env.ROLE_ARN }}
-          aws-region: ap-northeast-2
-      - uses: aws-actions/amazon-ecr-login@v2
-        id: ecr
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/setup-buildx-action@v3
-      - name: ingest base 이미지 준비(requirements 바뀔 때만 빌드·푸시, 아니면 ECR 재사용)
+      - name: ingest base 이미지 준비(requirements 바뀔 때만 빌드·푸시, 아니면 GHCR 재사용)
         if: ${{ needs.changes.outputs.ai_ingest == 'true' }}
-        env:
-          REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
-          BASE_TAG="ingestion-worker-base-$(git rev-parse HEAD:services/ingestion-worker/requirements.txt | cut -c1-12)"
-          echo "BASE_REF=$REGISTRY/$ECR_REPOSITORY:$BASE_TAG" >> "$GITHUB_ENV"
-          if aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$BASE_TAG" >/dev/null 2>&1; then
+          BASE_TAG="$( { git rev-parse HEAD:services/ingestion-worker/requirements.txt; git rev-parse HEAD:services/ingestion-worker/base.Dockerfile; } | sha256sum | cut -c1-12)"
+          echo "BASE_REF=$BASE_IMAGE:$BASE_TAG" >> "$GITHUB_ENV"
+          if docker manifest inspect "$BASE_IMAGE:$BASE_TAG" >/dev/null 2>&1; then
             echo "base 이미 있음: $BASE_TAG"
           else
             echo "base 빌드·푸시: $BASE_TAG"
-            docker buildx build --platform linux/amd64 -f services/ingestion-worker/base.Dockerfile -t "$REGISTRY/$ECR_REPOSITORY:$BASE_TAG" --push .
+            docker buildx build --platform linux/amd64 -f services/ingestion-worker/base.Dockerfile -t "$BASE_IMAGE:$BASE_TAG" --push .
           fi
       - name: agent Image Build
         if: ${{ needs.changes.outputs.ai_agent == 'true' }}
@@ -173,8 +170,8 @@ jobs:
           file: services/agent/Dockerfile
           platforms: linux/amd64
           push: false
-          cache-from: type=registry,ref=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache-agent
-          cache-to: type=registry,ref=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache-agent,mode=max
+          cache-from: type=registry,ref=${{ env.CACHE_IMAGE }}:agent
+          cache-to: type=registry,ref=${{ env.CACHE_IMAGE }}:agent,mode=max
       - name: ingestion-worker Image Build
         if: ${{ needs.changes.outputs.ai_ingest == 'true' }}
         uses: docker/build-push-action@v6
@@ -184,8 +181,8 @@ jobs:
           platforms: linux/amd64
           push: false
           build-args: INGEST_BASE=${{ env.BASE_REF }}
-          cache-from: type=registry,ref=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache-ingestion-worker
-          cache-to: type=registry,ref=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache-ingestion-worker,mode=max
+          cache-from: type=registry,ref=${{ env.CACHE_IMAGE }}:ingestion-worker
+          cache-to: type=registry,ref=${{ env.CACHE_IMAGE }}:ingestion-worker,mode=max
       - name: retrieval Image Build
         if: ${{ needs.changes.outputs.ai_mcp == 'true' }}
         uses: docker/build-push-action@v6
@@ -193,8 +190,8 @@ jobs:
           context: ./services/retrieval
           platforms: linux/amd64
           push: false
-          cache-from: type=registry,ref=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache-retrieval
-          cache-to: type=registry,ref=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache-retrieval,mode=max
+          cache-from: type=registry,ref=${{ env.CACHE_IMAGE }}:retrieval
+          cache-to: type=registry,ref=${{ env.CACHE_IMAGE }}:retrieval,mode=max
 
   # 필수 체크(ruleset require-ci)가 요구하는 이름. 서비스별 결과를 모아 하나로 판정한다
   build:
