@@ -1,0 +1,55 @@
+# 에이전트(job-shell 공유 셸 + 에이전트 코드). 클러스터 내부 전용: http://agent:8000
+# 분석·예측을 맡는다(문서 파싱·재무 적재는 ingestion-worker). 지금은 PIPELINE_MODE=fake.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: agent, labels: { app: agent } }
+spec:
+  serviceName: agent
+  replicas: 1 
+  selector: { matchLabels: { app: agent } }
+  template:
+    metadata: { labels: { app: agent } }
+    spec:
+      serviceAccountName: s3-access 
+      enableServiceLinks: false     
+      terminationGracePeriodSeconds: 40 
+      containers:
+        - name: agent
+          image: skala-registry.skala-ai.com/p3-1/agent
+          ports: [{ containerPort: 8000 }]
+          env:
+            - { name: TZ, value: Asia/Seoul }
+            - { name: DB_PATH, value: /data/jobs.db }
+            - name: INTERNAL_API_KEY
+              valueFrom: { secretKeyRef: { name: ai-server-secrets, key: INTERNAL_API_KEY } }
+            - name: OPENAI_API_KEY
+              valueFrom: { secretKeyRef: { name: ai-server-secrets, key: OPENAI_API_KEY, optional: true } }
+          envFrom:
+            - configMapRef: { name: s3-config }
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits:   { cpu: 500m, memory: 1Gi }
+          startupProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 20
+          volumeMounts: [{ name: data, mountPath: /data }]
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: gp3
+        resources: { requests: { storage: 1Gi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: agent }
+spec:
+  selector: { app: agent }
+  ports: [{ port: 8000, targetPort: 8000 }]

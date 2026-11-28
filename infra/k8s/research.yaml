@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: research, labels: { app: research } }
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector: { matchLabels: { app: research } }
+  template:
+    metadata: { labels: { app: research } }
+    spec:
+      serviceAccountName: s3-access # IRSA: 키 없이 S3 버킷 접근
+      terminationGracePeriodSeconds: 45
+      containers:
+        - name: research
+          image: skala-registry.skala-ai.com/p3-1/research
+          ports: [{ containerPort: 8080 }]
+          lifecycle:
+            preStop: { exec: { command: ["sh", "-c", "sleep 10"] } }
+          env:
+            - { name: JAVA_TOOL_OPTIONS, value: "-XX:MaxRAMPercentage=75" }
+            - { name: TZ, value: Asia/Seoul }
+            - { name: AI_SERVICE_MODE, value: http }
+            - { name: DATASYNC_CRON, value: "0 0 3 * * *" } # 매일 03:00(서울)
+            - { name: DATASYNC_CORP_CODES, value: "00159023,00243988,00190321,00231363" } # DART 고유번호: SKT, SKB, KT, LGU+
+            - { name: AI_SERVICE_BASE_URL, value: "http://agent:8000" }
+            - { name: INGEST_SERVICE_BASE_URL, value: "http://ingestion-worker:8000" }
+            - { name: CANVAS_SERVICE_BASE_URL, value: "http://canvas:8080" }
+            - name: AI_SERVICE_API_KEY
+              valueFrom: { secretKeyRef: { name: ai-server-secrets, key: INTERNAL_API_KEY } }
+            - name: INTERNAL_API_KEY
+              valueFrom: { secretKeyRef: { name: ai-server-secrets, key: INTERNAL_API_KEY } }
+          envFrom:
+            - secretRef: { name: rds-credentials }   
+            - configMapRef: { name: s3-config }
+            - secretRef: { name: backend-secrets }
+          resources:
+            requests: { cpu: 300m, memory: 768Mi }
+            limits:   { cpu: 700m, memory: 1Gi }
+          startupProbe:
+            httpGet: { path: /actuator/health, port: 8080 }
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8080 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8080 }
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata: { name: research }
+spec:
+  selector: { app: research }
+  ports: [{ port: 8080, targetPort: 8080 }]

@@ -1,0 +1,46 @@
+# MCP 조회 서비스(읽기 전용). 클러스터 내부 전용: http://retrieval:8000
+# DuckDB 판은 S3에서 받아 읽기 전용으로 열고, Chroma를 조회한다. 쓰기·볼륨은 없다.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: retrieval, labels: { app: retrieval } }
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector: { matchLabels: { app: retrieval } }
+  template:
+    metadata: { labels: { app: retrieval } }
+    spec:
+      serviceAccountName: s3-access   # IRSA: 키 없이 S3(DuckDB 판) 읽기
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: retrieval
+          image: skala-registry.skala-ai.com/p3-1/retrieval
+          ports: [{ containerPort: 8000 }]
+          env:
+            - { name: TZ, value: Asia/Seoul }
+            - { name: CHROMA_URL, value: "http://chroma:8000" }
+            - name: INTERNAL_API_KEY
+              valueFrom: { secretKeyRef: { name: ai-server-secrets, key: INTERNAL_API_KEY } }
+          envFrom:
+            - configMapRef: { name: s3-config }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits:   { cpu: 500m, memory: 512Mi }
+          startupProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata: { name: retrieval }
+spec:
+  selector: { app: retrieval }
+  ports: [{ port: 8000, targetPort: 8000 }]

@@ -1,0 +1,8 @@
+rootProject.name = 'telescope-backend'
+
+include 'backend-common', 'auth', 'canvas', 'research'
+
+project(':backend-common').projectDir = file('libs/backend-common')
+project(':auth').projectDir = file('services/auth')
+project(':canvas').projectDir = file('services/canvas')
+project(':research').projectDir = file('services/research')

@@ -1,0 +1,10 @@
+plugins {
+	id 'org.springframework.boot'
+}
+
+dependencies {
+	testImplementation testFixtures(project(':backend-common'))
+	api project(':backend-common')
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	runtimeOnly 'org.postgresql:postgresql'
+}

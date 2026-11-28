@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       backend: ${{ steps.diff.outputs.backend }}
-      be_analysis: ${{ steps.diff.outputs.be_analysis }}
+      be_research: ${{ steps.diff.outputs.be_research }}
       be_auth: ${{ steps.diff.outputs.be_auth }}
       be_canvas: ${{ steps.diff.outputs.be_canvas }}
       frontend: ${{ steps.diff.outputs.frontend }}
@@ -40,23 +40,23 @@ jobs:
             if printf '%s\n' "$files" | grep -qE '^\.github/workflows/'; then echo true; return; fi
             if printf '%s\n' "$files" | grep -qE "$1"; then echo true; else echo false; fi
           }
-          # backend 모듈 이미지: 공통(common·루트 빌드 파일)이 바뀌면 셋 다, 아니면 바뀐 모듈만 빌드한다
+          # JVM 모듈 이미지: 공통(backend-common·gradle 루트 파일)이 바뀌면 셋 다, 아니면 바뀐 모듈만
           be_module() {
-            if printf '%s\n' "$files" | grep -qE '^\.github/workflows/|^backend/(common/|build\.gradle|settings\.gradle|Dockerfile|\.dockerignore|gradlew|gradle/)'; then echo true; return; fi
+            if printf '%s\n' "$files" | grep -qE '^\.github/workflows/|^libs/backend-common/|^(settings\.gradle|build\.gradle|gradlew|gradle/|Dockerfile\.jvm)'; then echo true; return; fi
             if printf '%s\n' "$files" | grep -qE "$1"; then echo true; else echo false; fi
           }
           {
-            echo "backend=$(changed '^backend/')"
-            echo "be_analysis=$(be_module '^backend/analysis/')"
-            echo "be_auth=$(be_module '^backend/auth/')"
-            echo "be_canvas=$(be_module '^backend/canvas/')"
-            echo "frontend=$(changed '^frontend/')"
-            echo "ai-server=$(changed '^(ai|pipelines|mcp-server)/')"
-            # ai 이미지별 세분: agent=ai/, ingest=ai/server(공유 껍데기)+pipelines, mcp=mcp-server/
-            # ai/server가 바뀌면 ^ai/ 와 ^ai/server/ 둘 다 걸려 agent·ingest가 함께 빌드된다
-            echo "ai_agent=$(changed '^ai/')"
-            echo "ai_ingest=$(changed '^(ai/server/|pipelines/)')"
-            echo "ai_mcp=$(changed '^mcp-server/')"
+            echo "backend=$(changed '^(services/(auth|canvas|research)/|libs/backend-common/|settings\.gradle|build\.gradle|gradlew|gradle/|Dockerfile\.jvm)')"
+            echo "be_research=$(be_module '^services/research/')"
+            echo "be_auth=$(be_module '^services/auth/')"
+            echo "be_canvas=$(be_module '^services/canvas/')"
+            echo "frontend=$(changed '^services/frontend/')"
+            echo "ai-server=$(changed '^(services/(agent|ingestion-worker|retrieval)/|libs/job-shell/)')"
+            # ai 이미지별 세분: agent=services/agent+job-shell, ingest=ingestion-worker+job-shell, mcp=retrieval
+            # job-shell(공유 셸)이 바뀌면 agent·ingest 둘 다 빌드된다
+            echo "ai_agent=$(changed '^(services/agent/|libs/job-shell/)')"
+            echo "ai_ingest=$(changed '^(services/ingestion-worker/|libs/job-shell/)')"
+            echo "ai_mcp=$(changed '^services/retrieval/')"
           } | tee -a "$GITHUB_OUTPUT"
 
   backend:
@@ -70,23 +70,25 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: "21", cache: gradle }
       - name: Backend Test
-        working-directory: backend
         run: chmod +x gradlew && ./gradlew test --no-daemon
       - uses: docker/setup-buildx-action@v3
-      - name: backend(analysis) Image Build
-        if: needs.changes.outputs.be_analysis == 'true'
+      - name: research Image Build
+        if: needs.changes.outputs.be_research == 'true'
         uses: docker/build-push-action@v6
         with:
-          context: ./backend
+          context: .
+          file: Dockerfile.jvm
           platforms: linux/amd64
           push: false
+          build-args: MODULE=research
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
       - name: auth Image Build
         if: needs.changes.outputs.be_auth == 'true'
         uses: docker/build-push-action@v6
         with:
-          context: ./backend
+          context: .
+          file: Dockerfile.jvm
           platforms: linux/amd64
           push: false
           build-args: MODULE=auth
@@ -95,7 +97,8 @@ jobs:
         if: needs.changes.outputs.be_canvas == 'true'
         uses: docker/build-push-action@v6
         with:
-          context: ./backend
+          context: .
+          file: Dockerfile.jvm
           platforms: linux/amd64
           push: false
           build-args: MODULE=canvas
@@ -113,7 +116,7 @@ jobs:
       - name: Frontend Image Build
         uses: docker/build-push-action@v6
         with:
-          context: ./frontend
+          context: ./services/frontend
           platforms: linux/amd64
           push: false
           cache-from: type=gha,scope=frontend
@@ -128,46 +131,44 @@ jobs:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
       - uses: actions/setup-python@v5
-        with: { python-version: "3.12", cache: pip, cache-dependency-path: ai/server/requirements.txt }
-      - name: ai-server Test
-        # 공유 껍데기(ai/server)·agent·파이프라인 중 하나라도 바뀌면 실행. mcp-server만 바뀌면 건너뜀
+        with: { python-version: "3.12", cache: pip, cache-dependency-path: libs/job-shell/requirements.txt }
+      - name: job-shell Test
+        # 공유 셸(job-shell)·agent·ingestion 중 하나라도 바뀌면 실행. retrieval만 바뀌면 건너뜀
         if: ${{ needs.changes.outputs.ai_agent == 'true' || needs.changes.outputs.ai_ingest == 'true' }}
-        working-directory: ai/server
-        env:
-          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/pipelines
+        working-directory: libs/job-shell
         run: |
-          pip install -r requirements.txt
+          pip install -e .
           python -m pytest -q
       - uses: docker/setup-buildx-action@v3
-      - name: ai-server Image Build
+      - name: agent Image Build
         if: ${{ needs.changes.outputs.ai_agent == 'true' }}
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ai/server/Dockerfile
+          file: services/agent/Dockerfile
           platforms: linux/amd64
           push: false
-          cache-from: type=gha,scope=ai-server
-          cache-to: type=gha,mode=max,scope=ai-server
-      - name: ingest-worker Image Build
+          cache-from: type=gha,scope=agent
+          cache-to: type=gha,mode=max,scope=agent
+      - name: ingestion-worker Image Build
         if: ${{ needs.changes.outputs.ai_ingest == 'true' }}
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: pipelines/Dockerfile.worker
+          file: services/ingestion-worker/Dockerfile
           platforms: linux/amd64
           push: false
-          cache-from: type=gha,scope=ingest-worker
-          cache-to: type=gha,mode=max,scope=ingest-worker
-      - name: mcp-server Image Build
+          cache-from: type=gha,scope=ingestion-worker
+          cache-to: type=gha,mode=max,scope=ingestion-worker
+      - name: retrieval Image Build
         if: ${{ needs.changes.outputs.ai_mcp == 'true' }}
         uses: docker/build-push-action@v6
         with:
-          context: ./mcp-server
+          context: ./services/retrieval
           platforms: linux/amd64
           push: false
-          cache-from: type=gha,scope=mcp-server
-          cache-to: type=gha,mode=max,scope=mcp-server
+          cache-from: type=gha,scope=retrieval
+          cache-to: type=gha,mode=max,scope=retrieval
 
   # 필수 체크(ruleset require-ci)가 요구하는 이름. 서비스별 결과를 모아 하나로 판정한다
   build:

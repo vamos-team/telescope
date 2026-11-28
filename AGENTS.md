@@ -23,23 +23,24 @@ MVP 제외: 콜백(작업 상태는 폴링으로 조회), 사내 데이터 연�
 | 영역 | 담당 폴더 | 역할 |
 |---|---|---|
 | docs | `docs/` | 설계 문서 |
-| frontend | `frontend/` | Vue 3 + TypeScript |
-| backend | `backend/` | Spring Boot API 서버. 세부 규칙은 `backend/AGENTS.md` |
-| ai | `pipelines/`, `mcp-server/`, `ai/` | 수집, 파싱, 적재, 조회 도구, 분석·예측 서비스 |
-| infra | `infra/`, `.github/workflows/`, `docker-compose.yml` | CI/CD, 실행 환경 |
+| frontend | `services/frontend/` | Vue 3 + TypeScript |
+| backend | `services/auth/`, `services/canvas/`, `services/research/`, `libs/backend-common/`, `libs/job-shell/` | Spring Boot API 서비스(인증·협업·리서치)와 작업 셸. 세부 규칙은 `services/AGENTS.md` |
+| ai | `services/agent/`, `services/ingestion-worker/`, `services/retrieval/` | 분석·예측 에이전트, 수집·파싱·적재, 읽기 전용 조회 |
+| infra | `infra/`, `.github/workflows/`, `docker-compose.yml`, 루트 빌드 파일(`Dockerfile.jvm`·`settings.gradle`·`gradlew` 등) | CI/CD, 실행 환경 |
 
-- `pipelines/collectors`: 외부 원본 수집만 (파싱·가공 금지)
-- `pipelines/parsers`: 원본 → 구조화 (네트워크·DB 접근 금지)
-- `pipelines/loaders`: DART 재무 수치 → DuckDB 적재 배치
-- `mcp-server`: 읽기 전용 조회 도구
-- `ai/server`: FastAPI 껍데기(HTTP 서버, 작업 상태 관리). 코드 위치는 `ai/` 아래지만 **담당은
-  backend**다(회의 결정: HTTP 껍데기·job 관리는 backend, 작업별 구체적 API·파이프라인은 ai).
-  `ai/server`를 제외한 `ai/`의 나머지(분석·예측 로직, 파이프라인 연결)는 ai 담당이다.
+- `services/ingestion-worker/collectors`: 외부 원본 수집만 (파싱·가공 금지)
+- `services/ingestion-worker/parsers`: 원본 → 구조화 (네트워크·DB 접근 금지)
+- `services/ingestion-worker/loaders`: DART 재무 수치 → DuckDB 적재 배치
+- `services/retrieval`: 읽기 전용 조회 도구(MCP)
+- `libs/job-shell`: FastAPI 작업 셸(HTTP 서버, 작업 상태 관리). **담당은 backend**다(회의 결정:
+  HTTP 껍데기·job 관리는 backend, 작업별 구체적 API·파이프라인은 ai). `agent`·`ingestion-worker`가
+  공유 라이브러리로 함께 쓴다.
+- `services/agent`: 분석·예측 에이전트 로직(파이프라인 연결)은 ai 담당이다.
 - `data/`: DB·캐시. git에는 `.gitkeep`만 올라간다. 팀원마다 로컬 내용이 다르다.
 
 **담당 영역 규칙**
 - **사용자가 지정한 영역의 폴더 안에서만 작업한다.** 담당은 기본적으로 폴더 단위이지만, 이
-  문서가 하위 폴더별로 담당을 따로 적어둔 경우(`ai/server` 등)는 그 하위 폴더 단위를 따른다.
+  문서가 하위 폴더별로 담당을 따로 적어둔 경우(`libs/job-shell` 등)는 그 하위 폴더 단위를 따른다.
 - 다른 영역의 파일을 바꿔야 하면 수정하지 말고 멈춘다. 무엇을 왜 바꿔야 하는지 알리고 담당자와 논의한 뒤 진행한다.
 - 루트 파일(`README.md`, `AGENTS.md`, `.env.example`, `.gitignore`)과 저장소 설정(`.github/`, `.claude/`)은 사용자가 지시했을 때만 수정한다.
 - **`.gitignore`는 Claude가 임의로 고치지 않는다.** 로컬 파일(OS 메타데이터, 에디터 설정 등)이 추적되거나 리뷰에 걸려도
@@ -50,8 +51,8 @@ MVP 제외: 콜백(작업 상태는 폴링으로 조회), 사내 데이터 연�
 | 저장소 | 쓰기 | 읽기 |
 |---|---|---|
 | PostgreSQL (운영 데이터) | backend만 | backend |
-| DuckDB (재무 수치) | `pipelines/loaders` 배치만. 새 파일을 만들고 검증한 뒤 교체 | `mcp-server` (읽기 전용으로만 연다) |
-| ChromaDB (문서 검색) | 자료 준비(ingest)만 | `mcp-server`, 분석 서비스 |
+| DuckDB (재무 수치) | `services/ingestion-worker/loaders` 배치만. 새 파일을 만들고 검증한 뒤 교체 | `services/retrieval` (읽기 전용으로만 연다) |
+| ChromaDB (문서 검색) | 자료 준비(ingest)만 | `services/retrieval`, 분석 서비스 |
 | 파일 저장소 (원본, 추출 결과) | backend, ai | backend, ai |
 
 - backend는 DuckDB와 ChromaDB를 직접 열지 않는다.
