@@ -1,0 +1,67 @@
+# 데이터 파이프라인(ingest-worker). 클러스터 내부 전용: http://ingest-worker:8000
+# 작업 껍데기는 ai-server와 같고, 문서 파싱·재무 적재(무거운 의존성)를 맡는다. 지금은 PIPELINE_MODE=fake.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: ingest-worker, labels: { app: ingest-worker } }
+spec:
+  serviceName: ingest-worker
+  replicas: 1
+  selector: { matchLabels: { app: ingest-worker } }
+  template:
+    metadata: { labels: { app: ingest-worker } }
+    spec:
+      serviceAccountName: s3-access
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 40
+      securityContext: { fsGroup: 1000 }
+      containers:
+        - name: ingest-worker
+          image: skala-registry.skala-ai.com/p3-1/ingest-worker
+          ports: [{ containerPort: 8000 }]
+          env:
+            - { name: TZ, value: Asia/Seoul }
+            - { name: DB_PATH, value: /data/jobs.db }
+            # 원본 수집·DuckDB 판 생성은 임시 작업 공간에서 한다. 결과는 S3로 올린다
+            - { name: WORK_DIR, value: /work }
+            - name: INTERNAL_API_KEY
+              valueFrom: { secretKeyRef: { name: ai-server-secrets, key: INTERNAL_API_KEY } }
+            - name: OPENAI_API_KEY
+              valueFrom: { secretKeyRef: { name: ai-server-secrets, key: OPENAI_API_KEY, optional: true } }
+            - name: HF_TOKEN
+              valueFrom: { secretKeyRef: { name: ai-server-secrets, key: HF_TOKEN, optional: true } }
+            - name: OPENDART_API_KEY
+              valueFrom: { secretKeyRef: { name: ai-server-secrets, key: OPENDART_API_KEY, optional: true } }
+          envFrom:
+            - configMapRef: { name: s3-config }
+          # 파싱(docling·torch)은 메모리를 많이 쓴다. 실측 후 조정한다(#194 마무리)
+          resources:
+            requests: { cpu: 300m, memory: 1Gi }
+            limits:   { cpu: "1",  memory: 3Gi }
+          startupProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 20
+          volumeMounts:
+            - { name: data, mountPath: /data }
+            - { name: work, mountPath: /work }
+      volumes:
+        - { name: work, emptyDir: {} }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: gp3
+        resources: { requests: { storage: 1Gi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: ingest-worker }
+spec:
+  selector: { app: ingest-worker }
+  ports: [{ port: 8000, targetPort: 8000 }]

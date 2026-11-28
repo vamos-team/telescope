@@ -1,4 +1,5 @@
-# ai/server(FastAPI). 클러스터 내부 전용: http://ai-server:8000 
+# 에이전트(ai/server, FastAPI). 클러스터 내부 전용: http://ai-server:8000
+# 분석·예측을 맡는다(문서 파싱·재무 적재는 ingest-worker). 지금은 PIPELINE_MODE=fake.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata: { name: ai-server, labels: { app: ai-server } }
@@ -23,10 +24,6 @@ spec:
               valueFrom: { secretKeyRef: { name: ai-server-secrets, key: INTERNAL_API_KEY } }
             - name: OPENAI_API_KEY
               valueFrom: { secretKeyRef: { name: ai-server-secrets, key: OPENAI_API_KEY, optional: true } }
-            - name: HF_TOKEN
-              valueFrom: { secretKeyRef: { name: ai-server-secrets, key: HF_TOKEN, optional: true } }
-            - name: OPENDART_API_KEY
-              valueFrom: { secretKeyRef: { name: ai-server-secrets, key: OPENDART_API_KEY, optional: true } }
           envFrom:
             - configMapRef: { name: s3-config }
           resources:
@@ -48,7 +45,7 @@ spec:
       spec:
         accessModes: [ReadWriteOnce]
         storageClassName: gp3
-        resources: { requests: { storage: 10Gi } }
+        resources: { requests: { storage: 1Gi } }
 ---
 apiVersion: v1
 kind: Service
