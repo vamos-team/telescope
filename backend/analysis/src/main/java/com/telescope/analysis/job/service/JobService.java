@@ -138,7 +138,7 @@ public class JobService {
 
         JobStatusResponse ai;
         try {
-            ai = aiClient.getJobStatus(job.getExternalJobId());
+            ai = aiClient.getJobStatus(job.getJobType(), job.getExternalJobId());
         } catch (AiJobNotFoundException e) {
             // ai 쪽에서 작업이 사라졌다(예: Stub은 재시작하면 상태를 잃는다). 더 기다려도 끝나지 않는다.
             return applyAiStatus(jobId, JobStatus.FAILED, "ai 서비스에서 작업을 찾을 수 없습니다.");

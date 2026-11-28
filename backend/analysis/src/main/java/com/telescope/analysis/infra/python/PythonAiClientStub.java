@@ -66,7 +66,7 @@ public class PythonAiClientStub implements PythonAiClient {
     }
 
     @Override
-    public JobStatusResponse getJobStatus(String jobId) {
+    public JobStatusResponse getJobStatus(com.telescope.analysis.job.entity.JobType jobType, String jobId) {
         Instant startedAt = startedAtByJobId.get(jobId);
         if (startedAt == null) {
             throw new AiJobNotFoundException(jobId);

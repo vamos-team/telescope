@@ -49,7 +49,7 @@ class PythonAiClientWireTest {
     void 업그레이드_없이_HTTP_1_1로_본문을_보낸다() {
         String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
         PythonAiClientProperties props = new PythonAiClientProperties(
-                "http", baseUrl, "test-key", Duration.ofSeconds(2), Duration.ofSeconds(5), Duration.ofSeconds(3));
+                "http", baseUrl, baseUrl, "test-key", Duration.ofSeconds(2), Duration.ofSeconds(5), Duration.ofSeconds(3));
         PythonAiClient client = new PythonAiClientConfig().pythonAiClientHttp(props);
 
         JobStartResponse started = client.startDocumentPreparation(new DocumentPreparationRequest("1", "2", "abc.pdf"));

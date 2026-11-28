@@ -417,7 +417,7 @@ class DocumentServiceTest {
         }
 
         @Override
-        public JobStatusResponse getJobStatus(String jobId) {
+        public JobStatusResponse getJobStatus(com.telescope.analysis.job.entity.JobType jobType, String jobId) {
             return status;
         }
 

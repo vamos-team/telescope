@@ -24,13 +24,13 @@ class PythonAiClientStubTest {
         );
         assertThat(started.jobId()).isNotBlank();
 
-        JobStatusResponse immediately = client.getJobStatus(started.jobId());
+        JobStatusResponse immediately = client.getJobStatus(com.telescope.analysis.job.entity.JobType.ANALYSIS, started.jobId());
         assertThat(immediately.status()).isEqualTo(AiJobStatus.RUNNING);
         assertThat(immediately.result()).isNull();
 
         Thread.sleep(3_200);
 
-        JobStatusResponse afterWait = client.getJobStatus(started.jobId());
+        JobStatusResponse afterWait = client.getJobStatus(com.telescope.analysis.job.entity.JobType.ANALYSIS, started.jobId());
         assertThat(afterWait.status()).isEqualTo(AiJobStatus.SUCCEEDED);
         assertThat(afterWait.result()).isNotNull();
         assertThat(afterWait.errorMessage()).isNull();
@@ -38,7 +38,7 @@ class PythonAiClientStubTest {
 
     @Test
     void 모르는_jobId를_조회하면_예외를_던진다() {
-        assertThatThrownBy(() -> client.getJobStatus("no-such-job"))
+        assertThatThrownBy(() -> client.getJobStatus(com.telescope.analysis.job.entity.JobType.ANALYSIS, "no-such-job"))
                 .isInstanceOf(AiJobNotFoundException.class);
     }
 }

@@ -23,6 +23,8 @@ infra:
     # stub(기본, 가짜 구현) | http(ai/server 실제 호출). http면 주소와 비밀키가 필요하다(없으면 기동 실패).
     mode: ${AI_SERVICE_MODE:stub}
     base-url: ${AI_SERVICE_BASE_URL:}
+    # 데이터 파이프라인(ingest-worker) 주소. http 모드에서 필수
+    ingest-base-url: ${INGEST_SERVICE_BASE_URL:}
     # ai/server의 INTERNAL_API_KEY와 같은 값. 설정 파일에 값을 넣지 않는다
     api-key: ${AI_SERVICE_API_KEY:}
     # ai-contract 2.10 제안값
