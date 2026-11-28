@@ -14,6 +14,7 @@ env:
 permissions:
   id-token: write
   contents: read
+  packages: write
 
 concurrency:
   group: cd-main
@@ -34,6 +35,11 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       - uses: aws-actions/amazon-ecr-login@v2
         id: ecr
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 서비스별 이미지 태그 계산
         id: tags
@@ -84,6 +90,7 @@ jobs:
           BUILD_AGENT: ${{ steps.tags.outputs.build_agent }}
           BUILD_INGESTION: ${{ steps.tags.outputs.build_ingestion }}
           BUILD_RETRIEVAL: ${{ steps.tags.outputs.build_retrieval }}
+          BASE_IMAGE: ghcr.io/${{ github.repository }}/ingestion-worker-base
         run: |
           build() {
             if [ "$1" != true ]; then echo "$2 는 이미 ECR 에 있음, 빌드/푸시 건너뜀"; return; fi
@@ -94,7 +101,11 @@ jobs:
           build "$BUILD_CANVAS" "$CANVAS" Dockerfile.jvm . --build-arg MODULE=canvas
           build "$BUILD_FRONTEND" "$FRONTEND" services/frontend/Dockerfile services/frontend
           build "$BUILD_AGENT" "$AGENT" services/agent/Dockerfile .
-          build "$BUILD_INGESTION" "$INGESTION" services/ingestion-worker/Dockerfile .
+          if [ "$BUILD_INGESTION" = true ]; then
+            BASE_REF="$BASE_IMAGE:$( { git rev-parse HEAD:services/ingestion-worker/requirements.txt; git rev-parse HEAD:services/ingestion-worker/base.Dockerfile; } | sha256sum | cut -c1-12)"
+            docker manifest inspect "$BASE_REF" >/dev/null 2>&1 || docker buildx build --platform linux/amd64 -f services/ingestion-worker/base.Dockerfile -t "$BASE_REF" --push .
+            build "$BUILD_INGESTION" "$INGESTION" services/ingestion-worker/Dockerfile . --build-arg INGEST_BASE="$BASE_REF"
+          fi
           build "$BUILD_RETRIEVAL" "$RETRIEVAL" services/retrieval/Dockerfile services/retrieval
           echo "REGISTRY=$REGISTRY" >> "$GITHUB_ENV"
 
