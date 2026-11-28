@@ -41,62 +41,61 @@ jobs:
           tree() { git rev-parse "HEAD:$1" | cut -c1-12; }
           combined() { for d in "$@"; do git rev-parse "HEAD:$d"; done | sha256sum | cut -c1-12; }
           need_build() { aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$1" >/dev/null 2>&1 && echo false || echo true; }
-          # backend 서비스별 태그 = 그 모듈 + 공통(common·루트 빌드 파일)의 내용 해시. 공통이 바뀌면 셋 다, 한 모듈만 바뀌면 그 서비스만 재빌드된다
-          BE_SHARED="backend/common backend/build.gradle backend/settings.gradle backend/Dockerfile backend/.dockerignore backend/gradlew backend/gradle"
-          BACKEND="backend-$(combined backend/analysis $BE_SHARED)"
-          AUTH="auth-$(combined backend/auth $BE_SHARED)"
-          CANVAS="canvas-$(combined backend/canvas $BE_SHARED)"
-          FRONTEND="frontend-$(tree frontend)"
-          AI_SERVER="ai-server-$(tree ai)"
-          INGEST="ingest-worker-$(combined ai/server pipelines)"
-          MCP="mcp-server-$(tree mcp-server)"
+          # JVM 서비스 태그 = 그 모듈 + 공통(backend-common·gradle 루트)의 내용 해시. 공통이 바뀌면 셋 다, 한 모듈만 바뀌면 그 서비스만
+          BE_SHARED="libs/backend-common build.gradle settings.gradle Dockerfile.jvm Dockerfile.jvm.dockerignore gradlew gradle"
+          RESEARCH="research-$(combined services/research $BE_SHARED)"
+          AUTH="auth-$(combined services/auth $BE_SHARED)"
+          CANVAS="canvas-$(combined services/canvas $BE_SHARED)"
+          FRONTEND="frontend-$(tree services/frontend)"
+          AGENT="agent-$(combined services/agent libs/job-shell)"
+          INGESTION="ingestion-worker-$(combined services/ingestion-worker libs/job-shell)"
+          RETRIEVAL="retrieval-$(tree services/retrieval)"
           {
-            echo "backend=$BACKEND"; echo "build_backend=$(need_build "$BACKEND")"
+            echo "research=$RESEARCH"; echo "build_research=$(need_build "$RESEARCH")"
             echo "auth=$AUTH"; echo "build_auth=$(need_build "$AUTH")"
             echo "canvas=$CANVAS"; echo "build_canvas=$(need_build "$CANVAS")"
             echo "frontend=$FRONTEND"; echo "build_frontend=$(need_build "$FRONTEND")"
-            echo "ai_server=$AI_SERVER"; echo "build_ai_server=$(need_build "$AI_SERVER")"
-            echo "ingest=$INGEST"; echo "build_ingest=$(need_build "$INGEST")"
-            echo "mcp=$MCP"; echo "build_mcp=$(need_build "$MCP")"
+            echo "agent=$AGENT"; echo "build_agent=$(need_build "$AGENT")"
+            echo "ingestion=$INGESTION"; echo "build_ingestion=$(need_build "$INGESTION")"
+            echo "retrieval=$RETRIEVAL"; echo "build_retrieval=$(need_build "$RETRIEVAL")"
           } | tee -a "$GITHUB_OUTPUT"
 
       - uses: actions/setup-java@v4
-        if: steps.tags.outputs.build_backend == 'true' || steps.tags.outputs.build_auth == 'true' || steps.tags.outputs.build_canvas == 'true'
+        if: steps.tags.outputs.build_research == 'true' || steps.tags.outputs.build_auth == 'true' || steps.tags.outputs.build_canvas == 'true'
         with: { distribution: temurin, java-version: "21" }
       - name: Backend Test
-        if: steps.tags.outputs.build_backend == 'true' || steps.tags.outputs.build_auth == 'true' || steps.tags.outputs.build_canvas == 'true'
-        working-directory: backend
+        if: steps.tags.outputs.build_research == 'true' || steps.tags.outputs.build_auth == 'true' || steps.tags.outputs.build_canvas == 'true'
         run: chmod +x gradlew && ./gradlew test --no-daemon
 
       - name: Build & push (바뀐 서비스만)
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
-          BACKEND: ${{ steps.tags.outputs.backend }}
+          RESEARCH: ${{ steps.tags.outputs.research }}
           FRONTEND: ${{ steps.tags.outputs.frontend }}
-          AI_SERVER: ${{ steps.tags.outputs.ai_server }}
-          INGEST: ${{ steps.tags.outputs.ingest }}
-          MCP: ${{ steps.tags.outputs.mcp }}
+          AGENT: ${{ steps.tags.outputs.agent }}
+          INGESTION: ${{ steps.tags.outputs.ingestion }}
+          RETRIEVAL: ${{ steps.tags.outputs.retrieval }}
           AUTH: ${{ steps.tags.outputs.auth }}
           CANVAS: ${{ steps.tags.outputs.canvas }}
-          BUILD_BACKEND: ${{ steps.tags.outputs.build_backend }}
+          BUILD_RESEARCH: ${{ steps.tags.outputs.build_research }}
           BUILD_AUTH: ${{ steps.tags.outputs.build_auth }}
           BUILD_CANVAS: ${{ steps.tags.outputs.build_canvas }}
           BUILD_FRONTEND: ${{ steps.tags.outputs.build_frontend }}
-          BUILD_AI_SERVER: ${{ steps.tags.outputs.build_ai_server }}
-          BUILD_INGEST: ${{ steps.tags.outputs.build_ingest }}
-          BUILD_MCP: ${{ steps.tags.outputs.build_mcp }}
+          BUILD_AGENT: ${{ steps.tags.outputs.build_agent }}
+          BUILD_INGESTION: ${{ steps.tags.outputs.build_ingestion }}
+          BUILD_RETRIEVAL: ${{ steps.tags.outputs.build_retrieval }}
         run: |
           build() {
             if [ "$1" != true ]; then echo "$2 는 이미 ECR 에 있음, 빌드/푸시 건너뜀"; return; fi
             docker buildx build --platform linux/amd64 -t "$REGISTRY/$ECR_REPOSITORY:$2" -f "$3" --push "${@:5}" "$4"
           }
-          build "$BUILD_BACKEND" "$BACKEND" backend/Dockerfile backend
-          build "$BUILD_AUTH" "$AUTH" backend/Dockerfile backend --build-arg MODULE=auth
-          build "$BUILD_CANVAS" "$CANVAS" backend/Dockerfile backend --build-arg MODULE=canvas
-          build "$BUILD_FRONTEND" "$FRONTEND" frontend/Dockerfile frontend
-          build "$BUILD_AI_SERVER" "$AI_SERVER" ai/server/Dockerfile .
-          build "$BUILD_INGEST" "$INGEST" pipelines/Dockerfile.worker .
-          build "$BUILD_MCP" "$MCP" mcp-server/Dockerfile mcp-server
+          build "$BUILD_RESEARCH" "$RESEARCH" Dockerfile.jvm . --build-arg MODULE=research
+          build "$BUILD_AUTH" "$AUTH" Dockerfile.jvm . --build-arg MODULE=auth
+          build "$BUILD_CANVAS" "$CANVAS" Dockerfile.jvm . --build-arg MODULE=canvas
+          build "$BUILD_FRONTEND" "$FRONTEND" services/frontend/Dockerfile services/frontend
+          build "$BUILD_AGENT" "$AGENT" services/agent/Dockerfile .
+          build "$BUILD_INGESTION" "$INGESTION" services/ingestion-worker/Dockerfile .
+          build "$BUILD_RETRIEVAL" "$RETRIEVAL" services/retrieval/Dockerfile services/retrieval
           echo "REGISTRY=$REGISTRY" >> "$GITHUB_ENV"
 
       - name: kustomize 설치
@@ -111,13 +110,13 @@ jobs:
         working-directory: infra/k8s
         run: |
           "$RUNNER_TEMP/kustomize" edit set image \
-            "skala-registry.skala-ai.com/p3-1/backend=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.backend }}" \
+            "skala-registry.skala-ai.com/p3-1/research=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.research }}" \
             "skala-registry.skala-ai.com/p3-1/auth=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.auth }}" \
             "skala-registry.skala-ai.com/p3-1/canvas=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.canvas }}" \
             "skala-registry.skala-ai.com/p3-1/frontend=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.frontend }}" \
-            "skala-registry.skala-ai.com/p3-1/ai-server=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.ai_server }}" \
-            "skala-registry.skala-ai.com/p3-1/ingest-worker=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.ingest }}" \
-            "skala-registry.skala-ai.com/p3-1/mcp-server=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.mcp }}"
+            "skala-registry.skala-ai.com/p3-1/agent=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.agent }}" \
+            "skala-registry.skala-ai.com/p3-1/ingestion-worker=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.ingestion }}" \
+            "skala-registry.skala-ai.com/p3-1/retrieval=$REGISTRY/$ECR_REPOSITORY:${{ steps.tags.outputs.retrieval }}"
 
       # Ingress 의 허용 IP 는 저장소에 두지 않고 시크릿 ALLOWED_IPS에서 받아 배포 때만 넣는다.
       - name: 허용 IP 주입
@@ -154,13 +153,13 @@ jobs:
         working-directory: infra/k8s
         run: |
           kubectl -n "$NAMESPACE" apply -k .
-          kubectl -n "$NAMESPACE" rollout status deployment/backend --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deployment/research --timeout=300s
           kubectl -n "$NAMESPACE" rollout status deployment/auth --timeout=300s
           kubectl -n "$NAMESPACE" rollout status deployment/canvas --timeout=300s
           kubectl -n "$NAMESPACE" rollout status deployment/frontend --timeout=300s
           kubectl -n "$NAMESPACE" rollout status statefulset/chroma --timeout=300s
           kubectl -n "$NAMESPACE" rollout status statefulset/kafka --timeout=300s
           kubectl -n "$NAMESPACE" rollout status deployment/pg-proxy --timeout=120s
-          kubectl -n "$NAMESPACE" rollout status statefulset/ai-server --timeout=300s
-          kubectl -n "$NAMESPACE" rollout status statefulset/ingest-worker --timeout=300s
-          kubectl -n "$NAMESPACE" rollout status deployment/mcp-server --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status statefulset/agent --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status statefulset/ingestion-worker --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deployment/retrieval --timeout=300s
